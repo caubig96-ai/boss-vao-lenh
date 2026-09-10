@@ -101,3 +101,5 @@ WantedBy=multi-user.target
 ## Cảnh báo về target
 
 Target hiện lấy từ giá mở nến Spot M5. Trước khi dùng tiền thật, phải so sánh với “Mức giá cần vượt qua” của Binance Prediction trong ít nhất 50–100 phiên. Nếu hai nguồn không trùng tuyệt đối, cần thay nguồn target; dữ liệu Spot khi đó chỉ dùng để phân tích.
+
+Bot hoạt động ở chế độ bắt buộc chọn: mỗi phiên M5 hợp lệ sẽ đưa ra đúng một quyết định MUA TĂNG hoặc MUA GIẢM trong 20 giây đầu. Tín hiệu không bị loại theo ngưỡng xác suất; Telegram sẽ ghi rõ chất lượng THẤP, TRUNG BÌNH hoặc CAO cùng phân tích nến M1/M5.
