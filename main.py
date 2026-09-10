@@ -249,7 +249,7 @@ class TradingSignalBot:
         local_open = datetime.fromtimestamp(p.market_open_time / 1000, self.config.timezone)
         local_close = datetime.fromtimestamp(p.market_close_time / 1000, self.config.timezone)
         label = "🟢 𝗠𝗨𝗔 𝗧Ă𝗡𝗚" if p.direction == "UP" else "🔴 𝗠𝗨𝗔 𝗚𝗜Ả𝗠"
-        quality = "CAO" if p.confidence >= 0.65 else "TRUNG BÌNH" if p.confidence >= 0.57 else "THẤP"
+        confidence_block = self.confidence_block(p.confidence)
         history_side = "tăng" if p.direction == "UP" else "giảm"
         history_rate = p.confidence * 100
         m1_analysis = candle_analysis(list(self.m1), "M1")
@@ -261,8 +261,7 @@ class TradingSignalBot:
             f"⏰ Phiên: {local_open:%H:%M}–{local_close:%H:%M}\n"
             f"🎯 Target: <code>{p.target_price:,.2f}</code> USDT\n"
             f"💵 Giá lúc báo: <code>{p.signal_price:,.2f}</code> USDT\n"
-            f"📈 Độ tin cậy: <b>{p.confidence * 100:.1f}%</b>\n"
-            f"⚖️ Chất lượng tín hiệu: <b>{quality}</b>\n"
+            f"\n{confidence_block}\n\n"
             f"🔎 M1: {p.m1_probability * 100:.1f}% tăng | M5: {p.m5_probability * 100:.1f}% tăng\n"
             f"🕯 {m1_analysis}\n"
             f"🕯 {m5_analysis}\n"
@@ -279,6 +278,7 @@ class TradingSignalBot:
         base = float(await self.db.get("base_bet", str(self.config.base_bet)))
         next_step = int(await self.db.get("bet_step", "1"))
         next_bet = min(base * (2 if next_step == 2 else 1), self.config.max_bet)
+        confidence_block = self.confidence_block(float(row["confidence"]))
         return (
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{label}: {float(row['bet_amount']):.2f} USDT</b>\n"
@@ -286,12 +286,26 @@ class TradingSignalBot:
             f"⏰ Phiên: {local_open:%H:%M}–{local_close:%H:%M}\n"
             f"🎯 Target: <code>{float(row['target_price']):,.2f}</code> USDT\n"
             f"🏁 Giá đóng: <code>{close_price:,.2f}</code> USDT\n"
-            f"📈 Độ tin cậy lúc báo: <b>{float(row['confidence']) * 100:.1f}%</b>\n\n"
+            f"\n{confidence_block}\n\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{result_label}</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 Lãi/lỗ phiên này: <b>{pnl:+.2f} USDT</b>\n"
             f"➡️ Lệnh tiếp theo: <b>{next_bet:.2f} USDT – LỆNH {next_step}</b>" + await self.stats_text()
+        )
+
+    @staticmethod
+    def confidence_block(confidence: float) -> str:
+        if confidence >= 0.65:
+            icon, quality = "🟢", "CAO"
+        elif confidence >= 0.57:
+            icon, quality = "🟡", "TRUNG BÌNH"
+        else:
+            icon, quality = "🔴", "THẤP"
+        return (
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"{icon} <b>ĐỘ TIN CẬY: {quality} – {confidence * 100:.1f}%</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━"
         )
 
     async def handle_telegram(self, kind: str, value: str, raw: dict) -> None:
