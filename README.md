@@ -1,6 +1,6 @@
 # Boss Vào Lệnh
 
-Phiên bản Windows hiện tại: **v1.8.1**. Giao diện nến dùng phong cách BINACE-2 với đúng 100 nến Binance Futures Mainnet, Kline WebSocket live và ô LAST/đường giá lấy trực tiếp từ aggTrade mỗi 0,25 giây. Công thức phân tích Boss Vào Lệnh được giữ nguyên.
+Phiên bản Windows hiện tại: **v1.8.2**. Giao diện nến dùng phong cách BINACE-2 với đúng 100 nến Binance Futures Mainnet, Kline WebSocket live và ô LAST/đường giá lấy trực tiếp từ aggTrade mỗi 0,25 giây. Tin kết quả Telegram chỉ có đúng một dòng ĐÃ THẮNG, ĐÃ THUA hoặc ĐÃ HÒA. Công thức phân tích Boss Vào Lệnh được giữ nguyên.
 
 Bot tín hiệu BTCUSDT 5 phút: nhận dữ liệu chính thức từ Binance WebSocket, phân tích mẫu nến M1/M5, gửi một tín hiệu duy nhất trong 20 giây đầu của phiên và cập nhật kết quả trên chính tin nhắn Telegram.
 
