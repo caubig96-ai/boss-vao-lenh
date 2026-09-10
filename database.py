@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import aiosqlite
 
@@ -85,7 +85,7 @@ class Database:
                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (p.market_open_time, p.market_close_time, p.target_price, p.signal_price, p.direction,
              p.confidence, p.m1_probability, p.m5_probability, p.pattern_samples, p.bet_amount,
-             p.bet_step, int(p.actual), datetime.utcnow().isoformat()),
+             p.bet_step, int(p.actual), datetime.now(timezone.utc).isoformat()),
         )
         await self.conn.commit()
         return cursor.rowcount == 1
@@ -100,7 +100,7 @@ class Database:
     async def settle(self, open_time: int, result: str, close_price: float, pnl: float) -> None:
         await self.conn.execute(
             "UPDATE signals SET status='SETTLED',result=?,close_price=?,pnl=?,settled_at=? WHERE market_open_time=?",
-            (result, close_price, pnl, datetime.utcnow().isoformat(), open_time),
+            (result, close_price, pnl, datetime.now(timezone.utc).isoformat(), open_time),
         )
         await self.conn.commit()
 
@@ -119,7 +119,6 @@ class Database:
     async def event(self, event_type: str, payload: dict) -> None:
         await self.conn.execute(
             "INSERT INTO bot_events(event_type,payload,created_at) VALUES(?,?,?)",
-            (event_type, json.dumps(payload, ensure_ascii=False), datetime.utcnow().isoformat()),
+            (event_type, json.dumps(payload, ensure_ascii=False), datetime.now(timezone.utc).isoformat()),
         )
         await self.conn.commit()
-
