@@ -89,6 +89,8 @@ class TrayApplication:
         self.dashboard: tk.Toplevel | None = None
         self.m1_text: tk.Text | None = None
         self.m5_text: tk.Text | None = None
+        self.m1_chart: tk.Canvas | None = None
+        self.m5_chart: tk.Canvas | None = None
         self.status_var = tk.StringVar(value="Đang khởi động...")
         self._register_autostart()
         self._start_control_server()
@@ -356,8 +358,14 @@ class TrayApplication:
         header.pack(fill="x")
         ttk.Label(header, text="BOSS VÀO LỆNH", font=("Segoe UI", 18, "bold")).pack(side="left")
         ttk.Label(header, textvariable=self.status_var, font=("Segoe UI", 10)).pack(side="right")
-        panels = ttk.Panedwindow(self.dashboard, orient=tk.HORIZONTAL)
-        panels.pack(fill="both", expand=True, padx=12, pady=8)
+        notebook = ttk.Notebook(self.dashboard)
+        notebook.pack(fill="both", expand=True, padx=12, pady=8)
+        analysis_tab = ttk.Frame(notebook)
+        chart_tab = ttk.Frame(notebook)
+        notebook.add(analysis_tab, text="BẢNG PHÂN TÍCH")
+        notebook.add(chart_tab, text="BIỂU ĐỒ NẾN BINANCE")
+        panels = ttk.Panedwindow(analysis_tab, orient=tk.HORIZONTAL)
+        panels.pack(fill="both", expand=True)
         m1_frame = ttk.LabelFrame(panels, text="PHÂN TÍCH NẾN 1 PHÚT", padding=10)
         m5_frame = ttk.LabelFrame(panels, text="PHÂN TÍCH NẾN 5 PHÚT", padding=10)
         panels.add(m1_frame, weight=1)
@@ -366,6 +374,16 @@ class TrayApplication:
         self.m5_text = tk.Text(m5_frame, font=("Consolas", 11), state="disabled", wrap="word")
         self.m1_text.pack(fill="both", expand=True)
         self.m5_text.pack(fill="both", expand=True)
+        chart_panels = ttk.Panedwindow(chart_tab, orient=tk.HORIZONTAL)
+        chart_panels.pack(fill="both", expand=True)
+        m1_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT SPOT – NẾN M1 (LIVE)", padding=6)
+        m5_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT SPOT – NẾN M5 (LIVE + TARGET)", padding=6)
+        chart_panels.add(m1_chart_frame, weight=1)
+        chart_panels.add(m5_chart_frame, weight=1)
+        self.m1_chart = tk.Canvas(m1_chart_frame, background="#0b0e11", highlightthickness=0)
+        self.m5_chart = tk.Canvas(m5_chart_frame, background="#0b0e11", highlightthickness=0)
+        self.m1_chart.pack(fill="both", expand=True)
+        self.m5_chart.pack(fill="both", expand=True)
         controls = ttk.Frame(self.dashboard, padding=12)
         controls.pack(fill="x")
         ttk.Button(controls, text="DỪNG GỬI TÍN HIỆU", command=self._tray_pause).pack(side="left", padx=4)
@@ -406,12 +424,86 @@ class TrayApplication:
                 conn.row_factory = sqlite3.Row
                 m1 = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 8").fetchall()
                 m5 = conn.execute("SELECT * FROM candles WHERE interval='5m' ORDER BY open_time DESC LIMIT 8").fetchall()
+                m1_chart = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 60").fetchall()
+                m5_chart = conn.execute("SELECT * FROM candles WHERE interval='5m' ORDER BY open_time DESC LIMIT 60").fetchall()
                 last_signal = conn.execute("SELECT * FROM signals ORDER BY market_open_time DESC LIMIT 1").fetchone()
                 settings = dict(conn.execute("SELECT key,value FROM settings").fetchall())
             self._write_text(self.m1_text, self._candle_panel(m1, None, settings))
             self._write_text(self.m5_text, self._candle_panel(m5, last_signal, settings))
+            bot = self.engine.bot
+            m1_plot = self._with_live(list(reversed(m1_chart)), bot.live_m1 if bot else None)
+            m5_plot = self._with_live(list(reversed(m5_chart)), bot.live_m5 if bot else None)
+            self._draw_candles(self.m1_chart, m1_plot, "M1")
+            target = float(last_signal["target_price"]) if last_signal else None
+            self._draw_candles(self.m5_chart, m5_plot, "M5", target)
         except sqlite3.Error as exc:
             self.status_var.set(f"Đang chờ dữ liệu: {exc}")
+
+    @staticmethod
+    def _with_live(rows: list, live) -> list:
+        if live is None:
+            return rows
+        if rows and int(rows[-1]["open_time"]) == live.open_time:
+            rows = rows[:-1]
+        return (rows + [live])[-60:]
+
+    @staticmethod
+    def _value(row, key: str):
+        return getattr(row, key) if hasattr(row, key) else row[key]
+
+    def _draw_candles(self, canvas: tk.Canvas | None, rows: list, interval: str,
+                      target: float | None = None) -> None:
+        if not canvas or not canvas.winfo_exists():
+            return
+        canvas.delete("all")
+        width = max(canvas.winfo_width(), 420)
+        height = max(canvas.winfo_height(), 300)
+        left, right, top, bottom = 12, 82, 28, 34
+        plot_width, plot_height = width - left - right, height - top - bottom
+        if not rows:
+            canvas.create_text(width / 2, height / 2, text="Đang chờ nến Binance...", fill="#b7bdc6")
+            return
+        highs = [float(self._value(row, "high")) for row in rows]
+        lows = [float(self._value(row, "low")) for row in rows]
+        price_high, price_low = max(highs), min(lows)
+        padding = max((price_high - price_low) * 0.08, price_high * 0.00002)
+        price_high, price_low = price_high + padding, price_low - padding
+        span = max(price_high - price_low, 0.01)
+
+        def y(price: float) -> float:
+            return top + (price_high - price) / span * plot_height
+
+        for index in range(5):
+            grid_y = top + plot_height * index / 4
+            price = price_high - span * index / 4
+            canvas.create_line(left, grid_y, width - right, grid_y, fill="#202630")
+            canvas.create_text(width - right + 6, grid_y, text=f"{price:,.2f}", anchor="w", fill="#848e9c")
+        slot = plot_width / max(len(rows), 1)
+        body_width = max(2, min(9, slot * 0.62))
+        for index, row in enumerate(rows):
+            open_price = float(self._value(row, "open"))
+            high = float(self._value(row, "high"))
+            low = float(self._value(row, "low"))
+            close = float(self._value(row, "close"))
+            x = left + slot * (index + 0.5)
+            color = "#0ecb81" if close >= open_price else "#f6465d"
+            canvas.create_line(x, y(high), x, y(low), fill=color)
+            y_open, y_close = y(open_price), y(close)
+            if abs(y_open - y_close) < 1:
+                canvas.create_line(x - body_width / 2, y_open, x + body_width / 2, y_open, fill=color, width=2)
+            else:
+                canvas.create_rectangle(x - body_width / 2, min(y_open, y_close),
+                                        x + body_width / 2, max(y_open, y_close), fill=color, outline=color)
+        if target is not None and price_low <= target <= price_high:
+            target_y = y(target)
+            canvas.create_line(left, target_y, width - right, target_y, fill="#f0b90b", dash=(6, 4), width=2)
+            canvas.create_text(width - right + 6, target_y, text="TARGET", anchor="w", fill="#f0b90b")
+        first_time = datetime.fromtimestamp(int(self._value(rows[0], "open_time")) / 1000, self.config.timezone)
+        last_time = datetime.fromtimestamp(int(self._value(rows[-1], "open_time")) / 1000, self.config.timezone)
+        canvas.create_text(left, height - 15, text=f"{first_time:%H:%M}", anchor="w", fill="#848e9c")
+        canvas.create_text(width - right, height - 15, text=f"{last_time:%H:%M}", anchor="e", fill="#848e9c")
+        canvas.create_text(left, 12, text=f"BINANCE SPOT BTCUSDT • {interval} • LIVE",
+                           anchor="w", fill="#eaecef", font=("Segoe UI", 9, "bold"))
 
     def _candle_panel(self, rows, signal_row, settings: dict) -> str:
         lines = []
