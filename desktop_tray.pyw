@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.8.1"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
@@ -414,7 +414,7 @@ class TrayApplication:
             return
         # Luôn hẹn vòng tiếp theo trước. Nếu cửa sổ đang ẩn, vòng cập nhật vẫn
         # không bị mất và sẽ hoạt động ngay khi người dùng mở lại từ tray.
-        self.dashboard.after(500, self._refresh_dashboard)
+        self.dashboard.after(250, self._refresh_dashboard)
         if not self.dashboard.winfo_viewable():
             return
         try:
@@ -437,9 +437,10 @@ class TrayApplication:
             bot = self.engine.bot
             m1_plot = self._with_live(list(reversed(m1_chart)), bot.live_m1 if bot else None)
             m5_plot = self._with_live(list(reversed(m5_chart)), bot.live_m5 if bot else None)
-            self._draw_candles(self.m1_chart, m1_plot, "M1")
+            live_price = float(bot.live_price) if bot and bot.live_price else None
+            self._draw_candles(self.m1_chart, m1_plot, "M1", live_price=live_price)
             target = float(last_signal["target_price"]) if last_signal else None
-            self._draw_candles(self.m5_chart, m5_plot, "M5", target)
+            self._draw_candles(self.m5_chart, m5_plot, "M5", target, live_price)
         except sqlite3.Error as exc:
             self.status_var.set(f"Đang chờ dữ liệu: {exc}")
 
@@ -456,7 +457,7 @@ class TrayApplication:
         return getattr(row, key) if hasattr(row, key) else row[key]
 
     def _draw_candles(self, canvas: tk.Canvas | None, rows: list, interval: str,
-                      target: float | None = None) -> None:
+                      target: float | None = None, live_price: float | None = None) -> None:
         if not canvas or not canvas.winfo_exists():
             return
         canvas.delete("all")
@@ -469,6 +470,9 @@ class TrayApplication:
             return
         highs = [float(self._value(row, "high")) for row in rows]
         lows = [float(self._value(row, "low")) for row in rows]
+        if live_price is not None:
+            highs.append(live_price)
+            lows.append(live_price)
         price_high, price_low = max(highs), min(lows)
         padding = max((price_high - price_low) * 0.08, price_high * 0.00002)
         price_high, price_low = price_high + padding, price_low - padding
@@ -477,7 +481,7 @@ class TrayApplication:
         def y(price: float) -> float:
             return top + (price_high - price) / span * plot_height
 
-        last_close = float(self._value(rows[-1], "close"))
+        last_close = live_price if live_price is not None else float(self._value(rows[-1], "close"))
         canvas.create_rectangle(7, 7, 176, 34, fill="#181a20", outline="#665814")
         canvas.create_text(15, 20, text="FUTURES MAINNET LIVE", anchor="w", fill="#f0b90b",
                            font=("Segoe UI", 9, "bold"))
