@@ -1,6 +1,6 @@
 # Boss Vào Lệnh
 
-Phiên bản Windows hiện tại: **v1.7.0**. Giao diện đúng sẽ hiện số phiên bản này ở tiêu đề và có tab **BIỂU ĐỒ NẾN BINANCE**.
+Phiên bản Windows hiện tại: **v1.7.1**. Giao diện đúng sẽ hiện số phiên bản này ở tiêu đề và tự mở tab **BIỂU ĐỒ NẾN BINANCE**.
 
 Bot tín hiệu BTCUSDT 5 phút: nhận dữ liệu chính thức từ Binance WebSocket, phân tích mẫu nến M1/M5, gửi một tín hiệu duy nhất trong 20 giây đầu của phiên và cập nhật kết quả trên chính tin nhắn Telegram.
 
