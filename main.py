@@ -196,9 +196,15 @@ class TradingSignalBot:
         await self.db.settle(int(row["market_open_time"]), result, close_price, pnl if row["actual"] else 0.0)
         if row["actual"]:
             await self.apply_money_management(row, result, pnl)
+            result_message = await self.result_text(row, close_price, result, pnl)
             if row["telegram_message_id"]:
-                refreshed = [x for x in await self.db.pending() if x["market_open_time"] == row["market_open_time"]]
-                await self.telegram.edit(int(row["telegram_message_id"]), await self.result_text(row, close_price, result, pnl))
+                edited = await self.telegram.edit(int(row["telegram_message_id"]), result_message)
+                if not edited:
+                    await self.telegram.send(result_message)
+            else:
+                # Tín hiệu đã được lưu nhưng Telegram có thể lỗi đúng lúc gửi.
+                # Vẫn phải báo kết quả khi phiên kết thúc để không mất lệnh.
+                await self.telegram.send(result_message)
 
     async def apply_money_management(self, row, result: str, pnl: float) -> None:
         balance = float(await self.db.get("current_balance", "0")) + pnl
@@ -258,7 +264,7 @@ class TradingSignalBot:
         local_open = datetime.fromtimestamp(row["market_open_time"] / 1000, self.config.timezone)
         local_close = datetime.fromtimestamp(row["market_close_time"] / 1000, self.config.timezone)
         label = "🟢 𝗠𝗨𝗔 𝗧Ă𝗡𝗚" if row["direction"] == "UP" else "🔴 𝗠𝗨𝗔 𝗚𝗜Ả𝗠"
-        result_label = {"WIN": "✅ THẮNG", "LOSS": "❌ THUA", "TIE": "➖ HÒA"}[result]
+        result_label = {"WIN": "✅ ĐÃ THẮNG", "LOSS": "❌ ĐÃ THUA", "TIE": "➖ ĐÃ HÒA"}[result]
         base = float(await self.db.get("base_bet", str(self.config.base_bet)))
         next_step = int(await self.db.get("bet_step", "1"))
         next_bet = min(base * (2 if next_step == 2 else 1), self.config.max_bet)
@@ -270,7 +276,9 @@ class TradingSignalBot:
             f"🎯 Target: <code>{float(row['target_price']):,.2f}</code> USDT\n"
             f"🏁 Giá đóng: <code>{close_price:,.2f}</code> USDT\n"
             f"📈 Độ tin cậy lúc báo: <b>{float(row['confidence']) * 100:.1f}%</b>\n\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{result_label}</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 Lãi/lỗ phiên này: <b>{pnl:+.2f} USDT</b>\n"
             f"➡️ Lệnh tiếp theo: <b>{next_bet:.2f} USDT – LỆNH {next_step}</b>" + await self.stats_text()
         )
@@ -352,4 +360,3 @@ async def async_main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(async_main())
-
