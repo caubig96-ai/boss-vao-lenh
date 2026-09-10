@@ -13,9 +13,9 @@ pip install -r requirements-windows.txt
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
+  --collect-all tzdata ^
   desktop_tray.pyw
 
 echo.
 echo Da tao: dist\BossVaoLenh.exe
 pause
-
