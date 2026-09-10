@@ -15,6 +15,7 @@ class TelegramBot:
         self.chat_id = str(chat_id)
         self.handler = handler
         self.offset = 0
+        self.enabled = True
         self.session: aiohttp.ClientSession | None = None
 
     async def open(self) -> None:
@@ -24,11 +25,15 @@ class TelegramBot:
         if self.session:
             await self.session.close()
 
-    @staticmethod
-    def keyboard() -> dict:
+    def keyboard(self, enabled: bool | None = None) -> dict:
+        if enabled is not None:
+            self.enabled = enabled
+        enabled = self.enabled
+        stop_text = "🔴 ĐANG DỪNG" if enabled is False else "🔴 DỪNG GỬI LỆNH"
+        start_text = "🟢 ĐANG CHẠY" if enabled is True else "🟢 CHẠY LẠI"
         return {"inline_keyboard": [
-            [{"text": "🛑 DỪNG GỬI LỆNH", "callback_data": "stop"},
-             {"text": "▶️ CHẠY LẠI", "callback_data": "start"}],
+            [{"text": stop_text, "callback_data": "stop"},
+             {"text": start_text, "callback_data": "start"}],
             [{"text": "📊 BÁO CÁO", "callback_data": "status"},
              {"text": "💵 ĐỔI VỐN", "callback_data": "setbet_help"}],
         ]}
@@ -40,11 +45,11 @@ class TelegramBot:
                 raise RuntimeError(f"Telegram {method}: {data}")
             return data["result"]
 
-    async def send(self, text: str, keyboard: bool = True) -> int:
+    async def send(self, text: str, keyboard: bool = True, enabled: bool | None = None) -> int:
         payload = {"chat_id": self.chat_id, "text": text, "parse_mode": "HTML",
                    "disable_web_page_preview": True}
         if keyboard:
-            payload["reply_markup"] = self.keyboard()
+            payload["reply_markup"] = self.keyboard(enabled)
         result = await self._call("sendMessage", payload)
         return int(result["message_id"])
 
@@ -63,9 +68,9 @@ class TelegramBot:
         result = await self._call("sendMessage", payload)
         return int(result["message_id"])
 
-    async def edit(self, message_id: int, text: str) -> bool:
+    async def edit(self, message_id: int, text: str, enabled: bool | None = None) -> bool:
         payload = {"chat_id": self.chat_id, "message_id": message_id, "text": text,
-                   "parse_mode": "HTML", "reply_markup": self.keyboard()}
+                   "parse_mode": "HTML", "reply_markup": self.keyboard(enabled)}
         try:
             await self._call("editMessageText", payload)
             return True
