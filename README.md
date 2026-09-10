@@ -46,9 +46,12 @@ python main.py
 
 Ứng dụng Windows chạy nền ở khay hệ thống, không mở cửa sổ console và không nằm trên taskbar khi bảng điều khiển bị ẩn.
 
-1. Điền `.env` như phần trên.
-2. Chạy `build_windows.bat` một lần.
-3. Mở `dist/BossVaoLenh.exe`.
+1. Chạy `build_windows.bat` một lần.
+2. Mở `dist/BossVaoLenh.exe`.
+3. Lần đầu, tool yêu cầu dán Telegram Bot Token.
+4. Tool kiểm tra Token, hướng dẫn gửi `/start`, tự tìm Chat ID rồi lưu cấu hình.
+
+Các lần mở sau không phải nhập lại Token hoặc Chat ID.
 
 Ứng dụng tự đăng ký chạy cùng Windows cho tài khoản hiện tại. Nhấp đúp biểu tượng ở tray hoặc chọn **Mở bảng điều khiển**; mật khẩu mặc định là `123`. Có thể đổi bằng:
 
