@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
-APP_VERSION = "1.7.1"
+APP_VERSION = "1.8.0"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
@@ -380,8 +380,8 @@ class TrayApplication:
         self.m5_text.pack(fill="both", expand=True)
         chart_panels = ttk.Panedwindow(chart_tab, orient=tk.HORIZONTAL)
         chart_panels.pack(fill="both", expand=True)
-        m1_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT SPOT – NẾN M1 (LIVE)", padding=6)
-        m5_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT SPOT – NẾN M5 (LIVE + TARGET)", padding=6)
+        m1_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT FUTURES MAINNET – M1 LIVE", padding=0)
+        m5_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT FUTURES MAINNET – M5 LIVE + TARGET", padding=0)
         chart_panels.add(m1_chart_frame, weight=1)
         chart_panels.add(m5_chart_frame, weight=1)
         self.m1_chart = tk.Canvas(m1_chart_frame, background="#0b0e11", highlightthickness=0)
@@ -414,7 +414,7 @@ class TrayApplication:
             return
         # Luôn hẹn vòng tiếp theo trước. Nếu cửa sổ đang ẩn, vòng cập nhật vẫn
         # không bị mất và sẽ hoạt động ngay khi người dùng mở lại từ tray.
-        self.dashboard.after(2000, self._refresh_dashboard)
+        self.dashboard.after(500, self._refresh_dashboard)
         if not self.dashboard.winfo_viewable():
             return
         try:
@@ -428,8 +428,8 @@ class TrayApplication:
                 conn.row_factory = sqlite3.Row
                 m1 = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 8").fetchall()
                 m5 = conn.execute("SELECT * FROM candles WHERE interval='5m' ORDER BY open_time DESC LIMIT 8").fetchall()
-                m1_chart = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 60").fetchall()
-                m5_chart = conn.execute("SELECT * FROM candles WHERE interval='5m' ORDER BY open_time DESC LIMIT 60").fetchall()
+                m1_chart = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 100").fetchall()
+                m5_chart = conn.execute("SELECT * FROM candles WHERE interval='5m' ORDER BY open_time DESC LIMIT 100").fetchall()
                 last_signal = conn.execute("SELECT * FROM signals ORDER BY market_open_time DESC LIMIT 1").fetchone()
                 settings = dict(conn.execute("SELECT key,value FROM settings").fetchall())
             self._write_text(self.m1_text, self._candle_panel(m1, None, settings))
@@ -449,7 +449,7 @@ class TrayApplication:
             return rows
         if rows and int(rows[-1]["open_time"]) == live.open_time:
             rows = rows[:-1]
-        return (rows + [live])[-60:]
+        return (rows + [live])[-100:]
 
     @staticmethod
     def _value(row, key: str):
@@ -462,7 +462,7 @@ class TrayApplication:
         canvas.delete("all")
         width = max(canvas.winfo_width(), 420)
         height = max(canvas.winfo_height(), 300)
-        left, right, top, bottom = 12, 82, 28, 34
+        left, right, top, bottom = 58, 90, 70, 28
         plot_width, plot_height = width - left - right, height - top - bottom
         if not rows:
             canvas.create_text(width / 2, height / 2, text="Đang chờ nến Binance...", fill="#b7bdc6")
@@ -477,9 +477,21 @@ class TrayApplication:
         def y(price: float) -> float:
             return top + (price_high - price) / span * plot_height
 
-        for index in range(5):
-            grid_y = top + plot_height * index / 4
-            price = price_high - span * index / 4
+        last_close = float(self._value(rows[-1], "close"))
+        canvas.create_rectangle(7, 7, 176, 34, fill="#181a20", outline="#665814")
+        canvas.create_text(15, 20, text="FUTURES MAINNET LIVE", anchor="w", fill="#f0b90b",
+                           font=("Segoe UI", 9, "bold"))
+        canvas.create_rectangle(184, 7, 252, 34, fill="#181a20", outline="#2b3139")
+        canvas.create_text(192, 20, text=f"{len(rows)}/100", anchor="w", fill="#eaecef",
+                           font=("Segoe UI", 9, "bold"))
+        canvas.create_rectangle(260, 7, 430, 34, fill="#181a20", outline="#665814")
+        canvas.create_text(268, 20, text=f"LAST {last_close:,.2f}", anchor="w", fill="#f0b90b",
+                           font=("Segoe UI", 9, "bold"))
+        canvas.create_text(left, 50, text=f"BTCUSDT PERPETUAL • {interval} • KLINE + AGGTRADE",
+                           anchor="w", fill="#848e9c", font=("Segoe UI", 8, "bold"))
+        for index in range(6):
+            grid_y = top + plot_height * index / 5
+            price = price_high - span * index / 5
             canvas.create_line(left, grid_y, width - right, grid_y, fill="#202630")
             canvas.create_text(width - right + 6, grid_y, text=f"{price:,.2f}", anchor="w", fill="#848e9c")
         slot = plot_width / max(len(rows), 1)
@@ -502,12 +514,13 @@ class TrayApplication:
             target_y = y(target)
             canvas.create_line(left, target_y, width - right, target_y, fill="#f0b90b", dash=(6, 4), width=2)
             canvas.create_text(width - right + 6, target_y, text="TARGET", anchor="w", fill="#f0b90b")
+        last_y = y(last_close)
+        canvas.create_line(left, last_y, width - right, last_y, fill="#f0b90b", dash=(5, 4))
+        canvas.create_text(width - right + 6, last_y, text=f"{last_close:,.2f}", anchor="w", fill="#f0b90b")
         first_time = datetime.fromtimestamp(int(self._value(rows[0], "open_time")) / 1000, self.config.timezone)
         last_time = datetime.fromtimestamp(int(self._value(rows[-1], "open_time")) / 1000, self.config.timezone)
         canvas.create_text(left, height - 15, text=f"{first_time:%H:%M}", anchor="w", fill="#848e9c")
         canvas.create_text(width - right, height - 15, text=f"{last_time:%H:%M}", anchor="e", fill="#848e9c")
-        canvas.create_text(left, 12, text=f"BINANCE SPOT BTCUSDT • {interval} • LIVE",
-                           anchor="w", fill="#eaecef", font=("Segoe UI", 9, "bold"))
 
     def _candle_panel(self, rows, signal_row, settings: dict) -> str:
         lines = []
