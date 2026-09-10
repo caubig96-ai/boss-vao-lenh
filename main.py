@@ -115,7 +115,7 @@ class TradingSignalBot:
             self.live_m5 = candle
             self.live_price = candle.close
             if is_new_market:
-                self.schedule_decision(candle)
+                self.schedule_decision(candle, self.last_market_event_ms)
         if candle.closed:
             target = self.m1 if candle.interval == "1m" else self.m5
             if not target or target[-1].open_time != candle.open_time:
@@ -126,15 +126,20 @@ class TradingSignalBot:
             if candle.interval == "5m":
                 await self.settle_market(candle)
 
-    def schedule_decision(self, candle: Candle) -> None:
+    @staticmethod
+    def decision_delay(open_time_ms: int, event_time_ms: int, decision_second: int) -> float | None:
+        """Tính lịch bằng đồng hồ Binance, không phụ thuộc giờ Windows."""
+        elapsed = max(0.0, (event_time_ms - open_time_ms) / 1000)
+        if elapsed > 20:
+            return None
+        return max(0.0, decision_second - elapsed)
+
+    def schedule_decision(self, candle: Candle, event_time_ms: int) -> None:
         if candle.open_time in self.decision_tasks:
             return
-        server_now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-        elapsed = (server_now_ms - candle.open_time) / 1000
-        # Không phát tín hiệu muộn cho phiên hiện tại khi app vừa khởi động.
-        if elapsed > 20:
+        delay = self.decision_delay(candle.open_time, event_time_ms, self.config.decision_second)
+        if delay is None:
             return
-        delay = max(0.0, self.config.decision_second - elapsed)
         self.decision_tasks[candle.open_time] = asyncio.create_task(self.make_decision(candle, delay))
 
     async def make_decision(self, candle: Candle, delay: float) -> None:
@@ -158,6 +163,18 @@ class TradingSignalBot:
             if actual:
                 message_id = await self.telegram.send(await self.signal_text(prediction), enabled=True)
                 await self.db.update_message_id(candle.open_time, message_id)
+            await self.db.event("DECISION_CREATED", {
+                "open_time": candle.open_time,
+                "direction": direction,
+                "actual": actual,
+                "confidence": confidence,
+            })
+        except Exception as exc:
+            log.exception("Không tạo/gửi được tín hiệu phiên %s", candle.open_time)
+            try:
+                await self.db.event("DECISION_ERROR", {"open_time": candle.open_time, "error": str(exc)})
+            except Exception:
+                pass
         finally:
             self.decision_tasks.pop(candle.open_time, None)
 
