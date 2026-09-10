@@ -45,6 +45,7 @@ class TradingSignalBot:
         await self.db.set_default("current_balance", "0")
         await self.db.set_default("pause_started_at", "0")
         await self.db.set_default("awaiting_setbet", "0")
+        await self.db.set_default("stats_reset_at", "0")
         self.telegram.enabled = await self.db.get("manual_enabled", "1") == "1"
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         await self.telegram.open()
@@ -246,8 +247,10 @@ class TradingSignalBot:
         return int(start.timestamp() * 1000)
 
     async def stats_text(self) -> str:
-        virtual = await self.db.stats(self.day_start_ms(), actual_only=False)
-        actual = await self.db.stats(self.day_start_ms(), actual_only=True)
+        reset_at = int(await self.db.get("stats_reset_at", "0"))
+        stats_start = max(self.day_start_ms(), reset_at)
+        virtual = await self.db.stats(stats_start, actual_only=False)
+        actual = await self.db.stats(stats_start, actual_only=True)
         balance = float(await self.db.get("current_balance", "0"))
         actual_total = (actual["wins"] or 0) + (actual["losses"] or 0) + (actual["ties"] or 0)
         virtual_decided = (virtual["wins"] or 0) + (virtual["losses"] or 0)
@@ -331,6 +334,28 @@ class TradingSignalBot:
                     "• Lệnh 2 = 4 USDT\n\n"
                     "Hãy nhập một số rồi bấm Gửi.",
                     "Ví dụ: 2",
+                )
+            elif value == "reset_stats":
+                await self.telegram.ask_reset_confirmation()
+            elif value == "reset_cancel":
+                await self.telegram.send("❎ Đã hủy reset thống kê.")
+            elif value == "reset_confirm":
+                pending = await self.db.pending()
+                now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                # Lệnh đang dở vẫn được tính sau khi chấm; lịch sử trước đó bị ẩn khỏi thống kê mới.
+                reset_at = min((int(row["market_open_time"]) for row in pending), default=now_ms)
+                await self.db.set("stats_reset_at", reset_at)
+                await self.db.set("current_balance", 0)
+                await self.db.set("bet_step", 1)
+                await self.db.set("risk_cycle_losses", 0)
+                await self.db.set("risk_pause_until", 0)
+                await self.db.event("STATS_RESET", {"reset_at": reset_at, "requested_at": now_ms})
+                enabled = await self.signals_enabled()
+                await self.telegram.send(
+                    "♻️ <b>ĐÃ RESET THỐNG KÊ VỀ 0</b>\n"
+                    "Thắng: 0 | Thua: 0 | Lãi/lỗ: 0.00 USDT\n"
+                    "Tầng tiền: LỆNH 1",
+                    enabled=enabled,
                 )
             return
         parts = value.split()
