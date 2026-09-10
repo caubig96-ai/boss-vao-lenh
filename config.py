@@ -19,12 +19,24 @@ def _int(name: str, default: int) -> int:
 
 
 def _default_database_path() -> str:
-    """Dùng đường dẫn cố định trên Windows để rebuild/move EXE không làm mất thống kê."""
+    """Use one stable Windows database so rebuilding/moving the EXE cannot reset stats."""
     if os.name == "nt":
         root = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
         if root:
             return os.path.join(root, "BossVaoLenh", "data", "bot.db")
     return "data/bot.db"
+
+
+def _database_path() -> str:
+    configured = os.getenv("DATABASE_PATH", "").strip()
+    # Old .env files contain DATABASE_PATH=data/bot.db. In a one-file Windows
+    # build that path follows the EXE/cwd and creates a fresh DB after rebuilds.
+    # Keep custom absolute paths, but never use a relative DB path on Windows.
+    if os.name == "nt":
+        if configured and os.path.isabs(configured):
+            return configured
+        return _default_database_path()
+    return configured or _default_database_path()
 
 
 @dataclass(frozen=True)
@@ -36,7 +48,7 @@ class Config:
     payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
     decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 18))
     max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
-    database_path: str = field(default_factory=lambda: os.getenv("DATABASE_PATH", _default_database_path()))
+    database_path: str = field(default_factory=_database_path)
     timezone_name: str = field(default_factory=lambda: os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
     app_password: str = field(default_factory=lambda: os.getenv("APP_PASSWORD", "123"))
@@ -46,8 +58,6 @@ class Config:
         try:
             return ZoneInfo(self.timezone_name)
         except ZoneInfoNotFoundError:
-            # Bản Windows/PyInstaller vẫn chạy đúng giờ Việt Nam nếu dữ liệu
-            # IANA bị thiếu hoặc bị phần mềm bảo mật loại khỏi gói cài đặt.
             if self.timezone_name == "Asia/Ho_Chi_Minh":
                 return timezone(timedelta(hours=7), name="Asia/Ho_Chi_Minh")
             raise
