@@ -113,3 +113,31 @@ def blended_prediction(m1: list[Candle], m5: list[Candle], live_price: float, ta
     confidence = probability_up if direction == "UP" else 1.0 - probability_up
     return direction, confidence, p1, p5, min(n1, n5)
 
+
+def candle_analysis(candles: list[Candle], label: str) -> str:
+    """Mô tả ngắn nến vừa đóng và bối cảnh kỹ thuật, không dùng nến live."""
+    if not candles:
+        return f"{label}: chưa đủ dữ liệu"
+    last = candles[-1]
+    span = max(last.high - last.low, last.close * 1e-9)
+    body = abs(last.close - last.open)
+    upper = last.high - max(last.open, last.close)
+    lower = min(last.open, last.close) - last.low
+    closes = [c.close for c in candles[-40:]]
+    current_rsi = rsi_wilder(closes)
+    fast = ema(closes, 9)
+    slow = ema(closes, 21)
+
+    if body / span <= 0.12:
+        shape = "Doji, thị trường đang giằng co"
+    elif lower > body * 2 and upper < body:
+        shape = "râu dưới dài, có lực mua đẩy lên"
+    elif upper > body * 2 and lower < body:
+        shape = "râu trên dài, có lực bán ép xuống"
+    elif last.close > last.open:
+        shape = "nến tăng"
+    else:
+        shape = "nến giảm"
+
+    trend = "EMA9 trên EMA21" if fast >= slow else "EMA9 dưới EMA21"
+    return f"{label}: {shape}; RSI {current_rsi:.1f}; {trend}"
