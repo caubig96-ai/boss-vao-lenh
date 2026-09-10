@@ -18,6 +18,15 @@ def _int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
 
 
+def _default_database_path() -> str:
+    """Dùng đường dẫn cố định trên Windows để rebuild/move EXE không làm mất thống kê."""
+    if os.name == "nt":
+        root = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+        if root:
+            return os.path.join(root, "BossVaoLenh", "data", "bot.db")
+    return "data/bot.db"
+
+
 @dataclass(frozen=True)
 class Config:
     telegram_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
@@ -27,7 +36,7 @@ class Config:
     payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
     decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 18))
     max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
-    database_path: str = field(default_factory=lambda: os.getenv("DATABASE_PATH", "data/bot.db"))
+    database_path: str = field(default_factory=lambda: os.getenv("DATABASE_PATH", _default_database_path()))
     timezone_name: str = field(default_factory=lambda: os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh"))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
     app_password: str = field(default_factory=lambda: os.getenv("APP_PASSWORD", "123"))
