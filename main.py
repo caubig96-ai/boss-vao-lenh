@@ -44,6 +44,7 @@ class TradingSignalBot:
         await self.db.set_default("current_balance", "0")
         await self.db.set_default("pause_started_at", "0")
         await self.db.set_default("awaiting_setbet", "0")
+        self.telegram.enabled = await self.db.get("manual_enabled", "1") == "1"
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         await self.telegram.open()
         await self.backfill()
@@ -152,7 +153,7 @@ class TradingSignalBot:
             if not await self.db.create_signal(prediction):
                 return
             if actual:
-                message_id = await self.telegram.send(await self.signal_text(prediction))
+                message_id = await self.telegram.send(await self.signal_text(prediction), enabled=True)
                 await self.db.update_message_id(candle.open_time, message_id)
         finally:
             self.decision_tasks.pop(candle.open_time, None)
@@ -202,14 +203,10 @@ class TradingSignalBot:
         if row["actual"]:
             await self.apply_money_management(row, result, pnl)
             result_message = await self.result_text(row, close_price, result, pnl)
-            if row["telegram_message_id"]:
-                edited = await self.telegram.edit(int(row["telegram_message_id"]), result_message)
-                if not edited:
-                    await self.telegram.send(result_message)
-            else:
-                # Tín hiệu đã được lưu nhưng Telegram có thể lỗi đúng lúc gửi.
-                # Vẫn phải báo kết quả khi phiên kết thúc để không mất lệnh.
-                await self.telegram.send(result_message)
+            # Gửi tin mới để Telegram phát thông báo ngay khi phiên M5 đóng.
+            # Không chỉ sửa tin cũ vì tin bị sửa thường không tạo thông báo.
+            enabled = await self.signals_enabled()
+            await self.telegram.send(result_message, enabled=enabled)
 
     async def apply_money_management(self, row, result: str, pnl: float) -> None:
         balance = float(await self.db.get("current_balance", "0")) + pnl
@@ -302,12 +299,16 @@ class TradingSignalBot:
             if value == "stop":
                 await self.db.set("manual_enabled", 0)
                 await self.db.set("pause_started_at", int(datetime.now(timezone.utc).timestamp() * 1000))
-                await self.telegram.send("🛑 <b>ĐÃ DỪNG GỬI LỆNH</b>\nTool vẫn phân tích và chấm kết quả 24/7.")
+                await self.telegram.send(
+                    "🔴 <b>ĐÃ DỪNG GỬI LỆNH</b>\nTool vẫn phân tích và chấm kết quả 24/7.",
+                    enabled=False,
+                )
             elif value == "start":
                 await self.db.set("manual_enabled", 1)
-                await self.telegram.send("▶️ <b>ĐÃ CHẠY LẠI</b>" + await self.stats_text())
+                await self.telegram.send("🟢 <b>BOT ĐANG CHẠY</b>" + await self.stats_text(), enabled=True)
             elif value == "status":
-                await self.telegram.send(await self.status_text())
+                enabled = await self.signals_enabled()
+                await self.telegram.send(await self.status_text(), enabled=enabled)
             elif value == "setbet_help":
                 await self.db.set("awaiting_setbet", 1)
                 await self.telegram.ask(
@@ -388,7 +389,11 @@ class TradingSignalBot:
 
     async def run(self) -> None:
         await self.setup()
-        await self.telegram.send("🤖 <b>BOT ĐÃ KHỞI ĐỘNG</b>\nĐang nhận nến Binance và phân tích 24/7.")
+        enabled = await self.signals_enabled()
+        await self.telegram.send(
+            "🤖 <b>BOT ĐÃ KHỞI ĐỘNG</b>\nĐang nhận nến Binance và phân tích 24/7.",
+            enabled=enabled,
+        )
         tasks = [asyncio.create_task(self.websocket_loop()), asyncio.create_task(self.telegram.poll())]
         await self.stop_event.wait()
         for task in tasks:
