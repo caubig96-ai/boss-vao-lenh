@@ -30,6 +30,7 @@ class Config:
     database_path: str = os.getenv("DATABASE_PATH", "data/bot.db")
     timezone_name: str = os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh")
     log_level: str = os.getenv("LOG_LEVEL", "INFO").upper()
+    app_password: str = os.getenv("APP_PASSWORD", "123")
 
     @property
     def timezone(self) -> ZoneInfo:
@@ -46,4 +47,3 @@ class Config:
             raise ValueError("MIN_CONFIDENCE phải nằm trong khoảng [0.5, 0.95]")
         if not 10 <= self.decision_second <= 20:
             raise ValueError("DECISION_SECOND phải nằm trong khoảng 10–20")
-
