@@ -1,6 +1,6 @@
 # Boss Vào Lệnh
 
-Phiên bản Windows hiện tại: **v1.7.1**. Giao diện đúng sẽ hiện số phiên bản này ở tiêu đề và tự mở tab **BIỂU ĐỒ NẾN BINANCE**.
+Phiên bản Windows hiện tại: **v1.8.0**. Giao diện nến dùng phong cách BINACE-2 với đúng 100 nến Binance Futures Mainnet, Kline WebSocket live và giá aggTrade. Công thức phân tích Boss Vào Lệnh được giữ nguyên.
 
 Bot tín hiệu BTCUSDT 5 phút: nhận dữ liệu chính thức từ Binance WebSocket, phân tích mẫu nến M1/M5, gửi một tín hiệu duy nhất trong 20 giây đầu của phiên và cập nhật kết quả trên chính tin nhắn Telegram.
 
@@ -9,7 +9,7 @@ Bot tín hiệu BTCUSDT 5 phút: nhận dữ liệu chính thức từ Binance W
 ## Chức năng
 
 - Giá trực tiếp qua `aggTrade`, nến M1 và M5 qua Binance WebSocket.
-- Target mặc định là giá mở nến Spot BTCUSDT M5.
+- Target mặc định là giá mở nến Binance Futures Mainnet BTCUSDT M5.
 - So sánh cụm ba nến cũ bằng mô hình k-nearest-neighbors nhẹ.
 - Chỉ sử dụng nến đã đóng để huấn luyện mẫu; không nhìn trước dữ liệu.
 - Quyết định ở giây 18 của mỗi phiên M5.
@@ -102,6 +102,6 @@ WantedBy=multi-user.target
 
 ## Cảnh báo về target
 
-Target hiện lấy từ giá mở nến Spot M5. Trước khi dùng tiền thật, phải so sánh với “Mức giá cần vượt qua” của Binance Prediction trong ít nhất 50–100 phiên. Nếu hai nguồn không trùng tuyệt đối, cần thay nguồn target; dữ liệu Spot khi đó chỉ dùng để phân tích.
+Target hiện lấy từ giá mở nến Binance Futures Mainnet M5 theo nguồn hiển thị của BINACE-2. Trước khi dùng tiền thật, phải so sánh với “Mức giá cần vượt qua” của Binance Prediction trong ít nhất 50–100 phiên. Nếu hai nguồn không trùng tuyệt đối, cần thay bằng nguồn target chính thức của Prediction.
 
 Bot hoạt động ở chế độ bắt buộc chọn: mỗi phiên M5 hợp lệ sẽ đưa ra đúng một quyết định MUA TĂNG hoặc MUA GIẢM trong 20 giây đầu. Tín hiệu không bị loại theo ngưỡng xác suất; Telegram sẽ ghi rõ chất lượng THẤP, TRUNG BÌNH hoặc CAO cùng phân tích nến M1/M5.
