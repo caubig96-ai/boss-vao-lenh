@@ -10,7 +10,7 @@ import aiohttp
 
 from config import Config
 from database import Database
-from indicators import blended_prediction
+from indicators import blended_prediction, candle_analysis
 from models import Candle, Prediction
 from telegram_bot import TelegramBot
 
@@ -123,9 +123,12 @@ class TradingSignalBot:
         if candle.open_time in self.decision_tasks:
             return
         server_now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
-        delay = max(0.0, (candle.open_time + self.config.decision_second * 1000 - server_now_ms) / 1000)
-        if delay <= self.config.decision_second:
-            self.decision_tasks[candle.open_time] = asyncio.create_task(self.make_decision(candle, delay))
+        elapsed = (server_now_ms - candle.open_time) / 1000
+        # Không phát tín hiệu muộn cho phiên hiện tại khi app vừa khởi động.
+        if elapsed > 20:
+            return
+        delay = max(0.0, self.config.decision_second - elapsed)
+        self.decision_tasks[candle.open_time] = asyncio.create_task(self.make_decision(candle, delay))
 
     async def make_decision(self, candle: Candle, delay: float) -> None:
         await asyncio.sleep(delay)
@@ -135,9 +138,8 @@ class TradingSignalBot:
             direction, confidence, p1, p5, samples = blended_prediction(
                 list(self.m1), list(self.m5), self.live_price, candle.open
             )
-            if confidence < self.config.min_confidence:
-                await self.db.event("SKIP_LOW_CONFIDENCE", {"open_time": candle.open_time, "confidence": confidence})
-                return
+            # Chế độ bắt buộc: mỗi phiên hợp lệ luôn chọn UP hoặc DOWN.
+            # confidence vẫn được công khai để người dùng nhận biết tín hiệu yếu.
             actual = await self.signals_enabled()
             base_bet = float(await self.db.get("base_bet", str(self.config.base_bet)))
             step = int(await self.db.get("bet_step", "1"))
@@ -247,6 +249,11 @@ class TradingSignalBot:
         local_open = datetime.fromtimestamp(p.market_open_time / 1000, self.config.timezone)
         local_close = datetime.fromtimestamp(p.market_close_time / 1000, self.config.timezone)
         label = "🟢 𝗠𝗨𝗔 𝗧Ă𝗡𝗚" if p.direction == "UP" else "🔴 𝗠𝗨𝗔 𝗚𝗜Ả𝗠"
+        quality = "CAO" if p.confidence >= 0.65 else "TRUNG BÌNH" if p.confidence >= 0.57 else "THẤP"
+        history_side = "tăng" if p.direction == "UP" else "giảm"
+        history_rate = p.confidence * 100
+        m1_analysis = candle_analysis(list(self.m1), "M1")
+        m5_analysis = candle_analysis(list(self.m5), "M5")
         return (
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{label}: {p.bet_amount:.2f} USDT</b>\n"
@@ -255,7 +262,11 @@ class TradingSignalBot:
             f"🎯 Target: <code>{p.target_price:,.2f}</code> USDT\n"
             f"💵 Giá lúc báo: <code>{p.signal_price:,.2f}</code> USDT\n"
             f"📈 Độ tin cậy: <b>{p.confidence * 100:.1f}%</b>\n"
+            f"⚖️ Chất lượng tín hiệu: <b>{quality}</b>\n"
             f"🔎 M1: {p.m1_probability * 100:.1f}% tăng | M5: {p.m5_probability * 100:.1f}% tăng\n"
+            f"🕯 {m1_analysis}\n"
+            f"🕯 {m5_analysis}\n"
+            f"🧩 Mẫu tương tự nghiêng {history_side}: <b>{history_rate:.1f}%</b> ({p.pattern_samples} mẫu)\n"
             f"🔢 Tầng tiền: <b>LỆNH {p.bet_step}</b>\n\n"
             "⏳ <b>KẾT QUẢ: ĐANG CHỜ</b>" + await self.stats_text()
         )
