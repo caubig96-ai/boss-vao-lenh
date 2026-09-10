@@ -5,6 +5,11 @@ from main import TradingSignalBot
 
 
 class MessageFormatTests(unittest.TestCase):
+    def test_decision_delay_uses_binance_event_time(self):
+        self.assertEqual(TradingSignalBot.decision_delay(1_000_000, 1_005_000, 18), 13.0)
+        self.assertEqual(TradingSignalBot.decision_delay(1_000_000, 1_018_000, 18), 0.0)
+        self.assertIsNone(TradingSignalBot.decision_delay(1_000_000, 1_021_000, 18))
+
     def test_confidence_colors(self):
         self.assertIn("🔴", TradingSignalBot.confidence_block(0.52))
         self.assertIn("THẤP", TradingSignalBot.confidence_block(0.52))
