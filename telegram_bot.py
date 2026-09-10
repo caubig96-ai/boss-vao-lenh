@@ -36,6 +36,7 @@ class TelegramBot:
              {"text": start_text, "callback_data": "start"}],
             [{"text": "📊 BÁO CÁO", "callback_data": "status"},
              {"text": "💵 ĐỔI VỐN", "callback_data": "setbet_help"}],
+            [{"text": "♻️ RESET THỐNG KÊ", "callback_data": "reset_stats"}],
         ]}
 
     async def _call(self, method: str, payload: dict) -> dict:
@@ -64,6 +65,23 @@ class TelegramBot:
                 "selective": True,
                 "input_field_placeholder": placeholder,
             },
+        }
+        result = await self._call("sendMessage", payload)
+        return int(result["message_id"])
+
+    async def ask_reset_confirmation(self) -> int:
+        payload = {
+            "chat_id": self.chat_id,
+            "text": (
+                "⚠️ <b>XÁC NHẬN RESET THỐNG KÊ?</b>\n"
+                "Thắng, thua, lãi/lỗ và số dư theo dõi sẽ về 0. "
+                "Vốn gốc và lịch sử dữ liệu vẫn được giữ."
+            ),
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": [[
+                {"text": "✅ ĐỒNG Ý RESET", "callback_data": "reset_confirm"},
+                {"text": "❎ HỦY", "callback_data": "reset_cancel"},
+            ]]},
         }
         result = await self._call("sendMessage", payload)
         return int(result["message_id"])
