@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from zoneinfo import ZoneInfo
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 
@@ -32,8 +33,15 @@ class Config:
     app_password: str = field(default_factory=lambda: os.getenv("APP_PASSWORD", "123"))
 
     @property
-    def timezone(self) -> ZoneInfo:
-        return ZoneInfo(self.timezone_name)
+    def timezone(self):
+        try:
+            return ZoneInfo(self.timezone_name)
+        except ZoneInfoNotFoundError:
+            # Bản Windows/PyInstaller vẫn chạy đúng giờ Việt Nam nếu dữ liệu
+            # IANA bị thiếu hoặc bị phần mềm bảo mật loại khỏi gói cài đặt.
+            if self.timezone_name == "Asia/Ho_Chi_Minh":
+                return timezone(timedelta(hours=7), name="Asia/Ho_Chi_Minh")
+            raise
 
     def validate(self) -> None:
         if not self.telegram_token or not self.telegram_chat_id:
