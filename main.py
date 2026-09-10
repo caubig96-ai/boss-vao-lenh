@@ -27,6 +27,7 @@ class TradingSignalBot:
         self.http: aiohttp.ClientSession | None = None
         self.m1: deque[Candle] = deque(maxlen=1500)
         self.m5: deque[Candle] = deque(maxlen=1500)
+        self.live_m1: Candle | None = None
         self.live_m5: Candle | None = None
         self.live_price = 0.0
         self.last_market_event_ms = 0
@@ -107,6 +108,8 @@ class TradingSignalBot:
         if event != "kline":
             return
         candle = Candle.from_ws(data)
+        if candle.interval == "1m":
+            self.live_m1 = candle
         if candle.interval == "5m":
             is_new_market = self.live_m5 is None or candle.open_time != self.live_m5.open_time
             self.live_m5 = candle
