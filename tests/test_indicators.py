@@ -1,6 +1,6 @@
 import unittest
 
-from indicators import blended_prediction, feature_vector, rsi_wilder
+from indicators import blended_prediction, candle_analysis, feature_vector, rsi_wilder
 from models import Candle
 
 
@@ -30,7 +30,12 @@ class IndicatorTests(unittest.TestCase):
         self.assertIn(result[0], ("UP", "DOWN"))
         self.assertGreaterEqual(result[1], 0.5)
 
+    def test_candle_analysis_contains_context(self):
+        text = candle_analysis(candles("1m", 40), "M1")
+        self.assertIn("M1:", text)
+        self.assertIn("RSI", text)
+        self.assertIn("EMA9", text)
+
 
 if __name__ == "__main__":
     unittest.main()
-
