@@ -42,6 +42,22 @@ Chạy:
 python main.py
 ```
 
+## Chạy ẩn trên Windows Tray
+
+Ứng dụng Windows chạy nền ở khay hệ thống, không mở cửa sổ console và không nằm trên taskbar khi bảng điều khiển bị ẩn.
+
+1. Điền `.env` như phần trên.
+2. Chạy `build_windows.bat` một lần.
+3. Mở `dist/BossVaoLenh.exe`.
+
+Ứng dụng tự đăng ký chạy cùng Windows cho tài khoản hiện tại. Nhấp đúp biểu tượng ở tray hoặc chọn **Mở bảng điều khiển**; mật khẩu mặc định là `123`. Có thể đổi bằng:
+
+```env
+APP_PASSWORD=mat-khau-moi
+```
+
+Đóng cửa sổ chỉ ẩn ứng dụng xuống tray; bộ phân tích vẫn chạy. Chỉ mục **Thoát hoàn toàn** ở menu tray mới dừng tiến trình. Ứng dụng có khóa chống chạy hai bản cùng lúc.
+
 Kiểm tra:
 
 ```bash
