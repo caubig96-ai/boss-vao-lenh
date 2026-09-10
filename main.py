@@ -14,8 +14,8 @@ from indicators import blended_prediction, candle_analysis
 from models import Candle, Prediction
 from telegram_bot import TelegramBot
 
-BINANCE_REST = "https://api.binance.com"
-BINANCE_WS = "wss://stream.binance.com:9443/stream"
+BINANCE_REST = "https://fapi.binance.com"
+BINANCE_WS = "wss://fstream.binance.com/stream"
 log = logging.getLogger("boss-vao-lenh")
 
 
@@ -62,7 +62,7 @@ class TradingSignalBot:
     async def backfill(self) -> None:
         for interval, target in (("1m", self.m1), ("5m", self.m5)):
             params = {"symbol": self.config.symbol, "interval": interval, "limit": 1000}
-            async with self.http.get(f"{BINANCE_REST}/api/v3/klines", params=params) as response:
+            async with self.http.get(f"{BINANCE_REST}/fapi/v1/klines", params=params) as response:
                 response.raise_for_status()
                 rows = await response.json()
             now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
@@ -186,7 +186,7 @@ class TradingSignalBot:
                 continue
             params = {"symbol": self.config.symbol, "interval": "5m",
                       "startTime": int(row["market_open_time"]), "limit": 1}
-            async with self.http.get(f"{BINANCE_REST}/api/v3/klines", params=params) as response:
+            async with self.http.get(f"{BINANCE_REST}/fapi/v1/klines", params=params) as response:
                 response.raise_for_status()
                 data = await response.json()
             if data and int(data[0][0]) == int(row["market_open_time"]):
