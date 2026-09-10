@@ -29,6 +29,7 @@ class TradingSignalBot:
         self.m5: deque[Candle] = deque(maxlen=1500)
         self.live_m5: Candle | None = None
         self.live_price = 0.0
+        self.last_market_event_ms = 0
         self.decision_tasks: dict[int, asyncio.Task] = {}
         self.stop_event = asyncio.Event()
 
@@ -42,6 +43,7 @@ class TradingSignalBot:
         await self.db.set_default("bet_step", "1")
         await self.db.set_default("current_balance", "0")
         await self.db.set_default("pause_started_at", "0")
+        await self.db.set_default("awaiting_setbet", "0")
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         await self.telegram.open()
         await self.backfill()
@@ -96,6 +98,7 @@ class TradingSignalBot:
                     log.warning("Bù dữ liệu lỗi: %s", backfill_exc)
 
     async def handle_market_message(self, data: dict) -> None:
+        self.last_market_event_ms = int(data.get("E") or datetime.now(timezone.utc).timestamp() * 1000)
         event = data.get("e")
         if event == "aggTrade":
             self.live_price = float(data["p"])
@@ -306,16 +309,43 @@ class TradingSignalBot:
             elif value == "status":
                 await self.telegram.send(await self.status_text())
             elif value == "setbet_help":
-                await self.telegram.send("💵 Gửi <code>/setbet 2</code> để đặt Lệnh 1 = 2 USDT và Lệnh 2 = 4 USDT.")
+                await self.db.set("awaiting_setbet", 1)
+                await self.telegram.ask(
+                    "💵 <b>NHẬP VỐN LỆNH 1</b>\n\n"
+                    "Ví dụ nhập <code>2</code> thì:\n"
+                    "• Lệnh 1 = 2 USDT\n"
+                    "• Lệnh 2 = 4 USDT\n\n"
+                    "Hãy nhập một số rồi bấm Gửi.",
+                    "Ví dụ: 2",
+                )
             return
         parts = value.split()
         command = parts[0].lower()
         try:
-            if command == "/setbet" and len(parts) == 2:
+            awaiting_setbet = await self.db.get("awaiting_setbet", "0") == "1"
+            if awaiting_setbet and command not in ("/cancel", "/status", "/start"):
+                amount = float(value.replace(",", "."))
+                if amount <= 0 or amount * 2 > self.config.max_bet:
+                    raise ValueError
+                await self.db.set("base_bet", amount)
+                await self.db.set("awaiting_setbet", 0)
+                step = int(await self.db.get("bet_step", "1"))
+                next_bet = min(amount * (2 if step == 2 else 1), self.config.max_bet)
+                await self.telegram.send(
+                    f"✅ <b>ĐÃ ĐỔI VỐN THÀNH CÔNG</b>\n"
+                    f"Lệnh 1: <b>{amount:.2f} USDT</b>\n"
+                    f"Lệnh 2: <b>{amount * 2:.2f} USDT</b>\n"
+                    f"Lệnh tiếp theo: <b>{next_bet:.2f} USDT – LỆNH {step}</b>"
+                )
+            elif command == "/cancel":
+                await self.db.set("awaiting_setbet", 0)
+                await self.telegram.send("Đã hủy nhập vốn.")
+            elif command == "/setbet" and len(parts) == 2:
                 amount = float(parts[1])
                 if amount <= 0 or amount * 2 > self.config.max_bet:
                     raise ValueError
                 await self.db.set("base_bet", amount)
+                await self.db.set("awaiting_setbet", 0)
                 await self.telegram.send(f"✅ <b>ĐÃ ĐỔI VỐN</b>\nLệnh 1: {amount:.2f} USDT\nLệnh 2: {amount * 2:.2f} USDT")
             elif command == "/setbalance" and len(parts) == 2:
                 amount = float(parts[1])
@@ -339,8 +369,18 @@ class TradingSignalBot:
         enabled = await self.db.get("manual_enabled", "1") == "1"
         base = float(await self.db.get("base_bet", str(self.config.base_bet)))
         step = int(await self.db.get("bet_step", "1"))
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        data_age = (now_ms - self.last_market_event_ms) / 1000 if self.last_market_event_ms else None
+        connected = data_age is not None and data_age <= 15
+        if self.last_market_event_ms:
+            last_data = datetime.fromtimestamp(self.last_market_event_ms / 1000, self.config.timezone).strftime("%H:%M:%S")
+        else:
+            last_data = "chưa nhận được"
         return (
             "🤖 <b>BÁO CÁO BOT</b>\n"
+            f"Bộ máy phân tích: <b>{'🟢 ĐANG HOẠT ĐỘNG' if connected else '🔴 MẤT DỮ LIỆU'}</b>\n"
+            f"Kết nối Binance: <b>{'BÌNH THƯỜNG' if connected else 'ĐANG KẾT NỐI LẠI'}</b>\n"
+            f"Lần nhận giá gần nhất: <b>{last_data}</b>\n"
             f"Trạng thái gửi lệnh: <b>{'ĐANG CHẠY' if enabled else 'ĐANG DỪNG'}</b>\n"
             f"Giá BTC: <code>{self.live_price:,.2f}</code> USDT\n"
             f"Vốn gốc: <b>{base:.2f}</b> | Tầng hiện tại: <b>LỆNH {step}</b>" + await self.stats_text()
