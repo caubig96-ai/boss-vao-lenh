@@ -48,6 +48,21 @@ class TelegramBot:
         result = await self._call("sendMessage", payload)
         return int(result["message_id"])
 
+    async def ask(self, text: str, placeholder: str = "Nhập số tiền USDT") -> int:
+        """Gửi ForceReply để Telegram tự mở ô nhập liệu cho người dùng."""
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "reply_markup": {
+                "force_reply": True,
+                "selective": True,
+                "input_field_placeholder": placeholder,
+            },
+        }
+        result = await self._call("sendMessage", payload)
+        return int(result["message_id"])
+
     async def edit(self, message_id: int, text: str) -> bool:
         payload = {"chat_id": self.chat_id, "message_id": message_id, "text": text,
                    "parse_mode": "HTML", "reply_markup": self.keyboard()}
