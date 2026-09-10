@@ -29,8 +29,8 @@ class TelegramBot:
         if enabled is not None:
             self.enabled = enabled
         enabled = self.enabled
-        stop_text = "🔴 ĐANG DỪNG" if enabled is False else "🔴 DỪNG GỬI LỆNH"
-        start_text = "🟢 ĐANG CHẠY" if enabled is True else "🟢 CHẠY LẠI"
+        stop_text = "🔴 ĐANG DỪNG" if enabled is False else "⚪ DỪNG GỬI LỆNH"
+        start_text = "🟢 ĐANG CHẠY" if enabled is True else "⚪ CHẠY LẠI"
         return {"inline_keyboard": [
             [{"text": stop_text, "callback_data": "stop"},
              {"text": start_text, "callback_data": "start"}],
