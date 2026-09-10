@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
-APP_VERSION = "1.8.3"
+APP_VERSION = "1.9.0"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
