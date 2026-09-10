@@ -255,6 +255,7 @@ class TradingSignalBot:
         m1_analysis = candle_analysis(list(self.m1), "M1")
         m5_analysis = candle_analysis(list(self.m5), "M5")
         return (
+            "📥 <b>TIN NHẮN VÀO LỆNH</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{label}: {p.bet_amount:.2f} USDT</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -266,8 +267,8 @@ class TradingSignalBot:
             f"🕯 {m1_analysis}\n"
             f"🕯 {m5_analysis}\n"
             f"🧩 Mẫu tương tự nghiêng {history_side}: <b>{history_rate:.1f}%</b> ({p.pattern_samples} mẫu)\n"
-            f"🔢 Tầng tiền: <b>LỆNH {p.bet_step}</b>\n\n"
-            "⏳ <b>KẾT QUẢ: ĐANG CHỜ</b>" + await self.stats_text()
+            f"🔢 Tầng tiền: <b>LỆNH {p.bet_step}</b>"
+            + await self.stats_text()
         )
 
     async def result_text(self, row, close_price: float, result: str, pnl: float) -> str:
@@ -280,6 +281,7 @@ class TradingSignalBot:
         next_bet = min(base * (2 if next_step == 2 else 1), self.config.max_bet)
         confidence_block = self.confidence_block(float(row["confidence"]))
         return (
+            "📤 <b>TIN NHẮN KẾT QUẢ PHIÊN 5 PHÚT</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{label}: {float(row['bet_amount']):.2f} USDT</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
