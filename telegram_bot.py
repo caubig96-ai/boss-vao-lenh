@@ -48,13 +48,15 @@ class TelegramBot:
         result = await self._call("sendMessage", payload)
         return int(result["message_id"])
 
-    async def edit(self, message_id: int, text: str) -> None:
+    async def edit(self, message_id: int, text: str) -> bool:
         payload = {"chat_id": self.chat_id, "message_id": message_id, "text": text,
                    "parse_mode": "HTML", "reply_markup": self.keyboard()}
         try:
             await self._call("editMessageText", payload)
+            return True
         except Exception as exc:
             log.warning("Không sửa được tin nhắn %s: %s", message_id, exc)
+            return False
 
     async def answer_callback(self, callback_id: str, text: str = "") -> None:
         await self._call("answerCallbackQuery", {"callback_query_id": callback_id, "text": text})
@@ -89,4 +91,3 @@ class TelegramBot:
         text = message.get("text", "").strip()
         if text:
             await self.handler("message", html.escape(text), message)
-
