@@ -16,6 +16,8 @@ from telegram_bot import TelegramBot
 
 BINANCE_REST = "https://fapi.binance.com"
 BINANCE_WS = "wss://fstream.binance.com/stream"
+M1_24H = 24 * 60
+M5_24H = 24 * 60 // 5
 log = logging.getLogger("boss-vao-lenh")
 
 
@@ -25,12 +27,16 @@ class TradingSignalBot:
         self.db = Database(config.database_path)
         self.telegram = TelegramBot(config.telegram_token, config.telegram_chat_id, self.handle_telegram)
         self.http: aiohttp.ClientSession | None = None
-        self.m1: deque[Candle] = deque(maxlen=1500)
-        self.m5: deque[Candle] = deque(maxlen=1500)
+        # Bộ nhớ live chỉ giữ đúng 24 giờ: 1440 nến M1 và 288 nến M5.
+        self.m1: deque[Candle] = deque(maxlen=M1_24H)
+        self.m5: deque[Candle] = deque(maxlen=M5_24H)
         self.live_m1: Candle | None = None
         self.live_m5: Candle | None = None
         self.live_price = 0.0
         self.last_market_event_ms = 0
+        self.last_trade_event_ms = 0
+        self.last_trade_time_ms = 0
+        self.trade_ticks = 0
         self.decision_tasks: dict[int, asyncio.Task] = {}
         self.stop_event = asyncio.Event()
 
@@ -60,20 +66,43 @@ class TradingSignalBot:
             await self.http.close()
         await self.db.close()
 
-    async def backfill(self) -> None:
-        for interval, target in (("1m", self.m1), ("5m", self.m5)):
-            params = {"symbol": self.config.symbol, "interval": interval, "limit": 1000}
+    async def _recent_closed_klines(self, interval: str, count: int) -> list[list]:
+        """Nạp đủ số nến đóng gần nhất, kể cả M1 cần hơn giới hạn 1000/request."""
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        end_time = now_ms - 1
+        result: list[list] = []
+        while len(result) < count:
+            remaining = count - len(result)
+            params = {
+                "symbol": self.config.symbol,
+                "interval": interval,
+                "limit": min(1000, remaining),
+                "endTime": end_time,
+            }
             async with self.http.get(f"{BINANCE_REST}/fapi/v1/klines", params=params) as response:
                 response.raise_for_status()
                 rows = await response.json()
-            now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            closed_rows = [row for row in rows if int(row[6]) < now_ms]
+            if not closed_rows:
+                break
+            result = closed_rows + result
+            oldest_open = int(closed_rows[0][0])
+            if oldest_open <= 0:
+                break
+            end_time = oldest_open - 1
+            if len(rows) < int(params["limit"]):
+                break
+        return result[-count:]
+
+    async def backfill(self) -> None:
+        for interval, target, count in (("1m", self.m1, M1_24H), ("5m", self.m5, M5_24H)):
+            rows = await self._recent_closed_klines(interval, count)
             target.clear()
             for row in rows:
                 candle = Candle.from_rest(interval, row)
-                if candle.close_time < now_ms:
-                    target.append(candle)
-                    await self.db.save_candle(candle)
-        log.info("Đã nạp %d nến M1 và %d nến M5", len(self.m1), len(self.m5))
+                target.append(candle)
+                await self.db.save_candle(candle)
+        log.info("Đã nạp rolling 24h: %d nến M1 và %d nến M5", len(self.m1), len(self.m5))
 
     async def websocket_loop(self) -> None:
         streams = f"{self.config.symbol.lower()}@aggTrade/{self.config.symbol.lower()}@kline_1m/{self.config.symbol.lower()}@kline_5m"
@@ -85,7 +114,8 @@ class TradingSignalBot:
                     log.info("Đã kết nối Binance WebSocket")
                     async for message in ws:
                         if message.type == aiohttp.WSMsgType.TEXT:
-                            await self.handle_market_message(message.json().get("data", {}))
+                            payload = message.json()
+                            await self.handle_market_message(payload.get("data", {}))
                         elif message.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
                             break
             except asyncio.CancelledError:
@@ -100,32 +130,103 @@ class TradingSignalBot:
                 except Exception as backfill_exc:
                     log.warning("Bù dữ liệu lỗi: %s", backfill_exc)
 
-    async def handle_market_message(self, data: dict) -> None:
-        self.last_market_event_ms = int(data.get("E") or datetime.now(timezone.utc).timestamp() * 1000)
-        event = data.get("e")
-        if event == "aggTrade":
-            self.live_price = float(data["p"])
+    def _apply_trade_to_live(self, interval: str, trade_time_ms: int, price: float) -> None:
+        """Mỗi aggTrade tạo snapshot nến mới để UI luôn thấy OHLC nhất quán theo từng tick."""
+        attr = "live_m1" if interval == "1m" else "live_m5"
+        current: Candle | None = getattr(self, attr)
+        bucket = Candle.bucket_open_time(interval, trade_time_ms)
+
+        # Bỏ tick đến muộn thuộc một bucket đã qua để biểu đồ không giật lùi.
+        if current is not None and bucket < current.open_time:
             return
+        if current is None or bucket > current.open_time:
+            updated = Candle.from_trade(interval, trade_time_ms, price)
+        elif current.closed:
+            # Kline đóng chính thức đã đến; không mở lại chính bucket đó vì một tick trễ.
+            return
+        else:
+            updated = current.with_trade(price)
+        setattr(self, attr, updated)
+
+    def _merge_live_kline(self, candle: Candle, event_time_ms: int) -> Candle:
+        """Ưu tiên OHLC chính thức, nhưng không để kline chậm ghi đè một aggTrade mới hơn."""
+        attr = "live_m1" if candle.interval == "1m" else "live_m5"
+        current: Candle | None = getattr(self, attr)
+        if candle.closed or current is None or current.open_time != candle.open_time:
+            return candle
+        if self.last_trade_event_ms <= event_time_ms:
+            return candle
+        # Trade mới hơn event kline: giữ open/volume chính thức, giữ close/high/low mới nhất từ tick.
+        return Candle(
+            candle.interval,
+            candle.open_time,
+            candle.close_time,
+            candle.open,
+            max(candle.high, current.high),
+            min(candle.low, current.low),
+            current.close,
+            candle.volume,
+            False,
+        )
+
+    async def handle_market_message(self, data: dict) -> None:
+        event_time_ms = int(data.get("E") or datetime.now(timezone.utc).timestamp() * 1000)
+        self.last_market_event_ms = max(self.last_market_event_ms, event_time_ms)
+        event = data.get("e")
+
+        if event == "aggTrade":
+            trade_time_ms = int(data.get("T") or event_time_ms)
+            # Combined stream có thể giao thông báo lệch thứ tự rất nhỏ; không cho giá live quay ngược thời gian.
+            if trade_time_ms < self.last_trade_time_ms:
+                return
+            price = float(data["p"])
+            self.last_trade_time_ms = trade_time_ms
+            self.last_trade_event_ms = max(self.last_trade_event_ms, event_time_ms)
+            self.trade_ticks += 1
+            self.live_price = price
+            self._apply_trade_to_live("1m", trade_time_ms, price)
+            self._apply_trade_to_live("5m", trade_time_ms, price)
+            return
+
         if event != "kline":
             return
-        candle = Candle.from_ws(data)
-        if candle.interval == "1m":
-            self.live_m1 = candle
-        if candle.interval == "5m":
-            is_new_market = self.live_m5 is None or candle.open_time != self.live_m5.open_time
-            self.live_m5 = candle
-            self.live_price = candle.close
-            if is_new_market:
-                self.schedule_decision(candle, self.last_market_event_ms)
-        if candle.closed:
-            target = self.m1 if candle.interval == "1m" else self.m5
-            if not target or target[-1].open_time != candle.open_time:
-                target.append(candle)
+
+        raw_candle = Candle.from_ws(data)
+        attr = "live_m1" if raw_candle.interval == "1m" else "live_m5"
+        current: Candle | None = getattr(self, attr)
+
+        # Nếu một tick của bucket mới đã tới trước kline đóng của bucket cũ, không kéo UI quay lại nến cũ.
+        if current is None or raw_candle.open_time >= current.open_time:
+            live_candle = self._merge_live_kline(raw_candle, event_time_ms)
+            setattr(self, attr, live_candle)
+        else:
+            live_candle = current
+
+        # Kline có thể làm nguồn dự phòng nếu aggTrade chưa tới hoặc không mới hơn bucket này.
+        if self.live_price == 0.0 or (
+            self.last_trade_time_ms <= raw_candle.close_time and event_time_ms >= self.last_trade_event_ms
+        ):
+            self.live_price = raw_candle.close
+
+        if raw_candle.interval == "5m":
+            # Gọi ở mọi kline M5; schedule_decision tự chống trùng và chỉ nhận 20 giây đầu phiên.
+            self.schedule_decision(raw_candle, event_time_ms)
+
+        if raw_candle.closed:
+            target = self.m1 if raw_candle.interval == "1m" else self.m5
+            if not target or target[-1].open_time < raw_candle.open_time:
+                target.append(raw_candle)
+            elif target[-1].open_time == raw_candle.open_time:
+                target[-1] = raw_candle
             else:
-                target[-1] = candle
-            await self.db.save_candle(candle)
-            if candle.interval == "5m":
-                await self.settle_market(candle)
+                # Trường hợp hiếm event đóng đến lệch thứ tự: thay đúng phần tử thay vì append sai timeline.
+                for index in range(len(target) - 1, -1, -1):
+                    if target[index].open_time == raw_candle.open_time:
+                        target[index] = raw_candle
+                        break
+            await self.db.save_candle(raw_candle)
+            if raw_candle.interval == "5m":
+                await self.settle_market(raw_candle)
 
     @staticmethod
     def decision_delay(open_time_ms: int, event_time_ms: int, decision_second: int) -> float | None:
@@ -248,21 +349,24 @@ class TradingSignalBot:
 
     async def stats_text(self) -> str:
         reset_at = int(await self.db.get("stats_reset_at", "0"))
-        stats_start = max(self.day_start_ms(), reset_at)
-        virtual = await self.db.stats(stats_start, actual_only=False)
-        actual = await self.db.stats(stats_start, actual_only=True)
+        persistent_start = max(0, reset_at)
+        today_start = max(self.day_start_ms(), persistent_start)
+        actual = await self.db.stats(persistent_start, actual_only=True)
+        virtual = await self.db.stats(persistent_start, actual_only=False)
+        today = await self.db.stats(today_start, actual_only=True)
         balance = float(await self.db.get("current_balance", "0"))
         actual_total = (actual["wins"] or 0) + (actual["losses"] or 0) + (actual["ties"] or 0)
         virtual_decided = (virtual["wins"] or 0) + (virtual["losses"] or 0)
         win_rate = ((virtual["wins"] or 0) / virtual_decided * 100) if virtual_decided else 0
         return (
-            "\n\n📊 <b>THỐNG KÊ HÔM NAY</b>\n"
-            f"🟢 Thắng: <b>{actual['wins'] or 0}</b> | 🔴 Thua: <b>{actual['losses'] or 0}</b>\n"
+            "\n\n📊 <b>THỐNG KÊ TỪ LẦN RESET</b>\n"
+            f"🟢 Thắng: <b>{actual['wins'] or 0}</b> | 🔴 Thua: <b>{actual['losses'] or 0}</b> | ➖ Hòa: <b>{actual['ties'] or 0}</b>\n"
             f"📋 Tổng lệnh thực tế: <b>{actual_total}</b>\n"
             f"💰 Tổng tiền đã đặt: <b>{actual['staked']:.2f} USDT</b>\n"
             f"💵 Lãi/lỗ ròng: <b>{actual['pnl']:+.2f} USDT</b>\n"
-            f"💳 Số dư hiện tại: <b>{balance:.2f} USDT</b>\n\n"
-            "📡 <b>PHÂN TÍCH 24/7</b>\n"
+            f"💳 Số dư hiện tại: <b>{balance:.2f} USDT</b>\n"
+            f"📅 Hôm nay: {today['wins'] or 0} thắng | {today['losses'] or 0} thua | {today['ties'] or 0} hòa\n\n"
+            "📡 <b>PHÂN TÍCH TỪ LẦN RESET</b>\n"
             f"Thắng: {virtual['wins'] or 0} | Thua: {virtual['losses'] or 0} | Hòa: {virtual['ties'] or 0}\n"
             f"Tỷ lệ thắng: {win_rate:.1f}%"
         )
@@ -410,16 +514,24 @@ class TradingSignalBot:
         step = int(await self.db.get("bet_step", "1"))
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         data_age = (now_ms - self.last_market_event_ms) / 1000 if self.last_market_event_ms else None
+        trade_age = (now_ms - self.last_trade_event_ms) / 1000 if self.last_trade_event_ms else None
         connected = data_age is not None and data_age <= 15
+        tick_connected = trade_age is not None and trade_age <= 3
         if self.last_market_event_ms:
             last_data = datetime.fromtimestamp(self.last_market_event_ms / 1000, self.config.timezone).strftime("%H:%M:%S")
         else:
             last_data = "chưa nhận được"
+        if self.last_trade_event_ms:
+            last_tick = datetime.fromtimestamp(self.last_trade_event_ms / 1000, self.config.timezone).strftime("%H:%M:%S.%f")[:-3]
+        else:
+            last_tick = "chưa nhận được"
         return (
             "🤖 <b>BÁO CÁO BOT</b>\n"
             f"Bộ máy phân tích: <b>{'🟢 ĐANG HOẠT ĐỘNG' if connected else '🔴 MẤT DỮ LIỆU'}</b>\n"
             f"Kết nối Binance: <b>{'BÌNH THƯỜNG' if connected else 'ĐANG KẾT NỐI LẠI'}</b>\n"
-            f"Lần nhận giá gần nhất: <b>{last_data}</b>\n"
+            f"Luồng tick aggTrade: <b>{'🟢 ĐANG NHẢY' if tick_connected else '🔴 KHÔNG CÓ TICK MỚI'}</b>\n"
+            f"Tick gần nhất: <b>{last_tick}</b> | Đã nhận: <b>{self.trade_ticks:,}</b>\n"
+            f"Lần nhận dữ liệu gần nhất: <b>{last_data}</b>\n"
             f"Trạng thái gửi lệnh: <b>{'ĐANG CHẠY' if enabled else 'ĐANG DỪNG'}</b>\n"
             f"Giá BTC: <code>{self.live_price:,.2f}</code> USDT\n"
             f"Vốn gốc: <b>{base:.2f}</b> | Tầng hiện tại: <b>LỆNH {step}</b>" + await self.stats_text()

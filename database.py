@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shutil
+import sys
 from datetime import datetime, timezone
 
 import aiosqlite
 
 from models import Candle, Prediction
 
+
+log = logging.getLogger(__name__)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -37,7 +42,35 @@ class Database:
         self.path = path
         self.conn: aiosqlite.Connection | None = None
 
+    def _migrate_legacy_windows_database(self) -> None:
+        """Một lần chuyển DB cũ cạnh EXE sang LOCALAPPDATA để rebuild không mất thống kê."""
+        if os.name != "nt":
+            return
+        target = os.path.abspath(self.path)
+        if os.path.exists(target):
+            return
+        candidates = [
+            os.path.abspath(os.path.join(os.getcwd(), "data", "bot.db")),
+            os.path.abspath(os.path.join(os.path.dirname(sys.executable), "data", "bot.db")),
+        ]
+        seen: set[str] = set()
+        for source in candidates:
+            if source in seen or source == target:
+                continue
+            seen.add(source)
+            if not os.path.isfile(source):
+                continue
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copy2(source, target)
+            for suffix in ("-wal", "-shm"):
+                sidecar = source + suffix
+                if os.path.isfile(sidecar):
+                    shutil.copy2(sidecar, target + suffix)
+            log.info("Đã chuyển dữ liệu thống kê cũ từ %s sang %s", source, target)
+            return
+
     async def open(self) -> None:
+        self._migrate_legacy_windows_database()
         directory = os.path.dirname(self.path)
         if directory:
             os.makedirs(directory, exist_ok=True)
