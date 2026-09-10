@@ -208,8 +208,7 @@ class TradingSignalBot:
             result_message = await self.result_text(row, close_price, result, pnl)
             # Gửi tin mới để Telegram phát thông báo ngay khi phiên M5 đóng.
             # Không chỉ sửa tin cũ vì tin bị sửa thường không tạo thông báo.
-            enabled = await self.signals_enabled()
-            await self.telegram.send(result_message, enabled=enabled)
+            await self.telegram.send(result_message, keyboard=False)
 
     async def apply_money_management(self, row, result: str, pnl: float) -> None:
         balance = float(await self.db.get("current_balance", "0")) + pnl
@@ -275,29 +274,7 @@ class TradingSignalBot:
         )
 
     async def result_text(self, row, close_price: float, result: str, pnl: float) -> str:
-        local_open = datetime.fromtimestamp(row["market_open_time"] / 1000, self.config.timezone)
-        local_close = datetime.fromtimestamp(row["market_close_time"] / 1000, self.config.timezone)
-        label = "🟢 𝗠𝗨𝗔 𝗧Ă𝗡𝗚" if row["direction"] == "UP" else "🔴 𝗠𝗨𝗔 𝗚𝗜Ả𝗠"
-        result_label = {"WIN": "✅ ĐÃ THẮNG", "LOSS": "❌ ĐÃ THUA", "TIE": "➖ ĐÃ HÒA"}[result]
-        base = float(await self.db.get("base_bet", str(self.config.base_bet)))
-        next_step = int(await self.db.get("bet_step", "1"))
-        next_bet = min(base * (2 if next_step == 2 else 1), self.config.max_bet)
-        confidence_block = self.confidence_block(float(row["confidence"]))
-        return (
-            "📤 <b>TIN NHẮN KẾT QUẢ PHIÊN 5 PHÚT</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>{label}: {float(row['bet_amount']):.2f} USDT</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"⏰ Phiên: {local_open:%H:%M}–{local_close:%H:%M}\n"
-            f"🎯 Target: <code>{float(row['target_price']):,.2f}</code> USDT\n"
-            f"🏁 Giá đóng: <code>{close_price:,.2f}</code> USDT\n"
-            f"\n{confidence_block}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"<b>{result_label}</b>\n"
-            "━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 Lãi/lỗ phiên này: <b>{pnl:+.2f} USDT</b>\n"
-            f"➡️ Lệnh tiếp theo: <b>{next_bet:.2f} USDT – LỆNH {next_step}</b>" + await self.stats_text()
-        )
+        return {"WIN": "✅ <b>ĐÃ THẮNG</b>", "LOSS": "❌ <b>ĐÃ THUA</b>", "TIE": "➖ <b>ĐÃ HÒA</b>"}[result]
 
     @staticmethod
     def confidence_block(confidence: float) -> str:
