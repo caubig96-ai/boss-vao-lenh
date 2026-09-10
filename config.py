@@ -24,7 +24,6 @@ class Config:
     symbol: str = field(default_factory=lambda: os.getenv("SYMBOL", "BTCUSDT").upper())
     base_bet: float = field(default_factory=lambda: _float("BASE_BET", 1.0))
     payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
-    min_confidence: float = field(default_factory=lambda: _float("MIN_CONFIDENCE", 0.56))
     decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 18))
     max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
     database_path: str = field(default_factory=lambda: os.getenv("DATABASE_PATH", "data/bot.db"))
@@ -43,7 +42,5 @@ class Config:
             raise ValueError("BASE_BET phải lớn hơn 0 và không vượt MAX_BET")
         if not 0 < self.payout_rate <= 2:
             raise ValueError("PAYOUT_RATE phải nằm trong khoảng (0, 2]")
-        if not 0.5 <= self.min_confidence <= 0.95:
-            raise ValueError("MIN_CONFIDENCE phải nằm trong khoảng [0.5, 0.95]")
         if not 10 <= self.decision_second <= 20:
             raise ValueError("DECISION_SECOND phải nằm trong khoảng 10–20")
