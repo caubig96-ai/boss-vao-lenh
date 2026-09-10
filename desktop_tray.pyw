@@ -21,6 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
+APP_VERSION = "1.7.0"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
@@ -350,13 +351,13 @@ class TrayApplication:
             self.dashboard.lift()
             return
         self.dashboard = tk.Toplevel(self.root)
-        self.dashboard.title("Boss Vào Lệnh – Phân tích M1 / M5")
+        self.dashboard.title(f"Boss Vào Lệnh v{APP_VERSION} – Phân tích M1 / M5")
         self.dashboard.geometry("980x620")
         self.dashboard.minsize(820, 520)
         self.dashboard.protocol("WM_DELETE_WINDOW", self.hide_dashboard)
         header = ttk.Frame(self.dashboard, padding=12)
         header.pack(fill="x")
-        ttk.Label(header, text="BOSS VÀO LỆNH", font=("Segoe UI", 18, "bold")).pack(side="left")
+        ttk.Label(header, text=f"BOSS VÀO LỆNH  •  v{APP_VERSION}", font=("Segoe UI", 18, "bold")).pack(side="left")
         ttk.Label(header, textvariable=self.status_var, font=("Segoe UI", 10)).pack(side="right")
         notebook = ttk.Notebook(self.dashboard)
         notebook.pack(fill="both", expand=True, padx=12, pady=8)
