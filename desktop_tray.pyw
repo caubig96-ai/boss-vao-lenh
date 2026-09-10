@@ -346,7 +346,8 @@ class TrayApplication:
         ttk.Button(controls, text="DỪNG GỬI TÍN HIỆU", command=self._tray_pause).pack(side="left", padx=4)
         ttk.Button(controls, text="CHẠY GỬI TÍN HIỆU", command=self._tray_resume).pack(side="left", padx=4)
         ttk.Button(controls, text="ẨN XUỐNG TRAY", command=self.hide_dashboard).pack(side="right", padx=4)
-        self._refresh_dashboard()
+        # Chờ Toplevel được Windows map xong rồi mới đọc và vẽ dữ liệu.
+        self.dashboard.after(250, self._refresh_dashboard)
 
     def hide_dashboard(self) -> None:
         if self.dashboard and self.dashboard.winfo_exists():
@@ -362,10 +363,20 @@ class TrayApplication:
         widget.configure(state="disabled")
 
     def _refresh_dashboard(self) -> None:
-        if not self.dashboard or not self.dashboard.winfo_exists() or not self.dashboard.winfo_viewable():
+        if not self.dashboard or not self.dashboard.winfo_exists():
+            return
+        # Luôn hẹn vòng tiếp theo trước. Nếu cửa sổ đang ẩn, vòng cập nhật vẫn
+        # không bị mất và sẽ hoạt động ngay khi người dùng mở lại từ tray.
+        self.dashboard.after(2000, self._refresh_dashboard)
+        if not self.dashboard.winfo_viewable():
             return
         try:
             path = self._db_path()
+            if not path.exists():
+                waiting = "Đang khởi động bộ máy và chờ dữ liệu Binance..."
+                self._write_text(self.m1_text, waiting)
+                self._write_text(self.m5_text, waiting)
+                return
             with sqlite3.connect(path, timeout=3) as conn:
                 conn.row_factory = sqlite3.Row
                 m1 = conn.execute("SELECT * FROM candles WHERE interval='1m' ORDER BY open_time DESC LIMIT 8").fetchall()
@@ -376,7 +387,6 @@ class TrayApplication:
             self._write_text(self.m5_text, self._candle_panel(m5, last_signal, settings))
         except sqlite3.Error as exc:
             self.status_var.set(f"Đang chờ dữ liệu: {exc}")
-        self.dashboard.after(2000, self._refresh_dashboard)
 
     def _candle_panel(self, rows, signal_row, settings: dict) -> str:
         lines = []
