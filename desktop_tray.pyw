@@ -8,6 +8,9 @@ import sqlite3
 import sys
 import threading
 import tkinter as tk
+import json
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -29,6 +32,7 @@ def app_directory() -> Path:
 BASE_DIR = app_directory()
 os.chdir(BASE_DIR)
 
+from dotenv import load_dotenv  # noqa: E402
 from config import Config  # noqa: E402
 from main import TradingSignalBot  # noqa: E402
 
@@ -84,9 +88,130 @@ class TrayApplication:
         self.m5_text: tk.Text | None = None
         self.status_var = tk.StringVar(value="Đang khởi động...")
         self._register_autostart()
-        self.engine.start()
         self._create_tray()
+        if self.config.telegram_token and self.config.telegram_chat_id:
+            self.engine.start()
+        else:
+            self.status_var.set("Cần cài Telegram lần đầu")
+            self.root.after(300, self.show_first_run_setup)
         self.root.after(1500, self._check_engine)
+
+    @staticmethod
+    def _telegram_api(token: str, method: str) -> dict:
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/{method}",
+            headers={"User-Agent": "BossVaoLenh/1.0"},
+        )
+        with urllib.request.urlopen(request, timeout=12) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if not payload.get("ok"):
+            raise ValueError(payload.get("description", "Telegram từ chối yêu cầu"))
+        return payload
+
+    @staticmethod
+    def _save_env(token: str, chat_id: str) -> None:
+        env_path = BASE_DIR / ".env"
+        values = {}
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                if "=" in line and not line.lstrip().startswith("#"):
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip()
+        values["TELEGRAM_BOT_TOKEN"] = token
+        values["TELEGRAM_CHAT_ID"] = chat_id
+        values.setdefault("APP_PASSWORD", "123")
+        values.setdefault("TIMEZONE", "Asia/Ho_Chi_Minh")
+        env_path.write_text("\n".join(f"{key}={value}" for key, value in values.items()) + "\n", encoding="utf-8")
+        try:
+            os.chmod(env_path, 0o600)
+        except OSError:
+            pass
+
+    def show_first_run_setup(self) -> None:
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Cài Telegram lần đầu")
+        dialog.geometry("570x430")
+        dialog.resizable(False, False)
+        dialog.attributes("-topmost", True)
+        dialog.grab_set()
+        body = ttk.Frame(dialog, padding=22)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="KẾT NỐI TELEGRAM MỘT LẦN", font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        ttk.Label(
+            body,
+            text=("1. Mở Telegram, tìm @BotFather.\n"
+                  "2. Gửi /newbot và làm theo hướng dẫn.\n"
+                  "3. Sao chép Token BotFather cung cấp rồi dán bên dưới."),
+            font=("Segoe UI", 10), justify="left",
+        ).pack(anchor="w", pady=(12, 8))
+        token_var = tk.StringVar()
+        token_entry = ttk.Entry(body, textvariable=token_var, font=("Consolas", 11), show="•")
+        token_entry.pack(fill="x", pady=5)
+        status = tk.StringVar(value="Chưa kiểm tra Token")
+        ttk.Label(body, textvariable=status, foreground="#374151").pack(anchor="w", pady=4)
+        bot_username = tk.StringVar()
+        detected_chat = tk.StringVar()
+
+        def run_thread(task, success):
+            def worker():
+                try:
+                    result = task()
+                    self.root.after(0, lambda: success(result))
+                except Exception as exc:
+                    self.root.after(0, lambda: status.set(f"Lỗi: {exc}"))
+            threading.Thread(target=worker, daemon=True).start()
+
+        def check_token():
+            token = token_var.get().strip()
+            if not token:
+                status.set("Hãy dán Token trước.")
+                return
+            status.set("Đang kiểm tra Token...")
+            run_thread(lambda: self._telegram_api(token, "getMe"), token_ok)
+
+        def token_ok(payload):
+            username = payload["result"].get("username", "")
+            bot_username.set(username)
+            status.set(f"Token hợp lệ – bot @{username}. Hãy mở bot, nhấn START hoặc gửi /start.")
+            detect_button.configure(state="normal")
+
+        def detect_chat():
+            token = token_var.get().strip()
+            status.set("Đang tìm tin nhắn /start của anh...")
+            run_thread(lambda: self._telegram_api(token, "getUpdates"), chat_ok)
+
+        def chat_ok(payload):
+            candidates = []
+            for update in payload.get("result", []):
+                message = update.get("message") or update.get("edited_message")
+                if message and message.get("chat", {}).get("type") == "private":
+                    candidates.append(message["chat"])
+            if not candidates:
+                status.set("Chưa thấy /start. Hãy nhắn /start cho bot rồi bấm lại.")
+                return
+            chat = candidates[-1]
+            detected_chat.set(str(chat["id"]))
+            name = chat.get("first_name") or chat.get("username") or str(chat["id"])
+            status.set(f"Đã tìm thấy Telegram: {name} – Chat ID {chat['id']}")
+            save_button.configure(state="normal")
+
+        def save_and_start():
+            self._save_env(token_var.get().strip(), detected_chat.get())
+            load_dotenv(BASE_DIR / ".env", override=True)
+            self.config = Config()
+            dialog.destroy()
+            self.status_var.set("Đã lưu Telegram – đang khởi động bot")
+            self.engine.start()
+            messagebox.showinfo("Hoàn tất", "Đã kết nối Telegram. Những lần sau tool sẽ tự chạy.")
+
+        ttk.Button(body, text="1. KIỂM TRA TOKEN", command=check_token).pack(fill="x", pady=(10, 5))
+        detect_button = ttk.Button(body, text="2. TÔI ĐÃ NHẮN /START – TỰ LẤY CHAT ID",
+                                   command=detect_chat, state="disabled")
+        detect_button.pack(fill="x", pady=5)
+        save_button = ttk.Button(body, text="3. LƯU VÀ CHẠY TOOL", command=save_and_start, state="disabled")
+        save_button.pack(fill="x", pady=5)
+        ttk.Label(body, text="Token được lưu trên máy trong tệp .env và không đẩy lên GitHub.",
+                  foreground="#6b7280").pack(anchor="w", pady=(12, 0))
 
     def _register_autostart(self) -> None:
         if os.name != "nt":
@@ -156,7 +281,9 @@ class TrayApplication:
             self.root.after(0, lambda: messagebox.showerror("Lỗi", str(exc)))
 
     def _check_engine(self) -> None:
-        if self.engine.error:
+        if not self.config.telegram_token or not self.config.telegram_chat_id:
+            self.status_var.set("Cần cài Telegram lần đầu")
+        elif self.engine.error:
             self.status_var.set(f"Lỗi cấu hình: {self.engine.error}")
         elif self.engine.thread and self.engine.thread.is_alive():
             self.status_var.set("Đang chạy ẩn và phân tích 24/7")
@@ -165,6 +292,9 @@ class TrayApplication:
         self.root.after(5000, self._check_engine)
 
     def request_password(self) -> None:
+        if not self.config.telegram_token or not self.config.telegram_chat_id:
+            self.show_first_run_setup()
+            return
         dialog = tk.Toplevel(self.root)
         dialog.title("Mở Boss Vào Lệnh")
         dialog.geometry("330x165")
@@ -295,4 +425,3 @@ def acquire_single_instance():
 if __name__ == "__main__":
     _mutex = acquire_single_instance()
     TrayApplication().run()
-
