@@ -1,6 +1,12 @@
 import unittest
 
-from indicators import blended_prediction, candle_analysis, feature_vector, rsi_wilder
+from indicators import (
+    blended_prediction,
+    candle_analysis,
+    feature_vector,
+    five_candle_pattern_probability,
+    rsi_wilder,
+)
 from models import Candle
 
 
@@ -24,6 +30,12 @@ class IndicatorTests(unittest.TestCase):
 
     def test_feature_has_fixed_length(self):
         self.assertEqual(len(feature_vector(candles("1m", 40), 39)), 18)
+
+    def test_five_candle_pattern_probability(self):
+        probability, samples = five_candle_pattern_probability(candles("5m", 200))
+        self.assertGreater(samples, 0)
+        self.assertGreaterEqual(probability, 0.02)
+        self.assertLessEqual(probability, 0.98)
 
     def test_prediction_shape(self):
         result = blended_prediction(candles("1m", 200), candles("5m", 200), 140, 139)

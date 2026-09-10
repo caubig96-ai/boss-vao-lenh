@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
-APP_VERSION = "1.9.0"
+APP_VERSION = "2.0.0"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
@@ -352,8 +352,8 @@ class TrayApplication:
             return
         self.dashboard = tk.Toplevel(self.root)
         self.dashboard.title(f"Boss Vào Lệnh v{APP_VERSION} – Phân tích M1 / M5")
-        self.dashboard.geometry("980x620")
-        self.dashboard.minsize(820, 520)
+        self.dashboard.geometry("1100x820")
+        self.dashboard.minsize(900, 650)
         self.dashboard.protocol("WM_DELETE_WINDOW", self.hide_dashboard)
         header = ttk.Frame(self.dashboard, padding=12)
         header.pack(fill="x")
@@ -378,7 +378,7 @@ class TrayApplication:
         self.m5_text = tk.Text(m5_frame, font=("Consolas", 11), state="disabled", wrap="word")
         self.m1_text.pack(fill="both", expand=True)
         self.m5_text.pack(fill="both", expand=True)
-        chart_panels = ttk.Panedwindow(chart_tab, orient=tk.HORIZONTAL)
+        chart_panels = ttk.Panedwindow(chart_tab, orient=tk.VERTICAL)
         chart_panels.pack(fill="both", expand=True)
         m1_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT FUTURES MAINNET – M1 LIVE", padding=0)
         m5_chart_frame = ttk.LabelFrame(chart_panels, text="BTCUSDT FUTURES MAINNET – M5 LIVE + TARGET", padding=0)
@@ -394,7 +394,7 @@ class TrayApplication:
         ttk.Button(controls, text="CHẠY GỬI TÍN HIỆU", command=self._tray_resume).pack(side="left", padx=4)
         ttk.Button(controls, text="ẨN XUỐNG TRAY", command=self.hide_dashboard).pack(side="right", padx=4)
         # Chờ Toplevel được Windows map xong rồi mới đọc và vẽ dữ liệu.
-        self.dashboard.after(250, self._refresh_dashboard)
+        self.dashboard.after(150, self._refresh_dashboard)
 
     def hide_dashboard(self) -> None:
         if self.dashboard and self.dashboard.winfo_exists():
@@ -412,9 +412,9 @@ class TrayApplication:
     def _refresh_dashboard(self) -> None:
         if not self.dashboard or not self.dashboard.winfo_exists():
             return
-        # Luôn hẹn vòng tiếp theo trước. Nếu cửa sổ đang ẩn, vòng cập nhật vẫn
-        # không bị mất và sẽ hoạt động ngay khi người dùng mở lại từ tray.
-        self.dashboard.after(250, self._refresh_dashboard)
+        # 150 ms giúp thân nến live bám giá aggTrade mượt hơn nhưng vẫn tránh
+        # vẽ quá dày làm nghẽn luồng giao diện Tkinter.
+        self.dashboard.after(150, self._refresh_dashboard)
         if not self.dashboard.winfo_viewable():
             return
         try:
@@ -468,9 +468,15 @@ class TrayApplication:
         if not rows:
             canvas.create_text(width / 2, height / 2, text="Đang chờ nến Binance...", fill="#b7bdc6")
             return
+
+        # Dữ liệu kline cập nhật theo nhịp riêng, còn aggTrade cập nhật live_price
+        # gần thời gian thực. Khi dòng cuối là Candle chưa đóng, dùng live_price
+        # làm close/high/low hiển thị để thân và râu nến nhảy theo từng nhịp giá.
+        last_row = rows[-1]
+        has_live_row = hasattr(last_row, "closed") and not bool(getattr(last_row, "closed"))
         highs = [float(self._value(row, "high")) for row in rows]
         lows = [float(self._value(row, "low")) for row in rows]
-        if live_price is not None:
+        if has_live_row and live_price is not None:
             highs.append(live_price)
             lows.append(live_price)
         price_high, price_low = max(highs), min(lows)
@@ -481,7 +487,10 @@ class TrayApplication:
         def y(price: float) -> float:
             return top + (price_high - price) / span * plot_height
 
-        last_close = live_price if live_price is not None else float(self._value(rows[-1], "close"))
+        last_close = (
+            live_price if has_live_row and live_price is not None
+            else float(self._value(rows[-1], "close"))
+        )
         canvas.create_rectangle(7, 7, 176, 34, fill="#181a20", outline="#665814")
         canvas.create_text(15, 20, text="FUTURES MAINNET LIVE", anchor="w", fill="#f0b90b",
                            font=("Segoe UI", 9, "bold"))
@@ -491,7 +500,7 @@ class TrayApplication:
         canvas.create_rectangle(260, 7, 430, 34, fill="#181a20", outline="#665814")
         canvas.create_text(268, 20, text=f"LAST {last_close:,.2f}", anchor="w", fill="#f0b90b",
                            font=("Segoe UI", 9, "bold"))
-        canvas.create_text(left, 50, text=f"BTCUSDT PERPETUAL • {interval} • KLINE + AGGTRADE",
+        canvas.create_text(left, 50, text=f"BTCUSDT PERPETUAL • {interval} • KLINE + AGGTRADE • 150ms UI",
                            anchor="w", fill="#848e9c", font=("Segoe UI", 8, "bold"))
         for index in range(6):
             grid_y = top + plot_height * index / 5
@@ -505,6 +514,10 @@ class TrayApplication:
             high = float(self._value(row, "high"))
             low = float(self._value(row, "low"))
             close = float(self._value(row, "close"))
+            if index == len(rows) - 1 and has_live_row and live_price is not None:
+                close = live_price
+                high = max(high, live_price)
+                low = min(low, live_price)
             x = left + slot * (index + 0.5)
             color = "#0ecb81" if close >= open_price else "#f6465d"
             canvas.create_line(x, y(high), x, y(low), fill=color)
