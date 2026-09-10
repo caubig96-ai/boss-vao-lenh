@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+INTERVAL_MS = {"1m": 60_000, "5m": 300_000}
+
+
 @dataclass(slots=True)
 class Candle:
     interval: str
@@ -26,6 +29,37 @@ class Candle:
         return cls(k["i"], int(k["t"]), int(k["T"]), float(k["o"]),
                    float(k["h"]), float(k["l"]), float(k["c"]),
                    float(k["v"]), bool(k["x"]))
+
+    @staticmethod
+    def bucket_open_time(interval: str, trade_time_ms: int) -> int:
+        width = INTERVAL_MS[interval]
+        return (int(trade_time_ms) // width) * width
+
+    @classmethod
+    def from_trade(cls, interval: str, trade_time_ms: int, price: float) -> "Candle":
+        """Khởi tạo nến live từ giao dịch đầu tiên nhìn thấy trong bucket.
+
+        Kline chính thức của Binance sẽ thay/căn chỉnh lại open và volume khi tới.
+        """
+        open_time = cls.bucket_open_time(interval, trade_time_ms)
+        close_time = open_time + INTERVAL_MS[interval] - 1
+        value = float(price)
+        return cls(interval, open_time, close_time, value, value, value, value, 0.0, False)
+
+    def with_trade(self, price: float) -> "Candle":
+        """Trả về snapshot nến mới sau một tick, không mutate object đang được UI đọc."""
+        value = float(price)
+        return Candle(
+            self.interval,
+            self.open_time,
+            self.close_time,
+            self.open,
+            max(self.high, value),
+            min(self.low, value),
+            value,
+            self.volume,
+            False,
+        )
 
 
 @dataclass(slots=True)
