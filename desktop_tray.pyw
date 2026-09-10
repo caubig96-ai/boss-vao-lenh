@@ -5,6 +5,7 @@ import ctypes
 import logging
 import os
 import sqlite3
+import socket
 import sys
 import threading
 import tkinter as tk
@@ -21,6 +22,8 @@ from PIL import Image, ImageDraw
 
 APP_NAME = "BossVaoLenh"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
+CONTROL_HOST = "127.0.0.1"
+CONTROL_PORT = 45873
 
 
 def app_directory() -> Path:
@@ -88,6 +91,7 @@ class TrayApplication:
         self.m5_text: tk.Text | None = None
         self.status_var = tk.StringVar(value="Đang khởi động...")
         self._register_autostart()
+        self._start_control_server()
         self._create_tray()
         if self.config.telegram_token and self.config.telegram_chat_id:
             self.engine.start()
@@ -95,6 +99,27 @@ class TrayApplication:
             self.status_var.set("Cần cài Telegram lần đầu")
             self.root.after(300, self.show_first_run_setup)
         self.root.after(1500, self._check_engine)
+
+    def _start_control_server(self) -> None:
+        """Cho lần nhấp EXE tiếp theo mở lại cửa sổ của tiến trình hiện có."""
+        def serve():
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+                    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    server.bind((CONTROL_HOST, CONTROL_PORT))
+                    server.listen(2)
+                    while True:
+                        connection, _ = server.accept()
+                        with connection:
+                            command = connection.recv(32).decode("ascii", errors="ignore").strip()
+                        if command == "OPEN":
+                            self.root.after(0, self.request_password)
+                        elif command == "EXIT":
+                            return
+            except OSError as exc:
+                self.root.after(0, lambda: self.status_var.set(f"Không mở được kênh điều khiển: {exc}"))
+
+        threading.Thread(target=serve, name="local-control", daemon=True).start()
 
     @staticmethod
     def _telegram_api(token: str, method: str) -> dict:
@@ -415,6 +440,11 @@ class TrayApplication:
             return
         if self.tray:
             self.tray.stop()
+        try:
+            with socket.create_connection((CONTROL_HOST, CONTROL_PORT), timeout=1) as connection:
+                connection.sendall(b"EXIT")
+        except OSError:
+            pass
         self.engine.stop()
         self.root.destroy()
 
@@ -427,7 +457,16 @@ def acquire_single_instance():
         return None
     handle = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
     if ctypes.windll.kernel32.GetLastError() == 183:
-        ctypes.windll.user32.MessageBoxW(None, "Boss Vào Lệnh đang chạy ở khay hệ thống.", APP_NAME, 0x40)
+        try:
+            with socket.create_connection((CONTROL_HOST, CONTROL_PORT), timeout=2) as connection:
+                connection.sendall(b"OPEN")
+        except OSError:
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Tool đang chạy nhưng chưa thể mở cửa sổ. Hãy kết thúc BossVaoLenh trong Task Manager rồi mở lại.",
+                APP_NAME,
+                0x30,
+            )
         sys.exit(0)
     return handle
 
