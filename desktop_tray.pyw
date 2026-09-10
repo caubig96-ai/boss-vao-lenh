@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw
 
 
 APP_NAME = "BossVaoLenh"
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.7.1"
 MUTEX_NAME = "Local\\BossVaoLenh_SingleInstance"
 CONTROL_HOST = "127.0.0.1"
 CONTROL_PORT = 45873
@@ -359,12 +359,15 @@ class TrayApplication:
         header.pack(fill="x")
         ttk.Label(header, text=f"BOSS VÀO LỆNH  •  v{APP_VERSION}", font=("Segoe UI", 18, "bold")).pack(side="left")
         ttk.Label(header, textvariable=self.status_var, font=("Segoe UI", 10)).pack(side="right")
-        notebook = ttk.Notebook(self.dashboard)
+        tab_style = ttk.Style(self.dashboard)
+        tab_style.configure("Boss.TNotebook.Tab", font=("Segoe UI", 11, "bold"), padding=(18, 9))
+        notebook = ttk.Notebook(self.dashboard, style="Boss.TNotebook")
         notebook.pack(fill="both", expand=True, padx=12, pady=8)
         analysis_tab = ttk.Frame(notebook)
         chart_tab = ttk.Frame(notebook)
         notebook.add(analysis_tab, text="BẢNG PHÂN TÍCH")
         notebook.add(chart_tab, text="BIỂU ĐỒ NẾN BINANCE")
+        notebook.select(chart_tab)
         panels = ttk.Panedwindow(analysis_tab, orient=tk.HORIZONTAL)
         panels.pack(fill="both", expand=True)
         m1_frame = ttk.LabelFrame(panels, text="PHÂN TÍCH NẾN 1 PHÚT", padding=10)
