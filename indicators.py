@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from statistics import fmean, pstdev
 
 from models import Candle
@@ -9,10 +10,48 @@ from models import Candle
 M1_CONTEXT_24H = 24 * 60
 M5_PATTERN_24H = 24 * 60 // 5
 PATTERN_WINDOW = 5
+M1_TREND_WINDOW = 10
+M5_TREND_WINDOW = 5
 
 
 def _safe_div(a: float, b: float) -> float:
     return a / b if abs(b) > 1e-12 else 0.0
+
+
+def _clamp(value: float, low: float = -1.0, high: float = 1.0) -> float:
+    return max(low, min(high, value))
+
+
+def _sign(value: float, eps: float = 1e-12) -> float:
+    if value > eps:
+        return 1.0
+    if value < -eps:
+        return -1.0
+    return 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class TrendSnapshot:
+    """Tóm tắt hướng của một cụm nến ĐÃ ĐÓNG, score nằm trong [-1, 1]."""
+
+    score: float
+    probability_up: float
+    bullish: int
+    bearish: int
+    doji: int
+    body_imbalance: float
+    close_slope: float
+    structure: float
+    wick_pressure: float
+    used: int
+
+    @property
+    def direction(self) -> str:
+        if self.score > 0.08:
+            return "UP"
+        if self.score < -0.08:
+            return "DOWN"
+        return "FLAT"
 
 
 def ema(values: list[float], period: int) -> float:
@@ -108,6 +147,132 @@ def knn_probability(candles: list[Candle], horizon: int, neighbors: int = 100) -
     return probability, len(selected)
 
 
+def _recency_weights(count: int) -> list[float]:
+    """10 nến M1: nửa gần nhất chiếm xấp xỉ 60% tổng trọng số."""
+    if count <= 1:
+        return [1.0] * count
+    return [1.0 + 1.2 * i / (count - 1) for i in range(count)]
+
+
+def timeframe_trend(candles: list[Candle], window: int) -> TrendSnapshot:
+    """Đọc xu hướng trực tiếp từ các nến đã đóng gần nhất.
+
+    Điểm gồm: 25% màu nến, 35% lực thân, 20% dốc close,
+    15% cấu trúc high/low và 5% áp lực râu nến. Nến gần nhất
+    có trọng số lớn hơn để bắt đảo chiều nhanh hơn.
+    """
+    series = [c for c in candles if c.closed][-window:]
+    count = len(series)
+    if count < 2:
+        return TrendSnapshot(0.0, 0.5, 0, 0, count, 0.0, 0.0, 0.0, 0.0, count)
+
+    weights = _recency_weights(count)
+    color_numerator = 0.0
+    color_denominator = 0.0
+    signed_body = 0.0
+    absolute_body = 0.0
+    wick_sum = 0.0
+    wick_weight = 0.0
+    ranges: list[float] = []
+    bullish = bearish = doji = 0
+
+    for candle, weight in zip(series, weights):
+        span = max(candle.high - candle.low, abs(candle.close) * 1e-9)
+        ranges.append(span)
+        body_delta = candle.close - candle.open
+        body = abs(body_delta)
+        body_ratio = body / span
+
+        if body_ratio <= 0.08:
+            candle_sign = 0.0
+            doji += 1
+        elif body_delta > 0:
+            candle_sign = 1.0
+            bullish += 1
+        else:
+            candle_sign = -1.0
+            bearish += 1
+
+        color_numerator += weight * candle_sign
+        color_denominator += weight
+        signed_body += weight * body_delta
+        absolute_body += weight * body
+
+        upper = candle.high - max(candle.open, candle.close)
+        lower = min(candle.open, candle.close) - candle.low
+        wick_sum += weight * _safe_div(lower - upper, span)
+        wick_weight += weight
+
+    color_score = _safe_div(color_numerator, color_denominator)
+    body_imbalance = _clamp(_safe_div(signed_body, absolute_body))
+
+    average_range = fmean(ranges) or max(abs(series[-1].close) * 1e-9, 1e-9)
+    net_close_move = series[-1].close - series[0].close
+    close_slope = _clamp(_safe_div(net_close_move, average_range * max(1, count - 1)))
+
+    structure_sum = 0.0
+    structure_weight = 0.0
+    pair_weights = weights[1:]
+    for previous, current, weight in zip(series, series[1:], pair_weights):
+        high_step = _sign(current.high - previous.high)
+        low_step = _sign(current.low - previous.low)
+        structure_sum += weight * ((high_step + low_step) / 2.0)
+        structure_weight += weight
+    structure = _clamp(_safe_div(structure_sum, structure_weight))
+    wick_pressure = _clamp(_safe_div(wick_sum, wick_weight))
+
+    score = _clamp(
+        0.25 * color_score
+        + 0.35 * body_imbalance
+        + 0.20 * close_slope
+        + 0.15 * structure
+        + 0.05 * wick_pressure
+    )
+    probability_up = _clamp(0.5 + 0.45 * score, 0.05, 0.95)
+    return TrendSnapshot(
+        score,
+        probability_up,
+        bullish,
+        bearish,
+        doji,
+        body_imbalance,
+        close_slope,
+        structure,
+        wick_pressure,
+        count,
+    )
+
+
+def m1_trend_score(candles: list[Candle]) -> TrendSnapshot:
+    return timeframe_trend(candles, M1_TREND_WINDOW)
+
+
+def m5_trend_score(candles: list[Candle]) -> TrendSnapshot:
+    return timeframe_trend(candles, M5_TREND_WINDOW)
+
+
+def timeframe_agreement(m1: TrendSnapshot, m5: TrendSnapshot) -> tuple[str, float]:
+    """Trả về hướng đồng thuận và bonus tối đa 0.10 cho score cuối."""
+    if abs(m1.score) < 0.12 or abs(m5.score) < 0.12:
+        return "MIXED", 0.0
+    if m1.score > 0 and m5.score > 0:
+        strength = min(1.0, (abs(m1.score) + abs(m5.score)) / 2.0)
+        return "UP", 0.10 * strength
+    if m1.score < 0 and m5.score < 0:
+        strength = min(1.0, (abs(m1.score) + abs(m5.score)) / 2.0)
+        return "DOWN", -0.10 * strength
+    return "CONFLICT", 0.0
+
+
+def trend_summary(snapshot: TrendSnapshot, label: str) -> str:
+    direction = {"UP": "TĂNG", "DOWN": "GIẢM", "FLAT": "ĐI NGANG"}[snapshot.direction]
+    return (
+        f"{label}: {direction} | xanh {snapshot.bullish}/{snapshot.used}, "
+        f"đỏ {snapshot.bearish}/{snapshot.used}, doji {snapshot.doji}/{snapshot.used} | "
+        f"lực thân {snapshot.body_imbalance:+.2f} | dốc close {snapshot.close_slope:+.2f}"
+    )
+
+
 def five_candle_pattern_vector(window: list[Candle]) -> list[float] | None:
     """Mô tả hình dạng và nhịp chuyển động của đúng 5 nến, độc lập mức giá tuyệt đối."""
     if len(window) != PATTERN_WINDOW:
@@ -135,12 +300,8 @@ def five_candle_pattern_probability(
     history_candles: int = M5_PATTERN_24H,
     neighbors: int = 40,
 ) -> tuple[float, int]:
-    """So 5 nến M5 vừa đóng với các nhóm 5 nến trước đó trong cửa sổ rolling 24 giờ.
-
-    Mỗi mẫu lịch sử chỉ được gắn nhãn bằng hướng của cây nến kế tiếp sau mẫu đó,
-    vì vậy không dùng dữ liệu tương lai của phiên đang dự đoán.
-    """
-    series = candles[-history_candles:]
+    """So 5 nến M5 vừa đóng với các nhóm 5 nến trước đó trong cửa sổ rolling 24 giờ."""
+    series = [c for c in candles if c.closed][-history_candles:]
     if len(series) < PATTERN_WINDOW * 3:
         return 0.5, 0
 
@@ -150,7 +311,6 @@ def five_candle_pattern_probability(
         return 0.5, 0
 
     samples: list[tuple[list[float], int]] = []
-    # end tối đa query_start - 1: mẫu lịch sử không chồng lên 5 nến query.
     for end in range(PATTERN_WINDOW - 1, query_start):
         window = series[end - PATTERN_WINDOW + 1: end + 1]
         features = five_candle_pattern_vector(window)
@@ -172,32 +332,59 @@ def five_candle_pattern_probability(
     return max(0.02, min(0.98, probability)), len(selected)
 
 
-def blended_prediction(m1: list[Candle], m5: list[Candle], live_price: float, target: float) -> tuple[str, float, float, float, int]:
-    # M1 chỉ lấy tối đa 24 giờ làm bối cảnh phụ. Trọng số chính là mẫu 5 nến M5
-    # trong đúng cửa sổ rolling 24 giờ (288 nến M5).
-    p1, _ = knn_probability(m1[-M1_CONTEXT_24H:], horizon=5, neighbors=80)
+def blended_prediction(
+    m1: list[Candle],
+    m5: list[Candle],
+    live_price: float,
+    target: float,
+) -> tuple[str, float, float, float, int]:
+    """Ưu tiên đồng thuận xu hướng M1/M5; lịch sử chỉ là lớp xác nhận phụ.
+
+    - M1: 10 nến đã đóng gần nhất, 50% trọng số.
+    - M5: 5 nến đã đóng gần nhất, 30% trọng số.
+    - Pattern M5 lịch sử 24h: 20% trọng số.
+    - Nếu M1 và M5 đồng hướng rõ ràng: cộng bonus đồng thuận tối đa 10%.
+
+    live_price/target vẫn nằm trong chữ ký để tương thích runtime hiện tại nhưng không
+    được dùng làm feature xu hướng, tránh để vài giây đầu của nến đang mở làm nhiễu
+    phân tích các nến đã đóng.
+    """
+    del live_price, target
+    m1_trend = m1_trend_score(m1)
+    m5_trend = m5_trend_score(m5)
     pattern_probability, pattern_samples = five_candle_pattern_probability(m5)
-    volatility = atr(m1[-30:]) or max(target * 0.0001, 1.0)
-    target_edge = max(-1.0, min(1.0, (live_price - target) / (2.0 * volatility)))
-    probability_up = max(
-        0.02,
-        min(0.98, 0.25 * p1 + 0.65 * pattern_probability + 0.10 * (0.5 + target_edge / 2)),
+    pattern_score = _clamp((pattern_probability - 0.5) * 2.0)
+    _, agreement_bonus = timeframe_agreement(m1_trend, m5_trend)
+
+    combined_score = _clamp(
+        0.50 * m1_trend.score
+        + 0.30 * m5_trend.score
+        + 0.20 * pattern_score
+        + agreement_bonus
     )
+    probability_up = _clamp(0.5 + 0.45 * combined_score, 0.05, 0.95)
     direction = "UP" if probability_up >= 0.5 else "DOWN"
     confidence = probability_up if direction == "UP" else 1.0 - probability_up
-    return direction, confidence, p1, pattern_probability, pattern_samples
+    return (
+        direction,
+        confidence,
+        m1_trend.probability_up,
+        m5_trend.probability_up,
+        pattern_samples,
+    )
 
 
 def candle_analysis(candles: list[Candle], label: str) -> str:
     """Mô tả ngắn nến vừa đóng và bối cảnh kỹ thuật, không dùng nến live."""
-    if not candles:
+    closed = [c for c in candles if c.closed]
+    if not closed:
         return f"{label}: chưa đủ dữ liệu"
-    last = candles[-1]
+    last = closed[-1]
     span = max(last.high - last.low, last.close * 1e-9)
     body = abs(last.close - last.open)
     upper = last.high - max(last.open, last.close)
     lower = min(last.open, last.close) - last.low
-    closes = [c.close for c in candles[-40:]]
+    closes = [c.close for c in closed[-40:]]
     current_rsi = rsi_wilder(closes)
     fast = ema(closes, 9)
     slow = ema(closes, 21)
