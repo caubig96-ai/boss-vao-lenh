@@ -94,7 +94,10 @@ class TradingSignalBotV3(v351.TradingSignalBotV3):
         stats, qualified = await self._signal_calibration(p)
         pairs = await self.pair_stats_since_reset()
         local_open = datetime.fromtimestamp(p.market_open_time / 1000, self.config.timezone)
-        local_close = datetime.fromtimestamp(p.market_close_time / 1000, self.config.timezone)
+        # Binance close_time is the final millisecond inside the candle, so using
+        # it directly formats 20:19 for a 20:15–20:20 candle. Show the exact next
+        # five-minute boundary instead.
+        local_close = datetime.fromtimestamp((p.market_open_time + 300_000) / 1000, self.config.timezone)
 
         direction = "MUA TĂNG" if p.direction == "UP" else "MUA GIẢM"
         direction_icon = "🟢" if p.direction == "UP" else "🔴"
