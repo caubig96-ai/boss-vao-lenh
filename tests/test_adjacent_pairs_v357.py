@@ -72,6 +72,12 @@ class AdjacentPairsV357Tests(unittest.TestCase):
         self.assertEqual(stats["loss_pairs"], 0)
         self.assertEqual(stats["unpaired"], 0)
 
+    def test_three_consecutive_losses_make_one_pair_and_one_single(self):
+        stats = self._run_results(["LOSS", "LOSS", "LOSS"])
+        self.assertEqual(stats["win_pairs"], 0)
+        self.assertEqual(stats["loss_pairs"], 1)
+        self.assertEqual(stats["unpaired"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
