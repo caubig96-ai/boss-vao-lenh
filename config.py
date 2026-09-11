@@ -46,7 +46,7 @@ class Config:
     symbol: str = field(default_factory=lambda: os.getenv("SYMBOL", "BTCUSDT").upper())
     base_bet: float = field(default_factory=lambda: _float("BASE_BET", 1.0))
     payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
-    decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 18))
+    decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 10))
     max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
     database_path: str = field(default_factory=_database_path)
     timezone_name: str = field(default_factory=lambda: os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh"))
