@@ -149,6 +149,48 @@ class Database:
         )).fetchone()
         return dict(row)
 
+    async def confidence_stats(self, start_ms: int, actual_only: bool = False) -> dict[str, dict]:
+        """Win/loss by the same confidence bands used in Telegram.
+
+        Ties are reported separately and are not included in the win-rate denominator.
+        By default this uses every settled analysis signal so the buckets keep learning
+        even while real Telegram sending is paused.
+        """
+        condition = "AND actual=1" if actual_only else ""
+        rows = await (await self.conn.execute(
+            f"""SELECT
+                    CASE
+                        WHEN confidence < 0.57 THEN 'LOW'
+                        WHEN confidence < 0.65 THEN 'MEDIUM'
+                        ELSE 'HIGH'
+                    END AS bucket,
+                    SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN result='LOSS' THEN 1 ELSE 0 END) AS losses,
+                    SUM(CASE WHEN result='TIE' THEN 1 ELSE 0 END) AS ties
+                 FROM signals
+                 WHERE market_open_time>=? AND status='SETTLED' {condition}
+                 GROUP BY bucket""",
+            (start_ms,),
+        )).fetchall()
+
+        result = {
+            "LOW": {"wins": 0, "losses": 0, "ties": 0},
+            "MEDIUM": {"wins": 0, "losses": 0, "ties": 0},
+            "HIGH": {"wins": 0, "losses": 0, "ties": 0},
+        }
+        for row in rows:
+            result[row["bucket"]] = {
+                "wins": int(row["wins"] or 0),
+                "losses": int(row["losses"] or 0),
+                "ties": int(row["ties"] or 0),
+            }
+        for stats in result.values():
+            decided = stats["wins"] + stats["losses"]
+            stats["decided"] = decided
+            stats["total"] = decided + stats["ties"]
+            stats["win_rate"] = (stats["wins"] / decided * 100.0) if decided else 0.0
+        return result
+
     async def event(self, event_type: str, payload: dict) -> None:
         await self.conn.execute(
             "INSERT INTO bot_events(event_type,payload,created_at) VALUES(?,?,?)",

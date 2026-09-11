@@ -46,6 +46,28 @@ class RuntimeV3Tests(unittest.TestCase):
         self.assertEqual(TradingSignalBotV3.decision_delay(0, 19_000, 18), 0.0)
         self.assertIsNone(TradingSignalBotV3.decision_delay(0, 30_000, 18))
 
+    def test_result_message_says_win_up_or_win_down(self):
+        bot = self.make_bot()
+
+        async def scenario():
+            up = await bot.result_text({"direction": "UP"}, 101.0, "WIN", 0.8)
+            down = await bot.result_text({"direction": "DOWN"}, 99.0, "WIN", 0.8)
+            loss_down = await bot.result_text({"direction": "DOWN"}, 101.0, "LOSS", -1.0)
+            return up, down, loss_down
+
+        up, down, loss_down = asyncio.run(scenario())
+        self.assertIn("ĐÃ THẮNG TĂNG", up)
+        self.assertIn("ĐÃ THẮNG GIẢM", down)
+        self.assertIn("ĐÃ THUA GIẢM", loss_down)
+
+    def test_confidence_bucket_line_shows_rate_and_counts(self):
+        text = TradingSignalBotV3._bucket_line(
+            "🟢", "CAO ≥65.0%", {"wins": 7, "losses": 3, "ties": 1, "decided": 10, "win_rate": 70.0}
+        )
+        self.assertIn("70.0%", text)
+        self.assertIn("7 thắng/3 thua", text)
+        self.assertIn("1 hòa", text)
+
     @unittest.skipUnless(os.name == "nt", "Windows persistence semantics")
     def test_windows_relative_database_path_is_ignored(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"LOCALAPPDATA": directory}, clear=False):

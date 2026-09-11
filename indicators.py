@@ -13,6 +13,30 @@ PATTERN_WINDOW = 5
 M1_TREND_WINDOW = 10
 M5_TREND_WINDOW = 5
 
+ANALYSIS_MODE_LABELS = {
+    "AUTO": "CÂN BẰNG",
+    "M1": "M1 NHANH",
+    "M5": "M5 CHẮC",
+    "AGREE": "ĐỒNG THUẬN M1+M5",
+}
+
+ANALYSIS_MODE_WEIGHTS = {
+    # m1, m5, historical pattern, agreement multiplier
+    "AUTO": (0.50, 0.30, 0.20, 1.00),
+    "M1": (0.70, 0.20, 0.10, 0.75),
+    "M5": (0.25, 0.55, 0.20, 1.00),
+    "AGREE": (0.40, 0.35, 0.25, 1.50),
+}
+
+
+def normalize_analysis_mode(mode: str | None) -> str:
+    value = (mode or "AUTO").strip().upper()
+    return value if value in ANALYSIS_MODE_WEIGHTS else "AUTO"
+
+
+def analysis_mode_label(mode: str | None) -> str:
+    return ANALYSIS_MODE_LABELS[normalize_analysis_mode(mode)]
+
 
 def _safe_div(a: float, b: float) -> float:
     return a / b if abs(b) > 1e-12 else 0.0
@@ -337,19 +361,22 @@ def blended_prediction(
     m5: list[Candle],
     live_price: float,
     target: float,
+    mode: str = "AUTO",
 ) -> tuple[str, float, float, float, int]:
-    """Ưu tiên đồng thuận xu hướng M1/M5; lịch sử chỉ là lớp xác nhận phụ.
+    """Chọn hướng theo chế độ phân tích nhưng luôn trả một quyết định mỗi phiên M5.
 
-    - M1: 10 nến đã đóng gần nhất, 50% trọng số.
-    - M5: 5 nến đã đóng gần nhất, 30% trọng số.
-    - Pattern M5 lịch sử 24h: 20% trọng số.
-    - Nếu M1 và M5 đồng hướng rõ ràng: cộng bonus đồng thuận tối đa 10%.
+    AUTO  : 50% M1 + 30% M5 + 20% pattern, cân bằng phản ứng/xác nhận.
+    M1    : 70% M1 + 20% M5 + 10% pattern, phản ứng nhanh hơn.
+    M5    : 25% M1 + 55% M5 + 20% pattern, ưu tiên xu hướng M5.
+    AGREE : 40% M1 + 35% M5 + 25% pattern, thưởng đồng thuận M1/M5 mạnh hơn.
 
-    live_price/target vẫn nằm trong chữ ký để tương thích runtime hiện tại nhưng không
-    được dùng làm feature xu hướng, tránh để vài giây đầu của nến đang mở làm nhiễu
-    phân tích các nến đã đóng.
+    Chỉ nến đã đóng được dùng trong trend/pattern. live_price/target được giữ trong
+    chữ ký để tương thích runtime nhưng không được đưa vào feature xu hướng.
     """
     del live_price, target
+    selected_mode = normalize_analysis_mode(mode)
+    m1_weight, m5_weight, pattern_weight, agreement_multiplier = ANALYSIS_MODE_WEIGHTS[selected_mode]
+
     m1_trend = m1_trend_score(m1)
     m5_trend = m5_trend_score(m5)
     pattern_probability, pattern_samples = five_candle_pattern_probability(m5)
@@ -357,10 +384,10 @@ def blended_prediction(
     _, agreement_bonus = timeframe_agreement(m1_trend, m5_trend)
 
     combined_score = _clamp(
-        0.50 * m1_trend.score
-        + 0.30 * m5_trend.score
-        + 0.20 * pattern_score
-        + agreement_bonus
+        m1_weight * m1_trend.score
+        + m5_weight * m5_trend.score
+        + pattern_weight * pattern_score
+        + agreement_bonus * agreement_multiplier
     )
     probability_up = _clamp(0.5 + 0.45 * combined_score, 0.05, 0.95)
     direction = "UP" if probability_up >= 0.5 else "DOWN"
