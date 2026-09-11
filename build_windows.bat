@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.5.3 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.5.4 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -38,12 +38,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.5.3 =====
+echo ===== BUILD BOSSVAOLENH V3.5.4 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v353.pyw
+  desktop_v354.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -54,17 +54,17 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.5.3
+echo VERSION: 3.5.4
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo NGUON NEN: BINANCE FUTURES KLINE M1/M5 ONLY
-echo TELEGRAM: 1 TIN HIEU + 1 TIN HANH DONG NGAN
+echo TELEGRAM: GIU NGUYEN TOAN BO NUT CU + THEM NUT CHI TIET
 echo TIN 2: MUA TANG/GIAM NGAY HOAC KHONG NEN VAO LENH + LENH 1/2 + GIA
 echo KET QUA: CHI BAO THANG/THUA/HOA + HUONG + LENH 1/2
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.5.3 moi...
+echo Dang mo BAN V3.5.4 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
-echo Moi M5 chi gui 1 tin bao lenh va 1 tin hanh dong ngan, khong lap lai tin bao lenh.
+echo Tin hieu giu cac nut dieu khien cu va them CHI TIET o tren cung.
 pause
