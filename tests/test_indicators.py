@@ -1,12 +1,14 @@
 import unittest
 
 from indicators import (
+    analysis_mode_label,
     blended_prediction,
     candle_analysis,
     feature_vector,
     five_candle_pattern_probability,
     m1_trend_score,
     m5_trend_score,
+    normalize_analysis_mode,
     rsi_wilder,
     timeframe_agreement,
 )
@@ -126,6 +128,19 @@ class IndicatorTests(unittest.TestCase):
         self.assertGreater(result[1], 0.60)
         self.assertLess(result[2], 0.5)
         self.assertLess(result[3], 0.5)
+
+    def test_modes_resolve_conflict_with_selected_timeframe_priority(self):
+        m1 = candles("1m", 200, True)
+        m5 = candles("5m", 200, False)
+        m1_mode = blended_prediction(m1, m5, 100, 100, mode="M1")
+        m5_mode = blended_prediction(m1, m5, 100, 100, mode="M5")
+        self.assertEqual(m1_mode[0], "UP")
+        self.assertEqual(m5_mode[0], "DOWN")
+
+    def test_analysis_mode_normalization_and_labels(self):
+        self.assertEqual(normalize_analysis_mode("m1"), "M1")
+        self.assertEqual(normalize_analysis_mode("unknown"), "AUTO")
+        self.assertEqual(analysis_mode_label("AGREE"), "ĐỒNG THUẬN M1+M5")
 
     def test_prediction_shape(self):
         result = blended_prediction(candles("1m", 200), candles("5m", 200), 140, 139)
