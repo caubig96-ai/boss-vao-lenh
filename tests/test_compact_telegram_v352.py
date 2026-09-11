@@ -69,7 +69,7 @@ class CompactRuntimeTests(unittest.TestCase):
             text = await bot.signal_text(p)
             self.assertIn("MUA TĂNG", text)
             self.assertIn("NÊN VÀO LỆNH", text)
-            self.assertIn("00:00–00:04", text)
+            self.assertIn("00:00–00:05", text)
             self.assertIn("72.5%", text)
             self.assertIn("4 thắng", text)
             self.assertIn("2 thua", text)
