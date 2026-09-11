@@ -1,107 +1,181 @@
 # Boss Vào Lệnh
 
-Phiên bản Windows hiện tại: **v1.9.0**. Telegram có nút RESET THỐNG KÊ kèm xác nhận, đưa thắng/thua/lãi lỗ/số dư theo dõi về 0 nhưng không xóa lịch sử và không làm mất lệnh đang dở. Lịch gửi tín hiệu dùng timestamp Binance thay vì đồng hồ Windows. Giao diện nến dùng phong cách BINACE-2 với 100 nến Binance Futures Mainnet, Kline WebSocket live và giá aggTrade.
+Phiên bản hiện tại: **V3**. Tool phân tích BTCUSDT Futures theo chu kỳ 5 phút, dùng hai khung M1/M5, gửi tín hiệu Telegram và lưu thống kê bền vững trong SQLite.
 
-Bot tín hiệu BTCUSDT 5 phút: nhận dữ liệu chính thức từ Binance WebSocket, phân tích mẫu nến M1/M5, gửi một tín hiệu duy nhất trong 20 giây đầu của phiên và cập nhật kết quả trên chính tin nhắn Telegram.
+> Đây là phần mềm thống kê và gửi tín hiệu, không tự đặt lệnh Binance Prediction. Kết quả mô hình không bảo đảm lợi nhuận hay độ chính xác tuyệt đối.
 
-> Đây là phần mềm thống kê và gửi tín hiệu, không tự đặt lệnh Binance Prediction. Kết quả mô hình không bảo đảm lợi nhuận.
+## Logic phân tích V3
 
-## Chức năng
+- M1 dùng **10 nến đã đóng gần nhất**.
+- M5 dùng **5 nến đã đóng gần nhất**.
+- Mỗi khung phân tích số nến xanh/đỏ, lực thân nến, dốc Close, cấu trúc High/Low và áp lực râu nến.
+- Nến gần nhất có trọng số lớn hơn để phản ứng nhanh với đảo chiều.
+- Khi M1 và M5 cùng hướng rõ ràng, engine cộng điểm đồng thuận.
+- Pattern M5 lịch sử vẫn được giữ làm lớp xác nhận phụ.
+- Chỉ nến đã đóng được dùng làm feature xu hướng; nến live không lọt vào phần phân tích trend.
+- Mọi phiên M5 hợp lệ vẫn được phân tích và báo như bình thường.
+- Khi độ tin cậy được xếp loại **CAO**, Telegram gửi thêm ngay sau tin chuẩn: `MUA TĂNG NGAY` hoặc `MUA GIẢM NGAY`.
 
-- Giá trực tiếp qua `aggTrade`, nến M1 và M5 qua Binance WebSocket.
-- Target mặc định là giá mở nến Binance Futures Mainnet BTCUSDT M5.
-- So sánh cụm ba nến cũ bằng mô hình k-nearest-neighbors nhẹ.
-- Chỉ sử dụng nến đã đóng để huấn luyện mẫu; không nhìn trước dữ liệu.
-- Quyết định ở giây 18 của mỗi phiên M5.
-- Telegram: Dừng gửi lệnh, Chạy lại, Báo cáo, Đổi vốn.
-- Dừng chỉ tắt tín hiệu; phân tích/chấm giả lập vẫn chạy 24/7.
-- Lệnh đang chờ được phục hồi và chấm lại sau restart.
-- Tách thống kê phân tích 24/7 và lệnh thực tế đã gửi.
-- Gấp lãi: Lệnh 1 thắng → Lệnh 2 gấp đôi; sau Lệnh 2 hoặc Lệnh 1 thua → về Lệnh 1.
-- Hai lệnh thực tế thua liên tiếp → ngừng tín hiệu 30 phút, phân tích nền vẫn chạy.
-- Chỉ số trong ngày tính từ 00:00 theo `Asia/Ho_Chi_Minh`; lịch sử không bị xóa.
-- Tự tính lãi/lỗ theo tỷ lệ trả thưởng cấu hình.
+## Dữ liệu thị trường và độ bền
 
-## Cài đặt
+- Giá live qua Binance Futures `aggTrade` WebSocket.
+- Nến M1 và M5 qua Binance WebSocket.
+- Có REST fallback nếu WebSocket bị gián đoạn.
+- Có watchdog để việc tạo quyết định không phụ thuộc riêng vào event kline M5.
+- Target là giá mở của cây M5 hiện tại trên Binance Futures Mainnet.
+- Lệnh đang chờ được phục hồi/chấm lại sau restart.
+- Telegram update offset được lưu để tránh phát lại callback STOP/RESET cũ.
+
+## Bản Windows
+
+Bản Windows có giao diện hai màn nến M1/M5, tray icon và database cố định trong LocalAppData để rebuild EXE không làm mất thống kê.
+
+Cài/build:
+
+```bat
+build_windows.bat
+```
+
+Sau khi build, chạy `dist/BossVaoLenh.exe`. Nếu dùng GitHub Desktop, chỉ cần chọn repo `boss-vao-lenh`, branch `main`, **Fetch origin → Pull origin**, rồi chạy lại `build_windows.bat`.
+
+Database Windows mặc định:
+
+```text
+%LOCALAPPDATA%\BossVaoLenh\data\bot.db
+```
+
+Log Windows V3:
+
+```text
+%LOCALAPPDATA%\BossVaoLenh\logs\boss-v3.log
+```
+
+## Bản CLOUD chạy song song với Windows
+
+Repo có entrypoint riêng `cloud_v3.py` để chạy headless trên Linux/Oracle Cloud VM. Bản cloud:
+
+- dùng cùng engine V3 và cùng logic M1/M5;
+- chạy độc lập với bản Windows;
+- dùng database riêng `data/cloud-bot.db`;
+- tin Telegram được gắn nhãn `CLOUD`;
+- tự restart bằng `systemd` nếu process lỗi hoặc VM reboot;
+- không cần mở cổng web, chỉ cần VM có kết nối Internet outbound tới Binance và Telegram.
+
+### Quan trọng: dùng Telegram Bot riêng cho CLOUD
+
+Không dùng chung Telegram Bot Token giữa Windows và CLOUD. Hai tiến trình cùng `getUpdates` trên một token có thể gây lỗi Telegram polling `409 Conflict` và làm callback bị chia giữa hai máy.
+
+Tạo Bot B riêng rồi đặt thông tin vào `.env.cloud`:
 
 ```bash
-python -m venv .venv
+cp .env.cloud.example .env.cloud
+nano .env.cloud
+```
+
+Tối thiểu:
+
+```env
+CLOUD_TELEGRAM_BOT_TOKEN=token-bot-cloud-rieng
+CLOUD_TELEGRAM_CHAT_ID=chat-id-cua-ban
+```
+
+Các biến cloud khác có thể chỉnh độc lập:
+
+```env
+CLOUD_SYMBOL=BTCUSDT
+CLOUD_BASE_BET=1
+CLOUD_PAYOUT_RATE=0.80
+CLOUD_DECISION_SECOND=18
+CLOUD_MAX_BET=50
+CLOUD_TIMEZONE=Asia/Ho_Chi_Minh
+CLOUD_LOG_LEVEL=INFO
+CLOUD_DATABASE_PATH=
+```
+
+Nếu `CLOUD_DATABASE_PATH` để trống, tool tự dùng `data/cloud-bot.db` trong repo cloud.
+
+## Cài trên Oracle Cloud Ubuntu/Debian
+
+Tạo một Linux VM free-tier nếu tài khoản/region của bạn còn quota, đăng nhập SSH, sau đó:
+
+```bash
+git clone https://github.com/caubig96-ai/boss-vao-lenh.git
+cd boss-vao-lenh
+cp .env.cloud.example .env.cloud
+nano .env.cloud
+bash deploy/oracle/install.sh
+```
+
+Installer sẽ:
+
+- cài Python/venv/git;
+- tạo `.venv`;
+- cài `requirements.txt`;
+- tạo thư mục `data` và `logs`;
+- tạo service `boss-vao-lenh-cloud`;
+- bật tự khởi động cùng VM;
+- restart service ngay nếu `.env.cloud` đã có đủ token/chat id.
+
+Kiểm tra trạng thái:
+
+```bash
+sudo systemctl status boss-vao-lenh-cloud
+```
+
+Xem log realtime:
+
+```bash
+journalctl -u boss-vao-lenh-cloud -f
+```
+
+Hoặc log file:
+
+```bash
+tail -f logs/cloud-v3.log
+```
+
+## Cập nhật bản CLOUD sau khi GitHub có code mới
+
+Trong thư mục repo trên VM:
+
+```bash
+bash deploy/oracle/update.sh
+```
+
+Script sẽ `git pull`, cài lại dependency nếu cần, chạy toàn bộ unit test và chỉ sau đó restart service cloud.
+
+## Chạy cloud thủ công không dùng systemd
+
+```bash
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.cloud.example .env.cloud
+nano .env.cloud
+python cloud_v3.py
 ```
 
-Điền tối thiểu:
+## Lệnh Telegram
 
-```env
-TELEGRAM_BOT_TOKEN=token-cua-bot
-TELEGRAM_CHAT_ID=chat-id-cua-ban
-```
+- `/status` – trạng thái, nguồn dữ liệu và thống kê.
+- `/setbet 1` – Lệnh 1 là 1 USDT; Lệnh 2 là 2 USDT.
+- `/setbalance 100` – đặt số dư theo dõi.
+- `/setpayout 80` – đặt tỷ lệ trả thưởng 80%.
 
-Chạy:
+Bot chỉ chấp nhận lệnh từ `TELEGRAM_CHAT_ID`/`CLOUD_TELEGRAM_CHAT_ID` đã cấu hình.
 
-```bash
-python main.py
-```
-
-## Chạy ẩn trên Windows Tray
-
-Ứng dụng Windows chạy nền ở khay hệ thống, không mở cửa sổ console và không nằm trên taskbar khi bảng điều khiển bị ẩn.
-
-1. Chạy `build_windows.bat` một lần.
-2. Mở `dist/BossVaoLenh.exe`.
-3. Lần đầu, tool yêu cầu dán Telegram Bot Token.
-4. Tool kiểm tra Token, hướng dẫn gửi `/start`, tự tìm Chat ID rồi lưu cấu hình.
-
-Các lần mở sau không phải nhập lại Token hoặc Chat ID.
-
-Ứng dụng tự đăng ký chạy cùng Windows cho tài khoản hiện tại. Nhấp đúp biểu tượng ở tray hoặc chọn **Mở bảng điều khiển**; mật khẩu mặc định là `123`. Có thể đổi bằng:
-
-```env
-APP_PASSWORD=mat-khau-moi
-```
-
-Đóng cửa sổ chỉ ẩn ứng dụng xuống tray; bộ phân tích vẫn chạy. Chỉ mục **Thoát hoàn toàn** ở menu tray mới dừng tiến trình. Ứng dụng có khóa chống chạy hai bản cùng lúc.
-
-Kiểm tra:
+## Kiểm tra code
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-## Lệnh Telegram
+CI GitHub chạy test trên cả Ubuntu Python 3.11 và Windows Python 3.12.
 
-- `/status` – trạng thái và thống kê.
-- `/setbet 1` – Lệnh 1 là 1 USDT; Lệnh 2 là 2 USDT.
-- `/setbalance 100` – đặt số dư hiện tại.
-- `/setpayout 80` – lợi nhuận mỗi lệnh thắng bằng 80% tiền đặt.
+## Render
 
-Bot chỉ chấp nhận lệnh từ `TELEGRAM_CHAT_ID` đã cấu hình.
-
-## Triển khai 24/7
-
-Nên dùng Oracle Cloud Always Free, Google Compute Engine Free Tier hoặc Render Background Worker trả phí. `render.yaml` dùng Worker vì Render Web Service miễn phí có thể ngủ và làm lỡ 20 giây đầu phiên.
-
-Trên Linux, có thể chạy bằng `systemd`:
-
-```ini
-[Unit]
-Description=Boss Vao Lenh
-After=network-online.target
-
-[Service]
-WorkingDirectory=/opt/boss-vao-lenh
-ExecStart=/opt/boss-vao-lenh/.venv/bin/python main.py
-Restart=always
-RestartSec=5
-EnvironmentFile=/opt/boss-vao-lenh/.env
-
-[Install]
-WantedBy=multi-user.target
-```
+`render.yaml` cũ vẫn còn để tham khảo nhưng không phải cấu hình cloud V3 khuyến nghị. Nó chạy `main.py` và dùng Background Worker. Để chạy thêm bản cloud V3 song song với Windows, ưu tiên `cloud_v3.py` + `systemd` trên VM riêng.
 
 ## Cảnh báo về target
 
-Target hiện lấy từ giá mở nến Binance Futures Mainnet M5 theo nguồn hiển thị của BINACE-2. Trước khi dùng tiền thật, phải so sánh với “Mức giá cần vượt qua” của Binance Prediction trong ít nhất 50–100 phiên. Nếu hai nguồn không trùng tuyệt đối, cần thay bằng nguồn target chính thức của Prediction.
-
-Bot hoạt động ở chế độ bắt buộc chọn: mỗi phiên M5 hợp lệ sẽ đưa ra đúng một quyết định MUA TĂNG hoặc MUA GIẢM trong 20 giây đầu. Tín hiệu không bị loại theo ngưỡng xác suất; Telegram sẽ ghi rõ chất lượng THẤP, TRUNG BÌNH hoặc CAO cùng phân tích nến M1/M5.
+Target hiện lấy từ giá mở nến Binance Futures Mainnet M5. Trước khi dùng tiền thật, nên so sánh với “Mức giá cần vượt qua” của sản phẩm thực tế bạn giao dịch trong nhiều phiên. Nếu hai nguồn không trùng tuyệt đối, cần thay bằng nguồn target chính thức của sản phẩm đó.
