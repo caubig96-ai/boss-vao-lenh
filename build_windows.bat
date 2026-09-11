@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.4 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.5 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -38,12 +38,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.4.0 =====
+echo ===== BUILD BOSSVAOLENH V3.5.0 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v33.pyw
+  desktop_v35.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -54,18 +54,19 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.4.0
+echo VERSION: 3.5.0
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
+echo NGUON NEN: BINANCE FUTURES KLINE M1/M5 ONLY
+echo AGGTRADE: CHI CAP NHAT PRICE - KHONG TAO HOAC SUA OHLC
 echo CHAM KET QUA: TANG THANG NEU NEN M5 XANH - GIAM THANG NEU NEN M5 DO - DOJI HOA
 echo THONG KE CAP: LENH 1+2, 3+4, 5+6... KHONG CHONG LAP
 echo LOC LENH: TOI THIEU 30 MAU CUNG MODE + VUNG SCORE VA WIN RATE LICH SU ^>=70%%
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.4 moi...
+echo Dang mo BAN V3.5 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
-echo Bot van phan tich 9 che do moi nen M5, nhung chi gui lenh that khi calibration du mau va dat nguong.
-echo Ket qua thang/thua chi dua vao mau nen M5 Binance chinh thuc, khong dua vao Target.
-echo Tab CHAN DOAN phai thay AGGTRADE TICKS tang lien tuc neu WebSocket hoat dong.
+echo Bieu do va phan tich nen deu lay OHLC tu Binance Futures Kline chinh thuc.
+echo Neu WebSocket Kline cham/mat, bot dung REST Kline du phong; aggTrade khong con tac dong vao hinh dang nen.
 pause
