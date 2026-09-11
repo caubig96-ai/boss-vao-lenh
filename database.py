@@ -124,6 +124,23 @@ class Database:
             (candle.interval, candle.open_time, candle.close_time, candle.open, candle.high,
              candle.low, candle.close, candle.volume),
         )
+
+        # A live M5 can be created from the first aggTrade before Binance's official
+        # kline reaches us. That provisional trade price must never decide WIN/LOSS.
+        # When Binance closes the M5 candle, its official OPEN is authoritative for
+        # the candle color (close > open = green, close < open = red). Correct every
+        # still-pending selected/shadow signal before runtime settles the candle.
+        if candle.interval == "5m":
+            await self.conn.execute(
+                """UPDATE signals SET target_price=?
+                   WHERE market_open_time=? AND status='PENDING'""",
+                (candle.open, candle.open_time),
+            )
+            await self.conn.execute(
+                """UPDATE mode_signals SET target_price=?
+                   WHERE market_open_time=? AND status='PENDING'""",
+                (candle.open, candle.open_time),
+            )
         await self.conn.commit()
 
     async def create_signal(self, p: Prediction) -> bool:
