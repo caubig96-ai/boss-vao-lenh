@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.5.6 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.5.7 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -38,12 +38,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.5.6 =====
+echo ===== BUILD BOSSVAOLENH V3.5.7 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v356.pyw
+  desktop_v357.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -54,11 +54,12 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.5.6
+echo VERSION: 3.5.7
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo NGUON NEN: BINANCE FUTURES KLINE M1/M5 ONLY
 echo TELEGRAM DAU PHIEN: DUNG 2 TIN - 1 TIN HIEU + 1 TIN HANH DONG
-echo TIN HIEU: THEM TONG THANG/THUA + DUONG KE SAU MUA TANG/GIAM
+echo CAP THANG/THUA: CHI TINH 2 LENH CUNG KET QUA LIEN NHAU THEO THOI GIAN
+echo TIN HIEU: TONG THANG/THUA + DUONG KE SAU MUA TANG/GIAM
 echo TIN HIEU: GIU NGUYEN TOAN BO NUT CU + NUT CHI TIET
 echo TIN 2: MUA TANG/GIAM NGAY HOAC KHONG NEN VAO LENH + LENH 1/2 + GIA
 echo CHONG TRUNG: KHOA ATOMIC THEO OPEN_TIME
@@ -66,7 +67,7 @@ echo KET QUA SAU 5 PHUT: 1 TIN THANG/THUA/HOA + HUONG + LENH 1/2
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.5.6 moi...
+echo Dang mo BAN V3.5.7 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
 echo Moi phien M5: 2 tin luc bat dau, 1 tin ket qua khi het 5 phut.
