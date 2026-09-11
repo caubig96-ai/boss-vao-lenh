@@ -8,6 +8,11 @@ py -3 -c "import socket,time; [(lambda p: (lambda s: (s.settimeout(.3),s.connect
 timeout /t 2 /nobreak >nul
 taskkill /IM BossVaoLenh.exe /T /F >nul 2>&1
 
+if exist ".env" (
+    echo ===== DAT THOI DIEM BAO LENH = GIAY THU 10 =====
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$p='.env'; $lines=Get-Content -LiteralPath $p; if($lines -match '^DECISION_SECOND='){ $lines=$lines -replace '^DECISION_SECOND=.*$','DECISION_SECOND=10' } else { $lines += 'DECISION_SECOND=10' }; Set-Content -LiteralPath $p -Value $lines -Encoding UTF8"
+)
+
 if not exist ".venv\Scripts\python.exe" (
     py -3 -m venv .venv
 )
@@ -33,7 +38,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.0.0 =====
+echo ===== BUILD BOSSVAOLENH V3.2.0 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
@@ -49,13 +54,14 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.0.0
+echo VERSION: 3.2.0
+echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
 echo Dang mo BAN V3 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
-echo Tren cua so phai thay: BOSS VAO LENH V3.0.0
+echo Bot se phan tich va gui lenh vao khoang giay thu 10 cua moi nen M5.
 echo Tab CHAN DOAN phai thay AGGTRADE TICKS tang lien tuc neu WebSocket hoat dong.
 pause
