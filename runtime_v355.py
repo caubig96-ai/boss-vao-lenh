@@ -7,10 +7,9 @@ import runtime_v354 as v354
 
 APP_VERSION = "3.5.5"
 
-# Keep inherited visible version strings in sync.
-v354.APP_VERSION = APP_VERSION
-v354.v353.APP_VERSION = APP_VERSION
-v354.v353.v352.v351.v35.v34.v33.APP_VERSION = APP_VERSION
+# Keep only the inherited base-runtime status text on the current visible version.
+# Do not mutate runtime_v354/runtime_v353 APP_VERSION directly; their regression
+# tests intentionally freeze those modules at their own released versions.
 v354.v353.v352.v351.v35.v34.v33.base_runtime.APP_VERSION = APP_VERSION
 
 
