@@ -78,14 +78,23 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v33 import APP_VERSION, TradingSignalBotV3
+    from runtime_v34 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
             return "☁️ <b>CLOUD</b>\n" + await super().signal_text(prediction)
 
-        async def result_text(self, row, close_price: float, result: str, pnl: float) -> str:
-            return "☁️ <b>CLOUD</b>\n" + await super().result_text(row, close_price, result, pnl)
+        async def result_text(
+            self,
+            row,
+            close_price: float,
+            result: str,
+            pnl: float,
+            open_price: float | None = None,
+        ) -> str:
+            return "☁️ <b>CLOUD</b>\n" + await super().result_text(
+                row, close_price, result, pnl, open_price
+            )
 
         async def status_text(self) -> str:
             return "☁️ <b>CLOUD</b>\n" + await super().status_text()
@@ -95,7 +104,7 @@ async def async_main() -> None:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
-                    "Bản cloud độc lập đang chạy 24/7: WebSocket + REST dự phòng + watchdog M5 + calibration theo kết quả thật.",
+                    "Bản cloud độc lập đang chạy 24/7: WebSocket + REST dự phòng + watchdog M5 + calibration theo kết quả thật + chấm theo màu nến Binance.",
                     enabled=enabled,
                 )
             except Exception as exc:
