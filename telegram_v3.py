@@ -62,6 +62,38 @@ class TelegramBotV3:
             self.last_error = ""
             return data["result"]
 
+    @staticmethod
+    def instant_followup_text(text: str) -> str | None:
+        """Only high-confidence ENTRY messages get the extra immediate-action alert.
+
+        Runtime classifies confidence >= 65% as CAO. Normal 5-minute signal messages
+        are always sent exactly as before; this helper only adds a second short alert
+        after a high-confidence normal signal has been delivered.
+        """
+        if "TIN NHẮN VÀO LỆNH" not in text or "ĐỘ TIN CẬY: CAO" not in text:
+            return None
+        if "𝗠𝗨𝗔 𝗧Ă𝗡𝗚" in text or "MUA TĂNG" in text:
+            return "🚨 <b>MUA TĂNG NGAY</b>"
+        if "𝗠𝗨𝗔 𝗚𝗜Ả𝗠" in text or "MUA GIẢM" in text:
+            return "🚨 <b>MUA GIẢM NGAY</b>"
+        return None
+
+    async def _send_instant_followup(self, text: str) -> None:
+        payload = {
+            "chat_id": self.chat_id,
+            "text": text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        try:
+            await self._call("sendMessage", payload)
+        except Exception as exc:
+            # The main signal has already been delivered. Never turn a successful
+            # normal 5-minute signal into a failure just because the optional
+            # high-confidence follow-up had a transient Telegram error.
+            self.last_error = f"instant follow-up: {exc}"
+            log.warning("Không gửi được cảnh báo lệnh độ tin cậy cao: %s", exc)
+
     async def send(self, text: str, keyboard: bool = True, enabled: bool | None = None) -> int:
         payload = {
             "chat_id": self.chat_id,
@@ -72,7 +104,14 @@ class TelegramBotV3:
         if keyboard:
             payload["reply_markup"] = self.keyboard(enabled)
         result = await self._call("sendMessage", payload)
-        return int(result["message_id"])
+        message_id = int(result["message_id"])
+
+        # IMPORTANT: every normal 5-minute signal is still sent first. Only signals
+        # already marked CAO by the analysis engine get this extra second message.
+        followup = self.instant_followup_text(text)
+        if followup:
+            await self._send_instant_followup(followup)
+        return message_id
 
     async def ask(self, text: str, placeholder: str = "Nhập số tiền USDT") -> int:
         result = await self._call("sendMessage", {
