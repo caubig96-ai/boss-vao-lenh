@@ -49,7 +49,7 @@ class TelegramBotV3:
              {"text": start_text, "callback_data": "start"}],
             [{"text": "📊 BÁO CÁO", "callback_data": "status"},
              {"text": "💵 ĐỔI VỐN", "callback_data": "setbet_help"}],
-            [{"text": "🧠 CHẾ ĐỘ NẾN", "callback_data": "analysis_mode"},
+            [{"text": "🧠 CHỌN CHẾ ĐỘ", "callback_data": "analysis_mode"},
              {"text": "📈 TỶ LỆ NGƯỠNG", "callback_data": "threshold_stats"}],
             [{"text": "♻️ RESET THỐNG KÊ", "callback_data": "reset_stats"}],
         ]}
@@ -111,27 +111,50 @@ class TelegramBotV3:
             await self._send_instant_followup(followup)
         return message_id
 
-    async def send_analysis_mode_menu(self, current_mode: str) -> int:
+    @staticmethod
+    def _mode_button_text(label: str, selected: bool, stats: dict | None) -> str:
+        prefix = "✅ " if selected else ""
+        if not stats or int(stats.get("decided", 0)) <= 0:
+            return f"{prefix}{label} · 0T/0B · --"
+        wins = int(stats.get("wins", 0))
+        losses = int(stats.get("losses", 0))
+        win_rate = float(stats.get("win_rate", 0.0))
+        return f"{prefix}{label} · {wins}T/{losses}B · {win_rate:.1f}%"
+
+    async def send_analysis_mode_menu(self, current_mode: str, stats: dict[str, dict] | None = None) -> int:
         current = (current_mode or "AUTO").upper()
         labels = [
             ("AUTO", "CÂN BẰNG"),
             ("M1", "M1 NHANH"),
             ("M5", "M5 CHẮC"),
             ("AGREE", "ĐỒNG THUẬN M1+M5"),
+            ("MOMENTUM", "ĐỘNG LƯỢNG"),
+            ("STRUCTURE", "CẤU TRÚC GIÁ"),
+            ("WICK", "ÁP LỰC RÂU NẾN"),
+            ("PATTERN", "MẪU 24H"),
+            ("BREAKOUT", "BỨT PHÁ"),
         ]
+        stats = stats or {}
         buttons = []
         for value, label in labels:
-            prefix = "✅ " if value == current else ""
-            buttons.append([{"text": prefix + label, "callback_data": f"mode_{value.lower()}"}])
+            buttons.append([{
+                "text": self._mode_button_text(label, value == current, stats.get(value)),
+                "callback_data": f"mode_{value.lower()}",
+            }])
         result = await self._call("sendMessage", {
             "chat_id": self.chat_id,
             "text": (
                 "🧠 <b>CHỌN CHẾ ĐỘ PHÂN TÍCH NẾN</b>\n\n"
-                "• CÂN BẰNG: M1 50% + M5 30% + mẫu lịch sử 20%\n"
-                "• M1 NHANH: ưu tiên 10 nến M1 gần nhất\n"
-                "• M5 CHẮC: ưu tiên 5 nến M5 gần nhất\n"
-                "• ĐỒNG THUẬN: tăng trọng số khi M1 và M5 cùng hướng\n\n"
-                "Mọi chế độ vẫn phân tích và đưa TĂNG/GIẢM ở mỗi phiên 5 phút."
+                "✅ = chế độ đang được dùng để <b>GỬI LỆNH TELEGRAM</b>.\n"
+                "Tất cả 9 chế độ vẫn phân tích cùng một phiên 5 phút và tự chấm thắng/thua ở nền.\n"
+                "Con số trên nút: <b>T = thắng, B = thua, % = tỷ lệ thắng</b>.\n\n"
+                "5 chế độ mới:\n"
+                "• ĐỘNG LƯỢNG: thân nến + dốc giá đóng cửa\n"
+                "• CẤU TRÚC GIÁ: HH/HL hoặc LH/LL\n"
+                "• ÁP LỰC RÂU NẾN: lực mua/bán qua râu nến\n"
+                "• MẪU 24H: ưu tiên mẫu 5 nến lịch sử\n"
+                "• BỨT PHÁ: thân + dốc + cấu trúc\n\n"
+                "Chọn một nút bên dưới; chỉ chế độ được chọn mới gửi lệnh mua/bán về Telegram."
             ),
             "parse_mode": "HTML",
             "reply_markup": {"inline_keyboard": buttons},
@@ -156,7 +179,7 @@ class TelegramBotV3:
             "chat_id": self.chat_id,
             "text": (
                 "⚠️ <b>XÁC NHẬN RESET THỐNG KÊ?</b>\n"
-                "Thắng, thua, lãi/lỗ và số dư theo dõi sẽ về 0. "
+                "Thắng, thua, lãi/lỗ, số dư theo dõi và bảng so sánh chế độ sẽ tính lại từ thời điểm reset. "
                 "Lịch sử nến vẫn được giữ."
             ),
             "parse_mode": "HTML",

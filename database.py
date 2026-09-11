@@ -30,6 +30,22 @@ CREATE TABLE IF NOT EXISTS signals (
  close_price REAL, pnl REAL DEFAULT 0, telegram_message_id INTEGER,
  created_at TEXT NOT NULL, settled_at TEXT
 );
+CREATE TABLE IF NOT EXISTS mode_signals (
+ market_open_time INTEGER NOT NULL,
+ mode TEXT NOT NULL,
+ market_close_time INTEGER NOT NULL,
+ target_price REAL NOT NULL,
+ direction TEXT NOT NULL,
+ confidence REAL NOT NULL,
+ status TEXT NOT NULL DEFAULT 'PENDING',
+ result TEXT,
+ close_price REAL,
+ created_at TEXT NOT NULL,
+ settled_at TEXT,
+ PRIMARY KEY(market_open_time, mode)
+);
+CREATE INDEX IF NOT EXISTS idx_mode_signals_status_time
+ ON mode_signals(status, market_open_time);
 CREATE TABLE IF NOT EXISTS bot_events (
  id INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, payload TEXT NOT NULL,
  created_at TEXT NOT NULL
@@ -123,6 +139,37 @@ class Database:
         await self.conn.commit()
         return cursor.rowcount == 1
 
+    async def create_mode_signals(
+        self,
+        market_open_time: int,
+        market_close_time: int,
+        target_price: float,
+        predictions: dict[str, tuple[str, float, float, float, int]],
+    ) -> None:
+        """Persist one virtual prediction per analysis mode for fair side-by-side scoring."""
+        created_at = datetime.now(timezone.utc).isoformat()
+        rows = [
+            (
+                market_open_time,
+                mode,
+                market_close_time,
+                target_price,
+                prediction[0],
+                prediction[1],
+                created_at,
+            )
+            for mode, prediction in predictions.items()
+        ]
+        if not rows:
+            return
+        await self.conn.executemany(
+            """INSERT OR IGNORE INTO mode_signals(
+               market_open_time,mode,market_close_time,target_price,direction,confidence,created_at)
+               VALUES(?,?,?,?,?,?,?)""",
+            rows,
+        )
+        await self.conn.commit()
+
     async def update_message_id(self, open_time: int, message_id: int) -> None:
         await self.conn.execute("UPDATE signals SET telegram_message_id=? WHERE market_open_time=?", (message_id, open_time))
         await self.conn.commit()
@@ -130,12 +177,43 @@ class Database:
     async def pending(self) -> list[aiosqlite.Row]:
         return await (await self.conn.execute("SELECT * FROM signals WHERE status='PENDING' ORDER BY market_open_time" )).fetchall()
 
+    async def pending_modes(self) -> list[aiosqlite.Row]:
+        return await (await self.conn.execute(
+            "SELECT * FROM mode_signals WHERE status='PENDING' ORDER BY market_open_time, mode"
+        )).fetchall()
+
     async def settle(self, open_time: int, result: str, close_price: float, pnl: float) -> None:
         await self.conn.execute(
             "UPDATE signals SET status='SETTLED',result=?,close_price=?,pnl=?,settled_at=? WHERE market_open_time=?",
             (result, close_price, pnl, datetime.now(timezone.utc).isoformat(), open_time),
         )
         await self.conn.commit()
+
+    async def settle_mode_signals(self, open_time: int, close_price: float) -> int:
+        rows = await (await self.conn.execute(
+            "SELECT mode,target_price,direction FROM mode_signals WHERE market_open_time=? AND status='PENDING'",
+            (open_time,),
+        )).fetchall()
+        if not rows:
+            return 0
+        settled_at = datetime.now(timezone.utc).isoformat()
+        updates = []
+        for row in rows:
+            target = float(row["target_price"])
+            direction = row["direction"]
+            if close_price == target:
+                result = "TIE"
+            else:
+                result = "WIN" if (direction == "UP") == (close_price > target) else "LOSS"
+            updates.append((result, close_price, settled_at, open_time, row["mode"]))
+        await self.conn.executemany(
+            """UPDATE mode_signals
+               SET status='SETTLED',result=?,close_price=?,settled_at=?
+               WHERE market_open_time=? AND mode=?""",
+            updates,
+        )
+        await self.conn.commit()
+        return len(updates)
 
     async def stats(self, start_ms: int, actual_only: bool) -> dict:
         condition = "AND actual=1" if actual_only else ""
@@ -148,6 +226,34 @@ class Database:
                  FROM signals WHERE market_open_time>=? AND status='SETTLED' {condition}""", (start_ms,)
         )).fetchone()
         return dict(row)
+
+    async def mode_stats(self, start_ms: int) -> dict[str, dict]:
+        """Return virtual W/L/T and win rate for every mode that has been scored."""
+        rows = await (await self.conn.execute(
+            """SELECT mode,
+                      SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) AS wins,
+                      SUM(CASE WHEN result='LOSS' THEN 1 ELSE 0 END) AS losses,
+                      SUM(CASE WHEN result='TIE' THEN 1 ELSE 0 END) AS ties
+               FROM mode_signals
+               WHERE market_open_time>=? AND status='SETTLED'
+               GROUP BY mode""",
+            (start_ms,),
+        )).fetchall()
+        result: dict[str, dict] = {}
+        for row in rows:
+            wins = int(row["wins"] or 0)
+            losses = int(row["losses"] or 0)
+            ties = int(row["ties"] or 0)
+            decided = wins + losses
+            result[row["mode"]] = {
+                "wins": wins,
+                "losses": losses,
+                "ties": ties,
+                "decided": decided,
+                "total": decided + ties,
+                "win_rate": (wins / decided * 100.0) if decided else 0.0,
+            }
+        return result
 
     async def confidence_stats(self, start_ms: int, actual_only: bool = False) -> dict[str, dict]:
         """Win/loss by the same confidence bands used in Telegram.
