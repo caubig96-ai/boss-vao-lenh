@@ -5,9 +5,9 @@ import runtime_v35 as v35
 
 APP_VERSION = "3.5.1"
 
-# Keep all inherited status/Telegram version strings synchronized.
-v35.APP_VERSION = APP_VERSION
-v35.v34.APP_VERSION = APP_VERSION
+# Only synchronize version strings actually rendered by inherited runtime methods.
+# Do not mutate runtime_v35.APP_VERSION itself: V3.5 regression tests import that
+# module directly and should continue to identify the frozen V3.5.0 implementation.
 v35.v34.v33.APP_VERSION = APP_VERSION
 v35.v34.v33.base_runtime.APP_VERSION = APP_VERSION
 
