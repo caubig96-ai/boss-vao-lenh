@@ -78,7 +78,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v35 import APP_VERSION, TradingSignalBotV3
+    from runtime_v351 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -104,7 +104,7 @@ async def async_main() -> None:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
-                    "Bản cloud chạy Binance Futures Kline M1/M5 làm nguồn OHLC duy nhất; aggTrade chỉ dùng cho giá tức thời. Calibration và chấm kết quả theo màu nến Binance vẫn giữ nguyên.",
+                    "Binance Futures Kline là nguồn OHLC duy nhất. Mỗi tín hiệu M5 vẫn được gửi để theo dõi; chỉ tín hiệu đạt calibration mới được khuyến khích và nhận thêm MUA TĂNG/GIẢM NGAY.",
                     enabled=enabled,
                 )
             except Exception as exc:
