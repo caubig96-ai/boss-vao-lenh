@@ -13,15 +13,38 @@ PATTERN_WINDOW = 5
 M1_TREND_WINDOW = 10
 M5_TREND_WINDOW = 5
 
+# Four original modes are kept unchanged. Five new modes deliberately look at
+# different parts of the same CLOSED-candle data so they can be compared fairly
+# on the exact same 5-minute sessions.
 ANALYSIS_MODE_LABELS = {
     "AUTO": "CÂN BẰNG",
     "M1": "M1 NHANH",
     "M5": "M5 CHẮC",
     "AGREE": "ĐỒNG THUẬN M1+M5",
+    "MOMENTUM": "ĐỘNG LƯỢNG",
+    "STRUCTURE": "CẤU TRÚC GIÁ",
+    "WICK": "ÁP LỰC RÂU NẾN",
+    "PATTERN": "MẪU 24H",
+    "BREAKOUT": "BỨT PHÁ",
 }
 
+ANALYSIS_MODE_DESCRIPTIONS = {
+    "AUTO": "M1 50% + M5 30% + mẫu lịch sử 20%",
+    "M1": "ưu tiên 10 nến M1 gần nhất",
+    "M5": "ưu tiên 5 nến M5 gần nhất",
+    "AGREE": "tăng trọng số khi M1 và M5 cùng hướng",
+    "MOMENTUM": "ưu tiên lực thân nến và độ dốc giá đóng cửa",
+    "STRUCTURE": "ưu tiên Higher High/Low hoặc Lower High/Low",
+    "WICK": "đọc áp lực mua/bán qua râu nến và lực thân",
+    "PATTERN": "ưu tiên mẫu 5 nến tương tự trong lịch sử 24 giờ",
+    "BREAKOUT": "ưu tiên thân nến + dốc giá + cấu trúc để bắt nhịp bứt phá",
+}
+
+ANALYSIS_MODES = tuple(ANALYSIS_MODE_LABELS)
+
+# Original four modes: m1, m5, historical pattern, agreement multiplier.
+# These values are intentionally left exactly as V3.1.0 so old behaviour stays intact.
 ANALYSIS_MODE_WEIGHTS = {
-    # m1, m5, historical pattern, agreement multiplier
     "AUTO": (0.50, 0.30, 0.20, 1.00),
     "M1": (0.70, 0.20, 0.10, 0.75),
     "M5": (0.25, 0.55, 0.20, 1.00),
@@ -31,11 +54,15 @@ ANALYSIS_MODE_WEIGHTS = {
 
 def normalize_analysis_mode(mode: str | None) -> str:
     value = (mode or "AUTO").strip().upper()
-    return value if value in ANALYSIS_MODE_WEIGHTS else "AUTO"
+    return value if value in ANALYSIS_MODE_LABELS else "AUTO"
 
 
 def analysis_mode_label(mode: str | None) -> str:
     return ANALYSIS_MODE_LABELS[normalize_analysis_mode(mode)]
+
+
+def analysis_mode_description(mode: str | None) -> str:
+    return ANALYSIS_MODE_DESCRIPTIONS[normalize_analysis_mode(mode)]
 
 
 def _safe_div(a: float, b: float) -> float:
@@ -356,39 +383,80 @@ def five_candle_pattern_probability(
     return max(0.02, min(0.98, probability)), len(selected)
 
 
-def blended_prediction(
-    m1: list[Candle],
-    m5: list[Candle],
-    live_price: float,
-    target: float,
-    mode: str = "AUTO",
-) -> tuple[str, float, float, float, int]:
-    """Chọn hướng theo chế độ phân tích nhưng luôn trả một quyết định mỗi phiên M5.
-
-    AUTO  : 50% M1 + 30% M5 + 20% pattern, cân bằng phản ứng/xác nhận.
-    M1    : 70% M1 + 20% M5 + 10% pattern, phản ứng nhanh hơn.
-    M5    : 25% M1 + 55% M5 + 20% pattern, ưu tiên xu hướng M5.
-    AGREE : 40% M1 + 35% M5 + 25% pattern, thưởng đồng thuận M1/M5 mạnh hơn.
-
-    Chỉ nến đã đóng được dùng trong trend/pattern. live_price/target được giữ trong
-    chữ ký để tương thích runtime nhưng không được đưa vào feature xu hướng.
-    """
-    del live_price, target
+def _mode_score(
+    mode: str,
+    m1_trend: TrendSnapshot,
+    m5_trend: TrendSnapshot,
+    pattern_score: float,
+    agreement_bonus: float,
+) -> float:
     selected_mode = normalize_analysis_mode(mode)
-    m1_weight, m5_weight, pattern_weight, agreement_multiplier = ANALYSIS_MODE_WEIGHTS[selected_mode]
 
-    m1_trend = m1_trend_score(m1)
-    m5_trend = m5_trend_score(m5)
-    pattern_probability, pattern_samples = five_candle_pattern_probability(m5)
-    pattern_score = _clamp((pattern_probability - 0.5) * 2.0)
-    _, agreement_bonus = timeframe_agreement(m1_trend, m5_trend)
+    if selected_mode in ANALYSIS_MODE_WEIGHTS:
+        m1_weight, m5_weight, pattern_weight, agreement_multiplier = ANALYSIS_MODE_WEIGHTS[selected_mode]
+        return _clamp(
+            m1_weight * m1_trend.score
+            + m5_weight * m5_trend.score
+            + pattern_weight * pattern_score
+            + agreement_bonus * agreement_multiplier
+        )
 
-    combined_score = _clamp(
-        m1_weight * m1_trend.score
-        + m5_weight * m5_trend.score
-        + pattern_weight * pattern_score
-        + agreement_bonus * agreement_multiplier
+    if selected_mode == "MOMENTUM":
+        return _clamp(
+            0.30 * m1_trend.body_imbalance
+            + 0.25 * m1_trend.close_slope
+            + 0.20 * m5_trend.body_imbalance
+            + 0.20 * m5_trend.close_slope
+            + 0.05 * pattern_score
+        )
+
+    if selected_mode == "STRUCTURE":
+        return _clamp(
+            0.25 * m1_trend.structure
+            + 0.15 * m1_trend.close_slope
+            + 0.35 * m5_trend.structure
+            + 0.15 * m5_trend.close_slope
+            + 0.10 * pattern_score
+        )
+
+    if selected_mode == "WICK":
+        return _clamp(
+            0.35 * m1_trend.wick_pressure
+            + 0.30 * m5_trend.wick_pressure
+            + 0.15 * m1_trend.body_imbalance
+            + 0.10 * m5_trend.body_imbalance
+            + 0.10 * pattern_score
+        )
+
+    if selected_mode == "PATTERN":
+        return _clamp(
+            0.15 * m1_trend.score
+            + 0.15 * m5_trend.score
+            + 0.70 * pattern_score
+            + 0.50 * agreement_bonus
+        )
+
+    # BREAKOUT: require body force, close slope and structure to point the same way.
+    return _clamp(
+        0.25 * m1_trend.close_slope
+        + 0.25 * m1_trend.body_imbalance
+        + 0.20 * m5_trend.close_slope
+        + 0.20 * m5_trend.structure
+        + 0.10 * pattern_score
+        + 0.50 * agreement_bonus
     )
+
+
+def _prediction_from_components(
+    mode: str,
+    m1_trend: TrendSnapshot,
+    m5_trend: TrendSnapshot,
+    pattern_probability: float,
+    pattern_samples: int,
+    agreement_bonus: float,
+) -> tuple[str, float, float, float, int]:
+    pattern_score = _clamp((pattern_probability - 0.5) * 2.0)
+    combined_score = _mode_score(mode, m1_trend, m5_trend, pattern_score, agreement_bonus)
     probability_up = _clamp(0.5 + 0.45 * combined_score, 0.05, 0.95)
     direction = "UP" if probability_up >= 0.5 else "DOWN"
     confidence = probability_up if direction == "UP" else 1.0 - probability_up
@@ -399,6 +467,47 @@ def blended_prediction(
         m5_trend.probability_up,
         pattern_samples,
     )
+
+
+def all_mode_predictions(
+    m1: list[Candle],
+    m5: list[Candle],
+    live_price: float,
+    target: float,
+) -> dict[str, tuple[str, float, float, float, int]]:
+    """Analyze all nine modes once per M5 session using the same closed candles.
+
+    live_price/target remain in the signature for symmetry with blended_prediction,
+    but are deliberately excluded from the candle features to prevent live-candle leakage.
+    """
+    del live_price, target
+    m1_trend = m1_trend_score(m1)
+    m5_trend = m5_trend_score(m5)
+    pattern_probability, pattern_samples = five_candle_pattern_probability(m5)
+    _, agreement_bonus = timeframe_agreement(m1_trend, m5_trend)
+    return {
+        mode: _prediction_from_components(
+            mode,
+            m1_trend,
+            m5_trend,
+            pattern_probability,
+            pattern_samples,
+            agreement_bonus,
+        )
+        for mode in ANALYSIS_MODES
+    }
+
+
+def blended_prediction(
+    m1: list[Candle],
+    m5: list[Candle],
+    live_price: float,
+    target: float,
+    mode: str = "AUTO",
+) -> tuple[str, float, float, float, int]:
+    """Return one mandatory UP/DOWN decision for the selected candle-analysis mode."""
+    selected_mode = normalize_analysis_mode(mode)
+    return all_mode_predictions(m1, m5, live_price, target)[selected_mode]
 
 
 def candle_analysis(candles: list[Candle], label: str) -> str:
