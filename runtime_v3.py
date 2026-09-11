@@ -17,11 +17,11 @@ import aiohttp
 
 from config import Config
 from database import Database
-from indicators import blended_prediction, candle_analysis
+from indicators import analysis_mode_label, blended_prediction, candle_analysis, normalize_analysis_mode
 from models import Candle, Prediction
 from telegram_v3 import TelegramBotV3
 
-APP_VERSION = "3.0.0"
+APP_VERSION = "3.1.0"
 BINANCE_REST = "https://fapi.binance.com"
 BINANCE_WS = "wss://fstream.binance.com/stream"
 M1_24H = 1440
@@ -174,6 +174,7 @@ class TradingSignalBotV3:
             ("base_bet", str(self.config.base_bet)), ("payout_rate", str(self.config.payout_rate)),
             ("bet_step", "1"), ("current_balance", "0"), ("pause_started_at", "0"),
             ("awaiting_setbet", "0"), ("stats_reset_at", "0"), ("telegram_update_offset", "0"),
+            ("analysis_mode", "AUTO"),
         ):
             await self.db.set_default(key, value)
 
@@ -498,6 +499,9 @@ class TradingSignalBotV3:
             float(row["bet_amount"]), int(row["bet_step"]), bool(row["actual"]),
         )
 
+    async def current_analysis_mode(self) -> str:
+        return normalize_analysis_mode(await self.db.get("analysis_mode", "AUTO"))
+
     async def make_decision(self, open_time: int, delay: float) -> None:
         await asyncio.sleep(delay)
         try:
@@ -515,7 +519,10 @@ class TradingSignalBotV3:
             if self.live_price <= 0:
                 self.live_price = live.close
             target = live.open
-            direction, confidence, p1, p5, samples = blended_prediction(list(self.m1), list(self.m5), self.live_price, target)
+            mode = await self.current_analysis_mode()
+            direction, confidence, p1, p5, samples = blended_prediction(
+                list(self.m1), list(self.m5), self.live_price, target, mode=mode
+            )
             actual = await self.signals_enabled()
             base_bet = float(await self.db.get("base_bet", str(self.config.base_bet)))
             step = int(await self.db.get("bet_step", "1"))
@@ -535,7 +542,7 @@ class TradingSignalBotV3:
                     await self.db.event("SIGNAL_SEND_ERROR", {"open_time": open_time, "error": str(exc)})
             await self.db.event("DECISION_CREATED", {
                 "open_time": open_time, "direction": direction, "actual": actual,
-                "confidence": confidence, "created": created,
+                "confidence": confidence, "created": created, "analysis_mode": mode,
             })
         except Exception as exc:
             self.last_decision_state = f"LỖI: {type(exc).__name__}"
@@ -640,6 +647,31 @@ class TradingSignalBotV3:
         start = datetime.combine(now.date(), dt_time.min, tzinfo=self.config.timezone)
         return int(start.timestamp() * 1000)
 
+    @staticmethod
+    def _bucket_line(icon: str, label: str, stats: dict) -> str:
+        decided = int(stats.get("decided", 0))
+        wins = int(stats.get("wins", 0))
+        losses = int(stats.get("losses", 0))
+        ties = int(stats.get("ties", 0))
+        if decided <= 0:
+            value = "chưa có dữ liệu"
+        else:
+            value = f"<b>{stats.get('win_rate', 0.0):.1f}%</b> ({wins} thắng/{losses} thua)"
+        if ties:
+            value += f" + {ties} hòa"
+        return f"{icon} {label}: {value}"
+
+    async def threshold_stats_text(self) -> str:
+        reset_at = int(await self.db.get("stats_reset_at", "0"))
+        buckets = await self.db.confidence_stats(max(0, reset_at), actual_only=False)
+        return (
+            "📈 <b>TỶ LỆ THẮNG THEO NGƯỠNG TIN CẬY</b>\n"
+            + self._bucket_line("🔴", "THẤP 50.0–56.9%", buckets["LOW"]) + "\n"
+            + self._bucket_line("🟡", "TRUNG BÌNH 57.0–64.9%", buckets["MEDIUM"]) + "\n"
+            + self._bucket_line("🟢", "CAO ≥65.0%", buckets["HIGH"]) + "\n"
+            "<i>Tính trên các phiên đã chấm từ lần reset; hòa không tính vào mẫu thắng/thua.</i>"
+        )
+
     async def stats_text(self) -> str:
         reset_at = int(await self.db.get("stats_reset_at", "0"))
         persistent_start = max(0, reset_at)
@@ -661,7 +693,8 @@ class TradingSignalBotV3:
             f"📅 Hôm nay: {today['wins'] or 0} thắng | {today['losses'] or 0} thua | {today['ties'] or 0} hòa\n\n"
             f"📡 <b>PHÂN TÍCH TỪ LẦN RESET</b>\n"
             f"Thắng: {virtual['wins'] or 0} | Thua: {virtual['losses'] or 0} | Hòa: {virtual['ties'] or 0}\n"
-            f"Tỷ lệ thắng: {win_rate:.1f}%"
+            f"Tỷ lệ thắng: {win_rate:.1f}%\n\n"
+            + await self.threshold_stats_text()
         )
 
     async def signal_text(self, p: Prediction) -> str:
@@ -670,12 +703,14 @@ class TradingSignalBotV3:
         label = "🟢 𝗠𝗨𝗔 𝗧Ă𝗡𝗚" if p.direction == "UP" else "🔴 𝗠𝗨𝗔 𝗚𝗜Ả𝗠"
         m1_analysis = candle_analysis(list(self.m1), "M1")
         m5_analysis = candle_analysis(list(self.m5), "M5")
+        mode = await self.current_analysis_mode()
         return (
             f"📥 <b>TIN NHẮN VÀO LỆNH • V{APP_VERSION}</b>\n━━━━━━━━━━━━━━━━━━━━\n"
             f"<b>{label}: {p.bet_amount:.2f} USDT</b>\n━━━━━━━━━━━━━━━━━━━━\n\n"
             f"⏰ Phiên: {local_open:%H:%M}–{local_close:%H:%M}\n"
             f"🎯 Target: <code>{p.target_price:,.2f}</code> USDT\n"
             f"💵 Giá lúc báo: <code>{p.signal_price:,.2f}</code> USDT\n"
+            f"🧠 Chế độ: <b>{analysis_mode_label(mode)}</b>\n"
             f"\n{self.confidence_block(p.confidence)}\n\n"
             f"🔎 M1: {p.m1_probability * 100:.1f}% tăng | M5: {p.m5_probability * 100:.1f}% tăng\n"
             f"🕯 {m1_analysis}\n🕯 {m5_analysis}\n"
@@ -684,7 +719,12 @@ class TradingSignalBotV3:
         )
 
     async def result_text(self, row, close_price: float, result: str, pnl: float) -> str:
-        return {"WIN": "✅ <b>ĐÃ THẮNG</b>", "LOSS": "❌ <b>ĐÃ THUA</b>", "TIE": "➖ <b>ĐÃ HÒA</b>"}[result]
+        direction = "TĂNG" if row["direction"] == "UP" else "GIẢM"
+        return {
+            "WIN": f"✅ <b>ĐÃ THẮNG {direction}</b>",
+            "LOSS": f"❌ <b>ĐÃ THUA {direction}</b>",
+            "TIE": f"➖ <b>ĐÃ HÒA {direction}</b>",
+        }[result]
 
     @staticmethod
     def confidence_block(confidence: float) -> str:
@@ -703,6 +743,7 @@ class TradingSignalBotV3:
         paused = pause_until > now_ms
         base = float(await self.db.get("base_bet", str(self.config.base_bet)))
         step = int(await self.db.get("bet_step", "1"))
+        mode = await self.current_analysis_mode()
         trade_age = self._age(self.last_trade_rx_mono)
         kline_age = self._age(self.last_kline_rx_mono)
         rest_age = self._age(self.last_rest_ok_mono)
@@ -723,6 +764,7 @@ class TradingSignalBotV3:
         kline_age_value = kline_age if kline_age is not None else -1.0
         return (
             f"🤖 <b>BÁO CÁO BOT V{APP_VERSION}</b>\n"
+            f"🧠 Chế độ nến: <b>{analysis_mode_label(mode)}</b>\n"
             f"Nguồn giá: <b>{source}</b>\n"
             f"WebSocket: <b>{'CONNECTED' if self.ws_connected else 'RECONNECTING'}</b> | reconnect: {self.ws_reconnects}\n"
             f"Tick aggTrade: <b>{self.trade_ticks:,}</b> | tuổi tick: <b>{trade_age_value:.2f}s</b>\n"
@@ -737,6 +779,12 @@ class TradingSignalBotV3:
             f"Vốn gốc: <b>{base:.2f}</b> | Tầng: <b>LỆNH {step}</b>" + await self.stats_text()
         )
 
+    async def _set_analysis_mode(self, mode: str) -> str:
+        selected = normalize_analysis_mode(mode)
+        await self.db.set("analysis_mode", selected)
+        await self.db.event("ANALYSIS_MODE_CHANGED", {"mode": selected})
+        return selected
+
     async def handle_telegram(self, kind: str, value: str, raw: dict) -> None:
         if kind == "callback":
             if value == "stop":
@@ -750,6 +798,16 @@ class TradingSignalBotV3:
                 await self.telegram.send("🟢 <b>BOT ĐANG CHẠY</b>" + await self.stats_text(), enabled=True)
             elif value == "status":
                 await self.telegram.send(await self.status_text(), enabled=await self.db.get("manual_enabled", "1") == "1")
+            elif value == "analysis_mode":
+                await self.telegram.send_analysis_mode_menu(await self.current_analysis_mode())
+            elif value.startswith("mode_"):
+                selected = await self._set_analysis_mode(value[5:])
+                await self.telegram.send(
+                    f"🧠 Đã chọn chế độ: <b>{analysis_mode_label(selected)}</b>\n"
+                    "Từ phiên 5 phút kế tiếp bot sẽ dùng chế độ này."
+                )
+            elif value == "threshold_stats":
+                await self.telegram.send(await self.threshold_stats_text())
             elif value == "setbet_help":
                 await self.db.set("awaiting_setbet", 1)
                 await self.telegram.ask("💵 <b>NHẬP VỐN LỆNH 1</b>\nVí dụ nhập <code>2</code> → Lệnh 1 = 2 USDT, Lệnh 2 = 4 USDT.", "Ví dụ: 2")
@@ -800,18 +858,38 @@ class TradingSignalBotV3:
                     raise ValueError
                 await self.db.set("payout_rate", rate)
                 await self.telegram.send(f"✅ Tỷ lệ trả thưởng: <b>{rate * 100:.1f}%</b>")
+            elif command == "/mode":
+                if len(parts) == 1:
+                    await self.telegram.send_analysis_mode_menu(await self.current_analysis_mode())
+                elif len(parts) == 2:
+                    requested = parts[1].upper()
+                    aliases = {"BALANCE": "AUTO", "AUTO": "AUTO", "M1": "M1", "M5": "M5", "AGREE": "AGREE"}
+                    if requested not in aliases:
+                        raise ValueError
+                    selected = await self._set_analysis_mode(aliases[requested])
+                    await self.telegram.send(f"🧠 Chế độ nến: <b>{analysis_mode_label(selected)}</b>")
+                else:
+                    raise ValueError
+            elif command == "/thresholds":
+                await self.telegram.send(await self.threshold_stats_text())
             elif command in ("/status", "/start"):
                 await self.telegram.send(await self.status_text())
             else:
-                await self.telegram.send("Lệnh: /status, /setbet 1, /setbalance 100, /setpayout 80")
+                await self.telegram.send(
+                    "Lệnh: /status, /mode, /thresholds, /setbet 1, /setbalance 100, /setpayout 80"
+                )
         except (ValueError, IndexError):
-            await self.telegram.send("⚠️ Giá trị không hợp lệ. Ví dụ: <code>/setbet 1</code>")
+            await self.telegram.send(
+                "⚠️ Giá trị không hợp lệ. Ví dụ: <code>/setbet 1</code> hoặc <code>/mode M1</code>"
+            )
 
     async def safe_startup_message(self) -> None:
         try:
             enabled = await self.db.get("manual_enabled", "1") == "1"
+            mode = await self.current_analysis_mode()
             await self.telegram.send(
                 f"🤖 <b>BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
+                f"🧠 Chế độ nến: <b>{analysis_mode_label(mode)}</b>\n"
                 "WebSocket + REST dự phòng + watchdog tạo lệnh đã bật.",
                 enabled=enabled,
             )
