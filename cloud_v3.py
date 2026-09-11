@@ -16,12 +16,7 @@ DEFAULT_CLOUD_LOG = ROOT / "logs" / "cloud-v3.log"
 
 
 def load_cloud_environment(env_file: str | Path | None = None) -> Path:
-    """Load a cloud-only environment without reusing the Windows Telegram bot.
-
-    The cloud instance intentionally requires CLOUD_TELEGRAM_* variables. This
-    prevents a cloned repo that also contains a normal .env from accidentally
-    polling the same Telegram bot token as the Windows instance.
-    """
+    """Load a cloud-only environment without reusing the Windows Telegram bot."""
     path = Path(env_file or os.getenv("CLOUD_ENV_FILE", str(DEFAULT_CLOUD_ENV))).expanduser().resolve()
     if path.is_file():
         load_dotenv(path, override=False)
@@ -78,7 +73,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v351 import APP_VERSION, TradingSignalBotV3
+    from runtime_v352 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -104,7 +99,7 @@ async def async_main() -> None:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
-                    "Binance Futures Kline là nguồn OHLC duy nhất. Mỗi tín hiệu M5 vẫn được gửi để theo dõi; chỉ tín hiệu đạt calibration mới được khuyến khích và nhận thêm MUA TĂNG/GIẢM NGAY.",
+                    "Tín hiệu M5 dùng dạng ngắn; bấm CHI TIẾT để xem phân tích đầy đủ. Tín hiệu đủ điều kiện sẽ nhận thêm MUA TĂNG/GIẢM NGAY.",
                     enabled=enabled,
                 )
             except Exception as exc:
