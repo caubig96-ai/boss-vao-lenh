@@ -49,6 +49,8 @@ class TelegramBotV3:
              {"text": start_text, "callback_data": "start"}],
             [{"text": "📊 BÁO CÁO", "callback_data": "status"},
              {"text": "💵 ĐỔI VỐN", "callback_data": "setbet_help"}],
+            [{"text": "🧠 CHẾ ĐỘ NẾN", "callback_data": "analysis_mode"},
+             {"text": "📈 TỶ LỆ NGƯỠNG", "callback_data": "threshold_stats"}],
             [{"text": "♻️ RESET THỐNG KÊ", "callback_data": "reset_stats"}],
         ]}
 
@@ -88,9 +90,6 @@ class TelegramBotV3:
         try:
             await self._call("sendMessage", payload)
         except Exception as exc:
-            # The main signal has already been delivered. Never turn a successful
-            # normal 5-minute signal into a failure just because the optional
-            # high-confidence follow-up had a transient Telegram error.
             self.last_error = f"instant follow-up: {exc}"
             log.warning("Không gửi được cảnh báo lệnh độ tin cậy cao: %s", exc)
 
@@ -106,12 +105,38 @@ class TelegramBotV3:
         result = await self._call("sendMessage", payload)
         message_id = int(result["message_id"])
 
-        # IMPORTANT: every normal 5-minute signal is still sent first. Only signals
-        # already marked CAO by the analysis engine get this extra second message.
+        # Every normal 5-minute signal is always sent first. Only CAO gets the extra alert.
         followup = self.instant_followup_text(text)
         if followup:
             await self._send_instant_followup(followup)
         return message_id
+
+    async def send_analysis_mode_menu(self, current_mode: str) -> int:
+        current = (current_mode or "AUTO").upper()
+        labels = [
+            ("AUTO", "CÂN BẰNG"),
+            ("M1", "M1 NHANH"),
+            ("M5", "M5 CHẮC"),
+            ("AGREE", "ĐỒNG THUẬN M1+M5"),
+        ]
+        buttons = []
+        for value, label in labels:
+            prefix = "✅ " if value == current else ""
+            buttons.append([{"text": prefix + label, "callback_data": f"mode_{value.lower()}"}])
+        result = await self._call("sendMessage", {
+            "chat_id": self.chat_id,
+            "text": (
+                "🧠 <b>CHỌN CHẾ ĐỘ PHÂN TÍCH NẾN</b>\n\n"
+                "• CÂN BẰNG: M1 50% + M5 30% + mẫu lịch sử 20%\n"
+                "• M1 NHANH: ưu tiên 10 nến M1 gần nhất\n"
+                "• M5 CHẮC: ưu tiên 5 nến M5 gần nhất\n"
+                "• ĐỒNG THUẬN: tăng trọng số khi M1 và M5 cùng hướng\n\n"
+                "Mọi chế độ vẫn phân tích và đưa TĂNG/GIẢM ở mỗi phiên 5 phút."
+            ),
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": buttons},
+        })
+        return int(result["message_id"])
 
     async def ask(self, text: str, placeholder: str = "Nhập số tiền USDT") -> int:
         result = await self._call("sendMessage", {
