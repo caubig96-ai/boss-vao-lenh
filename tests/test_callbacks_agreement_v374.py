@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import unittest
-from types import SimpleNamespace
 
 import aiosqlite
 
@@ -109,7 +108,9 @@ class V374AsyncTests(unittest.IsolatedAsyncioTestCase):
                 rows.append((stamp, 3, "SETTLED", "WIN")); stamp += 1
             for _ in range(20):
                 rows.append((stamp, 3, "SETTLED", "LOSS")); stamp += 1
-            # 6/6 has enough samples and much stronger history.
+            # All >=4/6 historical examples here are 6/6 and perfect. >=4, >=5,
+            # and >=6 therefore have the same evidence, so policy intentionally
+            # chooses the lowest tied threshold to keep more future opportunities.
             for _ in range(20):
                 rows.append((stamp, 6, "SETTLED", "WIN")); stamp += 1
             await conn.executemany("INSERT INTO color_predictions VALUES(?,?,?,?)", rows)
@@ -117,7 +118,7 @@ class V374AsyncTests(unittest.IsolatedAsyncioTestCase):
             bot = TradingSignalBotV3.__new__(TradingSignalBotV3)
             bot.db = FakeDB(conn)
             threshold, stats, _exact = await bot.agreement_entry_policy()
-            self.assertEqual(threshold, 6)
+            self.assertEqual(threshold, 4)
             self.assertEqual(stats["wins"], 20)
             self.assertEqual(stats["losses"], 0)
         finally:
