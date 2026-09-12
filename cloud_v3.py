@@ -73,7 +73,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v361 import APP_VERSION, TradingSignalBotV3
+    from runtime_v37 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -97,11 +97,10 @@ async def async_main() -> None:
         async def safe_startup_message(self) -> None:
             try:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
-                mode = await self.current_analysis_mode()
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
-                    f"🤖 Auto tự chọn/tự đảo đang ưu tiên: <b>{mode}</b>\n"
-                    "♾️ Không nghỉ 30 phút sau chuỗi thua.",
+                    "🎨 AUTO dự đoán màu nến M5 bằng lịch sử nến đã đóng.\n"
+                    "🔒 Không dùng nến live làm feature • ♾️ không nghỉ sau chuỗi thua.",
                     enabled=enabled,
                 )
             except Exception as exc:
