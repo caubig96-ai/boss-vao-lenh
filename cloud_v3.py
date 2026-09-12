@@ -29,6 +29,13 @@ def load_cloud_environment(env_file: str | Path | None = None) -> Path:
             "Hãy dùng Telegram Bot riêng cho CLOUD để không xung đột polling với bản Windows."
         )
 
+    existing_desktop_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    if existing_desktop_token and existing_desktop_token == token:
+        raise ValueError(
+            "CLOUD_TELEGRAM_BOT_TOKEN đang trùng TELEGRAM_BOT_TOKEN. "
+            "Cloud và Windows phải dùng 2 bot token khác nhau để nút Telegram không bị 409 Conflict."
+        )
+
     mappings = {
         "CLOUD_TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
         "CLOUD_TELEGRAM_CHAT_ID": "TELEGRAM_CHAT_ID",
@@ -73,7 +80,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v373 import APP_VERSION, TradingSignalBotV3
+    from runtime_v374 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -97,11 +104,12 @@ async def async_main() -> None:
         async def safe_startup_message(self) -> None:
             try:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
+                threshold, _stats, _exact = await self.agreement_entry_policy()
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
                     "🎨 COLOR ENGINE là chế độ phân tích duy nhất.\n"
-                    "🧩 Từ 3/6 cách phân tích cùng hướng có thể báo MUA NGAY.\n"
-                    "🚫 Không còn nút/chế độ phân tích cũ.",
+                    f"🎯 Ngưỡng MUA NGAY hiện tại: <b>≥{threshold}/6</b>.\n"
+                    "🔐 Cloud bắt buộc dùng token riêng, không dùng chung token Windows.",
                     enabled=enabled,
                 )
             except Exception as exc:
