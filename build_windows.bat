@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.6.1 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.0 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -38,12 +38,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.6.1 =====
+echo ===== BUILD BOSSVAOLENH V3.7.0 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v361.pyw
+  desktop_v37.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -54,22 +54,22 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.6.1
+echo VERSION: 3.7.0
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo NGUON NEN: BINANCE FUTURES KLINE M1/M5 ONLY
-echo AUTO MODE: NEU MODE DU MAU CO WR DUOI 50 PHAN TRAM THI TU DAO TANG/GIAM
-echo XEP HANG: DUNG TY LE HIEU DUNG SAU DAO DE CHON MODE
-ECHO DONG THUAN: HUONG CHON + CHUOI GAN DAY + PHIEU CAC MODE PHAI CUNG HUONG MOI MUA NGAY
+echo COLOR ENGINE: DU DOAN CHI XANH/DO BANG NEN M5 DA DONG
+echo LICH SU: TOI DA 8640 NEN M5 - KHOANG 30 NGAY
+echo 6 NGUON: KNN + CHUOI MAU + THAN NEN + VI TRI CLOSE + RAU NEN + REGIME
+echo CHONG LEAK: KHONG DUNG GIA/BIEN DO NEN LIVE DE CHON MAU
+echo MUA NGAY: CHI KHI SCORE + DONG THUAN + HIEU CHINH LICH SU DAT DIEU KIEN
 echo SAU 2 LENH THUA: KHONG TAM NGHI 30 PHUT - GUI LIEN TUC
 echo TELEGRAM DAU PHIEN: DUNG 2 TIN - 1 TIN HIEU + 1 TIN HANH DONG
-echo CAP THANG/THUA: CHI TINH 2 LENH CUNG KET QUA LIEN NHAU THEO THOI GIAN
 echo TIN HIEU: GIU NGUYEN TOAN BO NUT CU + NUT CHI TIET
-echo TIN 2: CHI MUA NGAY KHI CAC NGUON CUNG HUONG; NEU KHONG THI KHONG NEN VAO
 echo KET QUA SAU 5 PHUT: 1 TIN THANG/THUA/HOA + HUONG + LENH 1/2
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.6.1 moi...
+echo Dang mo BAN V3.7.0 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
 echo Moi phien M5: 2 tin luc bat dau, 1 tin ket qua khi het 5 phut.
