@@ -60,7 +60,7 @@ async def async_main() -> None:
     load_cloud_environment()
     configure_logging()
     from config import Config
-    from runtime_v377 import APP_VERSION, TradingSignalBotV3
+    from runtime_v378 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
