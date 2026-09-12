@@ -80,7 +80,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v374 import APP_VERSION, TradingSignalBotV3
+    from runtime_v375 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -104,10 +104,13 @@ async def async_main() -> None:
         async def safe_startup_message(self) -> None:
             try:
                 enabled = await self.db.get("manual_enabled", "1") == "1"
+                mode = await self.current_signal_mode()
+                self.telegram.inverse_enabled = mode == "INVERSE"
                 threshold, _stats, _exact = await self.agreement_entry_policy()
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
                     "🎨 COLOR ENGINE là chế độ phân tích duy nhất.\n"
+                    f"↔️ Chế độ hướng lệnh: <b>{self.signal_mode_label(mode)}</b>.\n"
                     f"🎯 Ngưỡng MUA NGAY hiện tại: <b>≥{threshold}/6</b>.\n"
                     "🔐 Cloud bắt buộc dùng token riêng, không dùng chung token Windows.",
                     enabled=enabled,

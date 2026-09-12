@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-rem Frozen regression markers for the prior visible-startup release:
+rem Frozen regression markers for prior visible-startup releases:
 rem desktop_v372.pyw
 rem VERSION: 3.7.2
 
@@ -32,7 +32,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.7.4 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.5 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -42,12 +42,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.7.4 =====
+echo ===== BUILD BOSSVAOLENH V3.7.5 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v374.pyw
+  desktop_v375.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -58,15 +58,17 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.7.4
+echo VERSION: 3.7.5
 echo KHOI DONG: TOOL TU MO CUA SO MAT KHAU
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo CHE DO DUY NHAT: COLOR ENGINE
+echo NUT MOI: DAO TIN HIEU BAT/TAT - AP DUNG TU PHIEN M5 KE TIEP
+echo DAO TIN HIEU: TANG DOI THANH GIAM, GIAM DOI THANH TANG
+echo DAO TIN HIEU: SO NGUON DONG THUAN DUOC TINH LAI THEO HUONG NGUOC, KHONG DAO GIA 6 NGUON
+echo THONG KE 2/6 DEN 6/6: TACH RIENG CHE DO THUAN VA DAO
+echo MUA NGAY: TU CHON NGUONG >=3/6..>=6/6 THEO LICH SU CUA DUNG CHE DO
 echo TELEGRAM CALLBACK: TRA LOI NUT NGAY + BAO LOI NEU HANDLER LOI
 echo TELEGRAM POLLING: TU XOA WEBHOOK CU + CANH BAO 409 NEU TRUNG TOKEN
-echo TELEGRAM CARD: THONG KE 2/6 DEN 6/6 THANG/THUA/TY LE
-echo MUA NGAY: TU CHON NGUONG >=3/6..>=6/6 THEO LICH SU; CHUA DU 20 MAU THI >=3/6
-echo NUT CHON CHE DO: DA BO
 echo CHONG TRUNG TIN CHINH: KHOA ATOMIC THEO OPEN_TIME
 echo 9 CHE DO CU: DA TAT - KHONG TAO MODE SIGNALS MOI
 echo LICH SU: TOI DA 8640 NEN M5 - KHOANG 30 NGAY
@@ -75,8 +77,8 @@ echo SAU 2 LENH THUA: KHONG TAM NGHI 30 PHUT - GUI LIEN TUC
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.7.4 moi...
+echo Dang mo BAN V3.7.5 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
-echo V3.7.4 se hien cua so nhap mat khau ngay sau khi khoi dong.
+echo V3.7.5 se hien cua so nhap mat khau ngay sau khi khoi dong.
 pause
