@@ -22,7 +22,7 @@ python -m pip install --upgrade pip
 pip install -r requirements-windows.txt
 if errorlevel 1 exit /b 1
 
-echo ===== CHAY TEST WINDOWS / LOGIC V3.7.6 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.7 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo TEST LOI - KHONG BUILD EXE.
@@ -30,18 +30,19 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo ===== BUILD BOSSVAOLENH V3.7.6 =====
+echo ===== BUILD BOSSVAOLENH V3.7.7 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v376.pyw
+  desktop_v377.pyw
 if errorlevel 1 exit /b 1
 
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.7.6
+echo VERSION: 3.7.7
+echo THONG KE DONG THUAN: HIEN 1/6 DEN 6/6 THANG / THUA / TY LE
 echo DAO TIN HIEU: GIU NGUYEN X/6 CUA HUONG GOC DE HIEN THI
 echo DAO: 4/6, 5/6, 6/6 HUONG GOC = KHONG NEN VAO
 echo DAO: CHI MUA NGAY KHI HUONG GOC <=3/6 VA HUONG DAO >=3/6
