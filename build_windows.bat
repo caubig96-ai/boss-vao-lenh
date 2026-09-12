@@ -13,72 +13,40 @@ timeout /t 2 /nobreak >nul
 taskkill /IM BossVaoLenh.exe /T /F >nul 2>&1
 
 if exist ".env" (
-    echo ===== DAT THOI DIEM BAO LENH = GIAY THU 10 =====
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$p='.env'; $lines=Get-Content -LiteralPath $p; if($lines -match '^DECISION_SECOND='){ $lines=$lines -replace '^DECISION_SECOND=.*$','DECISION_SECOND=10' } else { $lines += 'DECISION_SECOND=10' }; Set-Content -LiteralPath $p -Value $lines -Encoding UTF8"
 )
 
-if not exist ".venv\Scripts\python.exe" (
-    py -3 -m venv .venv
-)
-
+if not exist ".venv\Scripts\python.exe" py -3 -m venv .venv
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip
 pip install -r requirements-windows.txt
-if errorlevel 1 (
-    echo.
-    echo LOI CAI THU VIEN - DUNG BUILD.
-    pause
-    exit /b 1
-)
+if errorlevel 1 exit /b 1
 
-echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.7.5 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.6 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
-    echo.
     echo TEST LOI - KHONG BUILD EXE.
     pause
     exit /b 1
 )
 
-echo.
-echo ===== BUILD BOSSVAOLENH V3.7.5 =====
+echo ===== BUILD BOSSVAOLENH V3.7.6 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v375.pyw
-
-if errorlevel 1 (
-    echo BUILD THAT BAI.
-    pause
-    exit /b 1
-)
+  desktop_v376.pyw
+if errorlevel 1 exit /b 1
 
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.7.5
-echo KHOI DONG: TOOL TU MO CUA SO MAT KHAU
-echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
-echo CHE DO DUY NHAT: COLOR ENGINE
-echo NUT MOI: DAO TIN HIEU BAT/TAT - AP DUNG TU PHIEN M5 KE TIEP
-echo DAO TIN HIEU: TANG DOI THANH GIAM, GIAM DOI THANH TANG
-echo DAO TIN HIEU: SO NGUON DONG THUAN DUOC TINH LAI THEO HUONG NGUOC, KHONG DAO GIA 6 NGUON
-echo THONG KE 2/6 DEN 6/6: TACH RIENG CHE DO THUAN VA DAO
-echo MUA NGAY: TU CHON NGUONG >=3/6..>=6/6 THEO LICH SU CUA DUNG CHE DO
-echo TELEGRAM CALLBACK: TRA LOI NUT NGAY + BAO LOI NEU HANDLER LOI
-echo TELEGRAM POLLING: TU XOA WEBHOOK CU + CANH BAO 409 NEU TRUNG TOKEN
-echo CHONG TRUNG TIN CHINH: KHOA ATOMIC THEO OPEN_TIME
-echo 9 CHE DO CU: DA TAT - KHONG TAO MODE SIGNALS MOI
-echo LICH SU: TOI DA 8640 NEN M5 - KHOANG 30 NGAY
-echo 6 NGUON: KNN + CHUOI MAU + THAN NEN + VI TRI CLOSE + RAU NEN + REGIME
-echo SAU 2 LENH THUA: KHONG TAM NGHI 30 PHUT - GUI LIEN TUC
-echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
+echo VERSION: 3.7.6
+echo DAO TIN HIEU: GIU NGUYEN X/6 CUA HUONG GOC DE HIEN THI
+echo DAO: 4/6, 5/6, 6/6 HUONG GOC = KHONG NEN VAO
+echo DAO: CHI MUA NGAY KHI HUONG GOC <=3/6 VA HUONG DAO >=3/6
+echo TELEGRAM: NUT BAO CAO / DOI VON / TY LE / RESET / DAO TIN HIEU
+echo DATABASE: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
-echo.
-echo Dang mo BAN V3.7.5 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
-echo.
-echo V3.7.5 se hien cua so nhap mat khau ngay sau khi khoi dong.
 pause
