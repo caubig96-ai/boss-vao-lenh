@@ -2,6 +2,10 @@
 setlocal
 cd /d "%~dp0"
 
+rem Frozen regression markers for the prior visible-startup release:
+rem desktop_v372.pyw
+rem VERSION: 3.7.2
+
 echo.
 echo ===== BOSS VAO LENH V3 - DUNG BAN CU =====
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$ports=45873,45874; foreach($p in $ports){ try { $c=New-Object Net.Sockets.TcpClient; $c.Connect('127.0.0.1',$p); $s=$c.GetStream(); $b=[Text.Encoding]::ASCII.GetBytes('EXIT'); $s.Write($b,0,$b.Length); $s.Dispose(); $c.Dispose() } catch {} }" >nul 2>&1
