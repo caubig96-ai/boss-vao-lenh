@@ -73,7 +73,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v36 import APP_VERSION, TradingSignalBotV3
+    from runtime_v361 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -100,7 +100,7 @@ async def async_main() -> None:
                 mode = await self.current_analysis_mode()
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
-                    f"🤖 Auto mode ưu tiên: <b>{mode}</b>\n"
+                    f"🤖 Auto tự chọn/tự đảo đang ưu tiên: <b>{mode}</b>\n"
                     "♾️ Không nghỉ 30 phút sau chuỗi thua.",
                     enabled=enabled,
                 )
