@@ -28,7 +28,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== CHAY TEST WINDOWS / LOGIC V3.7.0 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.1 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo.
@@ -38,12 +38,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo ===== BUILD BOSSVAOLENH V3.7.0 =====
+echo ===== BUILD BOSSVAOLENH V3.7.1 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v37.pyw
+  desktop_v371.pyw
 
 if errorlevel 1 (
     echo BUILD THAT BAI.
@@ -54,22 +54,22 @@ if errorlevel 1 (
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.7.0
+echo VERSION: 3.7.1
 echo BAO LENH: GIAY THU 10 CUA MOI PHIEN 5 PHUT
 echo NGUON NEN: BINANCE FUTURES KLINE M1/M5 ONLY
-echo COLOR ENGINE: DU DOAN CHI XANH/DO BANG NEN M5 DA DONG
+echo CHE DO DUY NHAT: COLOR ENGINE - DU DOAN NEN M5 DONG XANH HAY DO
+echo 9 CHE DO CU: DA TAT - KHONG CON CHAY NEN - KHONG CON TAO MODE SIGNALS MOI
 echo LICH SU: TOI DA 8640 NEN M5 - KHOANG 30 NGAY
 echo 6 NGUON: KNN + CHUOI MAU + THAN NEN + VI TRI CLOSE + RAU NEN + REGIME
 echo CHONG LEAK: KHONG DUNG GIA/BIEN DO NEN LIVE DE CHON MAU
 echo MUA NGAY: CHI KHI SCORE + DONG THUAN + HIEU CHINH LICH SU DAT DIEU KIEN
 echo SAU 2 LENH THUA: KHONG TAM NGHI 30 PHUT - GUI LIEN TUC
 echo TELEGRAM DAU PHIEN: DUNG 2 TIN - 1 TIN HIEU + 1 TIN HANH DONG
-echo TIN HIEU: GIU NGUYEN TOAN BO NUT CU + NUT CHI TIET
 echo KET QUA SAU 5 PHUT: 1 TIN THANG/THUA/HOA + HUONG + LENH 1/2
 echo DATABASE CO DINH: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 echo.
-echo Dang mo BAN V3.7.0 moi...
+echo Dang mo BAN V3.7.1 moi...
 start "" "%CD%\dist\BossVaoLenh.exe"
 echo.
 echo Moi phien M5: 2 tin luc bat dau, 1 tin ket qua khi het 5 phut.
