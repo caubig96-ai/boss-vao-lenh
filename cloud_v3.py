@@ -73,7 +73,7 @@ async def async_main() -> None:
     configure_logging()
 
     from config import Config
-    from runtime_v372 import APP_VERSION, TradingSignalBotV3
+    from runtime_v373 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):
@@ -100,8 +100,8 @@ async def async_main() -> None:
                 await self.telegram.send(
                     f"☁️ <b>CLOUD • BOT V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
                     "🎨 COLOR ENGINE là chế độ phân tích duy nhất.\n"
-                    "🧩 kNN + chuỗi màu + thân + Close + râu + regime.\n"
-                    "🚫 9 chế độ cũ đã tắt • ♾️ không nghỉ sau chuỗi thua.",
+                    "🧩 Từ 3/6 cách phân tích cùng hướng có thể báo MUA NGAY.\n"
+                    "🚫 Không còn nút/chế độ phân tích cũ.",
                     enabled=enabled,
                 )
             except Exception as exc:
