@@ -1,43 +1,73 @@
+from __future__ import annotations
+
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
-def _bool(name, default=False):
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
+def _float(name: str, default: float) -> float:
+    return float(os.getenv(name, str(default)))
 
 
-def _int(name, default):
-    try:
-        return int(os.getenv(name, default))
-    except Exception:
-        return default
+def _int(name: str, default: int) -> int:
+    return int(os.getenv(name, str(default)))
 
 
-def _float(name, default):
-    try:
-        return float(os.getenv(name, default))
-    except Exception:
-        return default
+def _default_database_path() -> str:
+    """Use one stable Windows database so rebuilding/moving the EXE cannot reset stats."""
+    if os.name == "nt":
+        root = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+        if root:
+            return os.path.join(root, "BossVaoLenh", "data", "bot.db")
+    return "data/bot.db"
 
 
-@dataclass
-class Settings:
-    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
-    symbol: str = os.getenv("SYMBOL", "BTCUSDT")
-    interval: str = os.getenv("INTERVAL", "5m")
-    binance_base_url: str = os.getenv("BINANCE_BASE_URL", "https://api.binance.com")
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///boss_vao_lenh.db")
-    model_threshold: float = _float("MODEL_THRESHOLD", 0.55)
-    enable_auto_consensus: bool = _bool("ENABLE_AUTO_CONSENSUS", True)
-    auto_consensus_min_agreement: int = _int("AUTO_CONSENSUS_MIN_AGREEMENT", 2)
-    auto_consensus_min_confidence: float = _float("AUTO_CONSENSUS_MIN_CONFIDENCE", 0.58)
-    auto_consensus_lookback: int = _int("AUTO_CONSENSUS_LOOKBACK", 100)
-    auto_consensus_min_samples: int = _int("AUTO_CONSENSUS_MIN_SAMPLES", 30)
-    auto_consensus_require_last_loss: bool = _bool("AUTO_CONSENSUS_REQUIRE_LAST_LOSS", True)
+def _database_path() -> str:
+    configured = os.getenv("DATABASE_PATH", "").strip()
+    # Old .env files contain DATABASE_PATH=data/bot.db. In a one-file Windows
+    # build that path follows the EXE/cwd and creates a fresh DB after rebuilds.
+    # Keep custom absolute paths, but never use a relative DB path on Windows.
+    if os.name == "nt":
+        if configured and os.path.isabs(configured):
+            return configured
+        return _default_database_path()
+    return configured or _default_database_path()
 
 
-settings = Settings()
+@dataclass(frozen=True)
+class Config:
+    telegram_token: str = field(default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", ""))
+    telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
+    symbol: str = field(default_factory=lambda: os.getenv("SYMBOL", "BTCUSDT").upper())
+    base_bet: float = field(default_factory=lambda: _float("BASE_BET", 1.0))
+    payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
+    decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 10))
+    max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
+    database_path: str = field(default_factory=_database_path)
+    timezone_name: str = field(default_factory=lambda: os.getenv("TIMEZONE", "Asia/Ho_Chi_Minh"))
+    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
+    app_password: str = field(default_factory=lambda: os.getenv("APP_PASSWORD", "123"))
+
+    @property
+    def timezone(self):
+        try:
+            return ZoneInfo(self.timezone_name)
+        except ZoneInfoNotFoundError:
+            if self.timezone_name == "Asia/Ho_Chi_Minh":
+                return timezone(timedelta(hours=7), name="Asia/Ho_Chi_Minh")
+            raise
+
+    def validate(self) -> None:
+        if not self.telegram_token or not self.telegram_chat_id:
+            raise ValueError("TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID là bắt buộc")
+        if self.base_bet <= 0 or self.base_bet > self.max_bet:
+            raise ValueError("BASE_BET phải lớn hơn 0 và không vượt MAX_BET")
+        if not 0 < self.payout_rate <= 2:
+            raise ValueError("PAYOUT_RATE phải nằm trong khoảng (0, 2]")
+        if not 10 <= self.decision_second <= 20:
+            raise ValueError("DECISION_SECOND phải nằm trong khoảng 10–20")
