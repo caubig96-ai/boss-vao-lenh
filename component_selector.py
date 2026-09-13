@@ -1,48 +1,64 @@
-"""Selection uses immutable RAW outcomes, never executed trade outcomes."""
 from __future__ import annotations
 
-import math
-
-METHODS = ("knn", "sequence", "body", "close_position", "wick", "regime")
 WINDOW = 100
 MIN_SAMPLES = 30
 
 
-def raw_direction(probability):
-    try:
-        value = float(probability)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(value) or not 0 <= value <= 1 or abs(value - .5) < .01:
-        return None
-    return "UP" if value > .5 else "DOWN"
-
-
 def summarize(results):
-    results = list(results)[:WINDOW]  # newest first, settled predictions only
+    results = [r for r in list(results)[:WINDOW] if r in ("WIN", "LOSS")]
     wins, losses = results.count("WIN"), results.count("LOSS")
     decided = wins + losses
-    return dict(wins=wins, losses=losses, decided=decided,
-                last=results[0] if results and results[0] in ("WIN", "LOSS") else None,
-                win_rate=wins / decided if decided else 0,
-                loss_rate=losses / decided if decided else 0)
+    return dict(
+        wins=wins,
+        losses=losses,
+        decided=decided,
+        last=results[0] if results else None,
+        win_rate=wins / decided if decided else 0,
+        loss_rate=losses / decided if decided else 0,
+    )
 
 
-def select_method(components, stats, min_samples=MIN_SAMPLES):
-    candidates = []
-    for index, method in enumerate(METHODS):
-        direction = raw_direction(components.get(method))
-        s = stats[method]
-        if direction is None or s["decided"] < min_samples:
-            continue
-        inverse = s["losses"] > s["wins"]
-        # Filter on the last RAW result; do not rewrite it as an executed win.
-        if s["last"] != ("WIN" if inverse else "LOSS"):
-            continue
-        rate = s["loss_rate"] if inverse else s["win_rate"]
-        executed = ("DOWN" if direction == "UP" else "UP") if inverse else direction
-        candidate = dict(method=method, raw_direction=direction,
-                         direction=executed, inverse=inverse, ranking_rate=rate,
-                         raw_stats=dict(s))
-        candidates.append((rate, s["decided"], -index, candidate))
-    return max(candidates, key=lambda x: x[:3])[3] if candidates else None
+def inverse_direction(direction):
+    return {"UP": "DOWN", "DOWN": "UP"}.get(direction)
+
+
+def evaluate_method(direction, confidence, results, min_samples=MIN_SAMPLES):
+    """Return selection info without mutating the method's original stats.
+
+    Winning method: keep original direction and require latest raw result LOSS.
+    Losing method: invert live sent direction and require latest raw result WIN.
+    """
+    if direction not in ("UP", "DOWN"):
+        return None
+    stats = summarize(results)
+    if stats["decided"] < min_samples:
+        return None
+    if stats["wins"] > stats["losses"]:
+        if stats["last"] != "LOSS":
+            return None
+        sent = direction
+        inverted = False
+        edge = stats["win_rate"]
+    elif stats["losses"] > stats["wins"]:
+        if stats["last"] != "WIN":
+            return None
+        sent = inverse_direction(direction)
+        inverted = True
+        edge = stats["loss_rate"]
+    else:
+        return None
+    return {
+        "raw_direction": direction,
+        "sent_direction": sent,
+        "inverted": inverted,
+        "confidence": float(confidence or 0),
+        "edge": edge,
+        **stats,
+    }
+
+
+def choose_best(candidates):
+    eligible = [c for c in candidates if c]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda c: (c["confidence"], c["edge"], c["decided"]))

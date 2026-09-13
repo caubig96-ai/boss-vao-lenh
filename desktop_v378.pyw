@@ -1,49 +1,34 @@
-from __future__ import annotations
-
+import asyncio
+import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk
 
-import desktop_v35 as desktop35
-from runtime_v378 import APP_VERSION, TradingSignalBotV3
+import runtime_v378
 
-
-desktop35.APP_VERSION = APP_VERSION
-desktop35.desktop.APP_VERSION = APP_VERSION
-desktop35.desktop.TradingSignalBotV3 = TradingSignalBotV3
+APP_VERSION = runtime_v378.APP_VERSION
 
 
-class VisibleStartupApplication(desktop35.BinanceKlineTrayApplication):
+class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self._startup_error_shown = False
-        if self.config.telegram_token and self.config.telegram_chat_id:
-            self.root.after(350, self.request_password)
-        self.root.after(900, self._watch_startup)
+        self.title(f"Boss Vào Lệnh {APP_VERSION}")
+        self.geometry("560x360")
+        self.resizable(True, True)
+        self.status = tk.StringVar(value="Sẵn sàng")
+        ttk.Label(self, text=f"Boss Vào Lệnh {APP_VERSION}", font=("Segoe UI", 18, "bold")).pack(pady=(24, 8))
+        ttk.Label(self, text="Dự đoán nến M5 & Telegram", font=("Segoe UI", 11)).pack()
+        ttk.Button(self, text="Khởi động", command=self.start_runtime).pack(pady=30)
+        ttk.Label(self, textvariable=self.status).pack(pady=8)
 
-    def _watch_startup(self) -> None:
-        if self.engine.error and not self._startup_error_shown:
-            self._startup_error_shown = True
-            log_path = desktop35.desktop.persistent_root() / "logs" / "boss-v3.log"
-            messagebox.showerror(
-                f"Boss Vào Lệnh V{APP_VERSION} - Engine không chạy",
-                f"Engine đã dừng: {self.engine.error}\n\nLog: {log_path}",
-            )
-            return
-        self.root.after(900, self._watch_startup)
+    def start_runtime(self):
+        self.status.set("Đang chạy...")
+        def runner():
+            try:
+                asyncio.run(runtime_v378.run())
+            except Exception as exc:
+                self.after(0, lambda: self.status.set(f"Lỗi: {exc}"))
+        threading.Thread(target=runner, daemon=True).start()
 
 
 if __name__ == "__main__":
-    try:
-        desktop35.desktop.shutdown_legacy_v2()
-        _mutex = desktop35.desktop.acquire_single_instance()
-        VisibleStartupApplication().run()
-    except Exception as exc:
-        root = tk.Tk()
-        root.withdraw()
-        messagebox.showerror(
-            f"Boss Vào Lệnh V{APP_VERSION} - Lỗi khởi động",
-            f"{type(exc).__name__}: {exc}",
-        )
-        root.destroy()
-        raise
-
+    App().mainloop()
