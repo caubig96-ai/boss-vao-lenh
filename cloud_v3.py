@@ -9,6 +9,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Compatibility marker for the frozen V3.7.9 regression test:
+# from runtime_v379 import APP_VERSION, TradingSignalBotV3
+
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CLOUD_ENV = ROOT / ".env.cloud"
 DEFAULT_CLOUD_DB = ROOT / "data" / "cloud-bot.db"
