@@ -22,7 +22,7 @@ python -m pip install --upgrade pip
 pip install -r requirements-windows.txt
 if errorlevel 1 exit /b 1
 
-echo ===== CHAY TEST WINDOWS / LOGIC V3.7.9 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.8.0 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo TEST LOI - KHONG BUILD EXE.
@@ -30,21 +30,21 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo ===== BUILD BOSSVAOLENH V3.7.9 =====
+echo ===== BUILD BOSSVAOLENH V3.8.0 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v379.pyw
+  desktop_v380.pyw
 if errorlevel 1 exit /b 1
 
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.7.9
-echo 2 PHUONG PHAP: CAP MAU + THE NEN
-echo DO 24H M5 - THE NEN GIONG TOI THIEU 90 PHAN TRAM
-echo THUA NHIEU THI DAO LENH; THONG KE GOC KHONG DAO
+echo VERSION: 3.8.0
+echo CHON 1 TRONG 2 PHUONG PHAP: MAU + LOAI RAU / THE NEN
+echo CHON PHUONG PHAP NAO THI CHI PHUONG PHAP DO GUI LENH
+echo VUNG 50-60 PHAN TRAM: XET KET QUA LENH TRUOC DE BAO UU TIEN
 echo DATABASE: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
 start "" "%CD%\dist\BossVaoLenh.exe"
