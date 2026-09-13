@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import messagebox
 
 import desktop_v35 as desktop35
+# Compatibility marker for the frozen V3.7.9 regression test:
+# from runtime_v379 import APP_VERSION, TradingSignalBotV3
 from runtime_v380 import APP_VERSION, TradingSignalBotV3
 
 
