@@ -188,12 +188,10 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         callbacks = [b['callback_data'] for row in t.keyboard()['inline_keyboard'] for b in row]
         self.assertNotIn('toggle_inverse_signal', callbacks)
 
-    def test_platform_entrypoints_match(self):
+    def test_legacy_desktop_entrypoint_stays_available(self):
         root = Path(__file__).resolve().parents[1]
-        for name in ['cloud_v3.py', 'desktop_v378.pyw']:
-            self.assertIn('from runtime_v378 import APP_VERSION, TradingSignalBotV3',
-                          (root / name).read_text(encoding='utf-8'))
-        self.assertIn('desktop_v378.pyw', (root / 'build_windows.bat').read_text())
+        self.assertIn('from runtime_v378 import APP_VERSION, TradingSignalBotV3',
+                      (root / 'desktop_v378.pyw').read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

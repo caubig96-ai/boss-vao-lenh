@@ -1,37 +1,30 @@
 # Boss Vào Lệnh
 
-Phiên bản hiện tại: **V3 (runtime_v3.7.9, xem CHANGELOG.md)**. Tool phân tích BTCUSDT Futures theo chu kỳ 5 phút, gửi tín hiệu Telegram và lưu thống kê bền vững trong SQLite.
+Phiên bản hiện tại: **V3.7.9**. Tool dự báo màu nến BTCUSDT Futures theo chu kỳ 5 phút bằng hai phương pháp cặp nến, gửi tín hiệu Telegram và lưu thống kê bền vững trong SQLite.
 
 > Đây là phần mềm thống kê và gửi tín hiệu, không tự đặt lệnh Binance Prediction. Kết quả mô hình không bảo đảm lợi nhuận hay độ chính xác tuyệt đối — xem mục "Giới hạn thực sự" bên dưới trước khi dùng tiền thật.
 
-## Logic phân tích thực tế đang chạy (runtime_v378.py, entrypoint của cloud_v3.py và bản Windows)
+## Logic hai phương pháp V3.7.9
 
-Bản mô tả M1+10 nến / M5+5 nến "đồng thuận" ở các mục dưới là engine **cũ** (`runtime_v37.py`/`indicators.py`), vẫn còn trong repo nhưng **không còn được gọi** bởi các entrypoint hiện tại. Logic thật sự đang chạy là:
+- Khi một phiên M5 mới bắt đầu, tool lấy đúng **hai nến M5 đã đóng gần nhất**.
+- Dữ liệu dò tìm chỉ dùng **24 giờ gần nhất = 288 nến M5**.
+- **Cặp màu:** tìm lần gần nhất trong quá khứ có cùng thứ tự XANH/ĐỎ, rồi lấy màu cây nến đã đóng ngay sau cặp đó làm dự báo gốc.
+- **Thế nến:** so thân nến, râu trên, râu dưới và vị trí Close; chỉ nhận cặp giống từ **90%**, lấy duy nhất cặp giống nhất rồi xem màu cây kế tiếp.
+- Hai phương pháp được chấm thắng/thua gốc độc lập, kể cả phương pháp không được chọn gửi lệnh.
+- Phương pháp thắng nhiều hơn thua sẽ giữ hướng. Phương pháp thua nhiều hơn thắng sẽ đảo hướng lệnh gửi, nhưng kết quả gốc vẫn ghi THUA.
+- Giữa hai phương pháp, tool ưu tiên phía có tỷ lệ hiệu quả lịch sử cao hơn sau khi xét giữ/đảo; tiếp theo là số mẫu và độ giống.
+- Nến `Close >= Open` được tính XANH; `Close < Open` được tính ĐỎ. Không có kết quả hòa.
+- Telegram có nút **LỆNH THẮNG THỰC TẾ** để xem các phiên thắng thật gần nhất.
 
-- Chỉ dùng nến M5 đã đóng (tối đa 30 ngày gần nhất, `COLOR_HISTORY_CANDLES`). Nến live không bao giờ lọt vào feature (`candle_color_model.predict_next_color` không nhận tham số giá live).
-- 6 phương pháp độc lập tính xác suất nến xanh: kNN mẫu hình tương tự, chuỗi màu (Markov/pattern), thân nến, vị trí Close, áp lực râu nến, regime/cấu trúc High-Low.
-- Mỗi phiên, `component_selector.select_method` xét cả 6 phương pháp ở cả hai chiều (giữ nguyên / đảo hướng) — tổng 12 khả năng — và **chỉ chọn một** khi cận dưới độ tin cậy (Wilson, đã hiệu chỉnh cho việc so sánh nhiều lần) của tỷ lệ thắng lịch sử vượt qua ngưỡng hòa vốn theo tỷ lệ trả thưởng hiện tại (`/setpayout`). Không đủ bằng chứng thống kê → phiên đó **KHÔNG MUA**.
-- Thống kê gốc (WIN/LOSS thật của từng phương pháp) không bao giờ bị ghi đè khi đảo hướng gửi lệnh — hai con số này luôn tách biệt trong tin nhắn kết quả.
-- Khi độ tin cậy được xếp loại **CAO**, Telegram gửi thêm ngay sau tin chuẩn: `MUA TĂNG NGAY` hoặc `MUA GIẢM NGAY`.
+Các engine 6 phương pháp và M1/M5 cũ còn trong repo để đọc database/phục vụ lịch sử,
+nhưng `cloud_v3.py` và bản Windows mới chỉ khởi động `runtime_v379.py`.
 
-Xem `CHANGELOG.md` để biết lý do và chi tiết kỹ thuật của bản vá này.
+## Giới hạn thực sự
 
-## Logic engine cũ (M1/M5), hiện KHÔNG được entrypoint nào gọi
-
-- M1 dùng **10 nến đã đóng gần nhất**.
-- M5 dùng **5 nến đã đóng gần nhất**.
-- Mỗi khung phân tích số nến xanh/đỏ, lực thân nến, dốc Close, cấu trúc High/Low và áp lực râu nến.
-- Nến gần nhất có trọng số lớn hơn để phản ứng nhanh với đảo chiều.
-- Khi M1 và M5 cùng hướng rõ ràng, engine cộng điểm đồng thuận.
-- Pattern M5 lịch sử vẫn được giữ làm lớp xác nhận phụ.
-- Chỉ nến đã đóng được dùng làm feature xu hướng; nến live không lọt vào phần phân tích trend.
-- Mọi phiên M5 hợp lệ vẫn được phân tích và báo như bình thường.
-
-## Giới hạn thực sự (đọc trước khi dùng tiền thật)
-
-- Yêu cầu thống kê chặt hơn (bản vá v3.7.9) đồng nghĩa với **ít tín hiệu hơn**, không phải nhiều tín hiệu đúng hơn theo nghĩa tuyệt đối — mục tiêu là tránh gửi lệnh dựa trên chuỗi thắng ngẫu nhiên của một trong 6 phương pháp.
-- 6 phương pháp đều tính từ cùng dữ liệu OHLC của cùng cây nến nên không hoàn toàn độc lập; "đồng thuận" giữa chúng có giá trị tham khảo thấp hơn con số hiển thị.
-- Đây không phải bằng chứng có "edge" thật trước chi phí (tỷ lệ trả thưởng < 100%). Trước khi dùng tiền thật, nên theo dõi thống kê thực tế (`/status`, `TỶ LỆ NGƯỠNG`) qua nhiều tuần ở chế độ không thật (`signals_enabled` tắt) trước.
+- Tỷ lệ thắng/thua trong quá khứ không bảo đảm lệnh tiếp theo sẽ lặp lại.
+- Một phương pháp mới có ít mẫu có thể bị đảo hướng quá sớm; cần theo dõi nhiều phiên trước khi dùng tiền thật.
+- Mức giống 90% chỉ mô tả hình học thân/râu nến, không phải xác suất chắc chắn thắng 90%.
+- Cần so tỷ lệ thắng thực tế với ngưỡng hòa vốn theo payout của nơi giao dịch.
 
 ## Dữ liệu thị trường và độ bền
 
@@ -71,7 +64,7 @@ Log Windows V3:
 
 Repo có entrypoint riêng `cloud_v3.py` để chạy headless trên Linux/Oracle Cloud VM. Bản cloud:
 
-- dùng cùng engine V3 và cùng logic M1/M5;
+- dùng cùng engine V3.7.9 và cùng logic hai cặp nến M5;
 - chạy độc lập với bản Windows;
 - dùng database riêng `data/cloud-bot.db`;
 - tin Telegram được gắn nhãn `CLOUD`;
@@ -174,7 +167,9 @@ python cloud_v3.py
 
 ## Lệnh Telegram
 
-- `/status` – trạng thái, nguồn dữ liệu và thống kê.
+- `/status` – trạng thái và thống kê.
+- `/methods` – thống kê gốc của Cặp màu và Thế nến.
+- `/wins` – các phiên thắng thực tế gần nhất.
 - `/setbet 1` – Lệnh 1 là 1 USDT; Lệnh 2 là 2 USDT.
 - `/setbalance 100` – đặt số dư theo dõi.
 - `/setpayout 80` – đặt tỷ lệ trả thưởng 80%.
