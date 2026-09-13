@@ -39,12 +39,12 @@ class SelectionTests(unittest.TestCase):
         stats['knn']['last'] = 'WIN'
         self.assertIsNone(select_method(dict(knn=.7), stats, min_samples=10))
 
-    def test_neutral_invalid_and_ties(self):
+    def test_neutral_invalid_and_legacy_ties(self):
         for value in [.5, .505, None, float('nan'), float('inf'), -1, 2]:
             self.assertIsNone(raw_direction(value))
         s = summarize(['TIE', 'WIN', 'LOSS'])
         self.assertEqual(s['decided'], 2)
-        self.assertEqual(s['last'], 'TIE')
+        self.assertIsNone(s['last'])
         self.assertEqual(s['win_rate'], .5)
 
     def test_window_and_stable_tie_break(self):
@@ -130,8 +130,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.settle_pending()
         await self.bot.settle_pending()
         stats = await self.bot.component_stats(30300000)
-        self.assertTrue(all(stats[m]['ties'] == 1 for m in METHODS))
+        self.assertTrue(all(stats[m]['wins'] == 1 for m in METHODS))
         self.assertEqual(await self.db.get('bet_step', '1'), '1')
+
+    async def test_equal_open_close_is_binary_green_not_tie(self):
+        self.assertEqual(self.bot.candle_color(100, 100), 'XANH')
+        self.assertEqual(self.bot.candle_result('UP', 100, 100), 'WIN')
+        self.assertEqual(self.bot.candle_result('DOWN', 100, 100), 'LOSS')
 
     async def test_no_lookahead_and_reset(self):
         await self.seed()

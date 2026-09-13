@@ -9,8 +9,9 @@ directional trades. Invalid or missing probabilities are ineligible.
 
 - Use up to 100 newest settled directional forecasts per method, after stats reset
   and strictly before the decision's open time. Require 30 WIN/LOSS samples.
-- Ties are displayed but excluded from the win/loss denominator. A latest tie
-  does not satisfy the latest-loss filter. Neutral forecasts are excluded.
+- Settlement is binary: Close >= Open is GREEN/UP; Close < Open is RED/DOWN.
+  Every directional forecast is therefore WIN or LOSS; no TIE is displayed.
+  Neutral method forecasts are still excluded from selection.
 - More original wins than losses: keep the method's current original direction;
   eligible only if its latest original outcome is LOSS.
 - More original losses than wins: reverse only the direction sent to Telegram;

@@ -22,8 +22,8 @@ def summarize(results):
     results = list(results)[:WINDOW]  # newest first, settled predictions only
     wins, losses = results.count("WIN"), results.count("LOSS")
     decided = wins + losses
-    return dict(wins=wins, losses=losses, ties=results.count("TIE"),
-                decided=decided, last=results[0] if results else None,
+    return dict(wins=wins, losses=losses, decided=decided,
+                last=results[0] if results and results[0] in ("WIN", "LOSS") else None,
                 win_rate=wins / decided if decided else 0,
                 loss_rate=losses / decided if decided else 0)
 
