@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import runtime_v377 as previous
 import runtime_v3 as base_runtime
@@ -35,7 +35,7 @@ METHOD_LABELS = {
     "wick": "Áp lực râu nến",
     "regime": "Regime / cấu trúc",
 }
-RESULT_LABELS = {"WIN": "THẮNG", "LOSS": "THUA", "TIE": "HÒA", None: "--"}
+RESULT_LABELS = {"WIN": "THẮNG", "LOSS": "THUA", None: "--"}
 DIRECTION_LABELS = {"UP": "TĂNG", "DOWN": "GIẢM"}
 
 
@@ -72,11 +72,10 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         await self.db.conn.execute("""
             UPDATE component_predictions AS p SET result=(
               SELECT CASE WHEN p.raw_direction IS NULL THEN 'NEUTRAL'
-                 WHEN c.close=c.open THEN 'TIE'
-                 WHEN (p.raw_direction='UP')=(c.close>c.open) THEN 'WIN'
+                 WHEN (p.raw_direction='UP')=(c.close>=c.open) THEN 'WIN'
                  ELSE 'LOSS' END
               FROM candles c WHERE c.interval='5m' AND c.open_time=p.market_open_time)
-            WHERE result IS NULL AND EXISTS (
+            WHERE (result IS NULL OR result='TIE') AND EXISTS (
               SELECT 1 FROM candles c WHERE c.interval='5m' AND c.open_time=p.market_open_time)
         """)
         await self.db.conn.commit()
@@ -94,12 +93,37 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         await self.db.conn.execute("""
             UPDATE component_predictions SET result=CASE
               WHEN raw_direction IS NULL THEN 'NEUTRAL'
-              WHEN ?=? THEN 'TIE'
-              WHEN (raw_direction='UP')=(?>?) THEN 'WIN' ELSE 'LOSS' END
-            WHERE market_open_time=? AND result IS NULL
-        """, (candle.close, candle.open, candle.close, candle.open, candle.open_time))
+              WHEN (raw_direction='UP')=(?>=?) THEN 'WIN' ELSE 'LOSS' END
+            WHERE market_open_time=? AND (result IS NULL OR result='TIE')
+        """, (candle.close, candle.open, candle.open_time))
         await self.db.conn.commit()
         await super().settle_market(candle)
+
+    @staticmethod
+    def candle_result(direction, open_price, close_price):
+        actual_direction = "UP" if close_price >= open_price else "DOWN"
+        return "WIN" if direction == actual_direction else "LOSS"
+
+    @staticmethod
+    def candle_color(open_price, close_price):
+        return "XANH" if close_price >= open_price else "ĐỎ"
+
+    async def _settle_color_prediction(self, candle):
+        if candle.interval != "5m":
+            return
+        row = await self._color_prediction_row(candle.open_time)
+        if row is None or row["status"] != "PENDING":
+            return
+        actual_direction = "UP" if candle.close >= candle.open else "DOWN"
+        result = "WIN" if row["direction"] == actual_direction else "LOSS"
+        await self.db.conn.execute(
+            """UPDATE color_predictions
+               SET status='SETTLED',result=?,actual_color=?,settled_at=?
+               WHERE market_open_time=? AND status='PENDING'""",
+            (result, "GREEN" if actual_direction == "UP" else "RED",
+             datetime.now(timezone.utc).isoformat(), candle.open_time),
+        )
+        await self.db.conn.commit()
 
     async def component_stats(self, before):
         reset = int(await self.db.get("stats_reset_at", "0"))
@@ -108,7 +132,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             rows = await (await self.db.conn.execute("""
                 SELECT result FROM component_predictions WHERE method=?
                 AND market_open_time>=? AND market_close_time<?
-                AND result IN ('WIN','LOSS','TIE')
+                AND result IN ('WIN','LOSS')
                 ORDER BY market_open_time DESC LIMIT ?
             """, (method, reset, before, WINDOW))).fetchall()
             stats[method] = summarize(row["result"] for row in rows)
@@ -204,7 +228,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         for method in METHODS:
             s = stats[method]
             lines.append(f"{METHOD_LABELS[method]}: ✅ {s['wins']} thắng • ❌ {s['losses']} thua"
-                         f" • ➖ {s['ties']} hòa • <b>{s['win_rate']:.1%}</b> thắng"
+                         f" • <b>{s['win_rate']:.1%}</b> thắng"
                          f" • gần nhất {RESULT_LABELS.get(s['last'], '--')}")
         return "\n".join(lines)
 
@@ -241,15 +265,46 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         return await self.signal_text(p) + "\n\n" + self._stats_text(snapshot["stats"])
 
     async def result_text(self, row, close_price, result, pnl, open_price=None):
-        text = await super().result_text(row, close_price, result, pnl, open_price)
+        official_open = float(open_price if open_price is not None else row["target_price"])
+        direction = DIRECTION_LABELS[row["direction"]]
+        header = f"✅ <b>ĐÃ THẮNG {direction}</b>" if result == "WIN" else f"❌ <b>ĐÃ THUA {direction}</b>"
+        text = (f"{header}\n"
+                f"🕯 Nến Binance M5: <b>{self.candle_color(official_open, close_price)}</b>\n"
+                f"Open: <code>{official_open:,.2f}</code> USDT\n"
+                f"Close: <code>{close_price:,.2f}</code> USDT\n"
+                f"Chênh lệch: <code>{close_price - official_open:+,.2f}</code> USDT")
         snapshot = await self._decision(int(row["market_open_time"]))
         if snapshot and snapshot["selected"]:
             selected = snapshot["selected"]
-            raw = ('LOSS' if result == 'WIN' else 'WIN') if selected['inverse'] and result != 'TIE' else result
+            raw = ('LOSS' if result == 'WIN' else 'WIN') if selected['inverse'] else result
             text += (f"\n🎯 Phương pháp: <b>{METHOD_LABELS[selected['method']]}</b>"
                      f"\n📊 Kết quả công thức gốc: <b>{RESULT_LABELS[raw]}</b>"
                      f"\n↔️ Kết quả lệnh gửi: <b>{RESULT_LABELS[result]}</b>")
         return text
+
+    async def stats_text(self):
+        reset_at = int(await self.db.get("stats_reset_at", "0"))
+        start = max(0, reset_at)
+        today_start = max(self.day_start_ms(), start)
+        actual = await self.db.stats(start, actual_only=True)
+        virtual = await self.db.stats(start, actual_only=False)
+        today = await self.db.stats(today_start, actual_only=True)
+        balance = float(await self.db.get("current_balance", "0"))
+        decided = int(virtual["wins"] or 0) + int(virtual["losses"] or 0)
+        rate = int(virtual["wins"] or 0) / decided * 100 if decided else 0.0
+        return (
+            "\n\n📊 <b>THỐNG KÊ TỪ LẦN RESET</b>\n"
+            f"🟢 Thắng: <b>{actual['wins'] or 0}</b> | 🔴 Thua: <b>{actual['losses'] or 0}</b>\n"
+            f"📋 Tổng lệnh thực tế: <b>{int(actual['wins'] or 0) + int(actual['losses'] or 0)}</b>\n"
+            f"💰 Tổng tiền đã đặt: <b>{actual['staked']:.2f} USDT</b>\n"
+            f"💵 Lãi/lỗ ròng: <b>{actual['pnl']:+.2f} USDT</b>\n"
+            f"💳 Số dư hiện tại: <b>{balance:.2f} USDT</b>\n"
+            f"📅 Hôm nay: {today['wins'] or 0} thắng | {today['losses'] or 0} thua\n\n"
+            f"📡 <b>PHÂN TÍCH TỪ LẦN RESET</b>\n"
+            f"Thắng: {virtual['wins'] or 0} | Thua: {virtual['losses'] or 0}\n"
+            f"Tỷ lệ thắng: {rate:.1f}%\n\n"
+            + await self.threshold_stats_text()
+        )
 
     async def _signal_calibration(self, p):
         snapshot = await self._decision(p.market_open_time)
