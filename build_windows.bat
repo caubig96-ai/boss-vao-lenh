@@ -5,6 +5,7 @@ cd /d "%~dp0"
 rem Frozen regression markers for prior visible-startup releases:
 rem desktop_v372.pyw
 rem VERSION: 3.7.2
+rem Compatibility marker for the V3.7.9 regression test: desktop_v379.pyw
 
 echo.
 echo ===== BOSS VAO LENH V3 - DUNG BAN CU =====
