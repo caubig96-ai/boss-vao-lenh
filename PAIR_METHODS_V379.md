@@ -1,44 +1,23 @@
-# V3.7.9 — Cặp màu và Thế nến
+# V3.7.9 — Đếm cặp màu + loại râu (wick_votes_v3)
 
-Runtime đang hoạt động chỉ dùng hai phương pháp. Các runtime phiên bản cũ được giữ
-lại vì chuỗi nâng cấp và khả năng đọc database cũ; chúng không tạo quyết định mới
-khi Windows/Cloud chạy qua `runtime_v379`.
+Khi bắt đầu phiên M5, lấy hai nến vừa đóng theo thứ tự thời gian.
+Quét đúng 24 giờ trước thời điểm mở phiên, tối đa 288 nến M5.
+Mỗi cặp phải đúng màu và loại râu ở từng vị trí: chỉ trên, chỉ dưới,
+hai râu hoặc không râu. Không xét độ dài thân/râu; không có ngưỡng 90%.
+Chỉ bỏ qua sai số số thực 4 ULP khi xác định râu.
 
-## Dữ liệu và thời điểm
+Đếm màu của nến đã đóng ngay sau **tất cả** cặp phù hợp.
+Xanh nhiều hơn gửi UP; đỏ nhiều hơn gửi DOWN; ngang phiếu hoặc không có mẫu
+thì không mua. Không đảo hướng theo thắng/thua lịch sử.
+Các bộ ba phải liên tiếp và kết thúc trước hai nến đầu vào; không dùng nến live.
+Thiếu một trong hai nến đầu vào ngay trước phiên thì không mua.
 
-- Quyết định được tạo sau khi phiên M5 mới bắt đầu, theo `DECISION_SECOND`.
-- Đầu vào là hai nến M5 đã đóng ngay trước phiên live.
-- Tìm kiếm trong tối đa 288 nến đã đóng gần nhất, tương đương 24 giờ.
-- Mọi cặp lịch sử phải có cây kế tiếp đã đóng. Cặp và cây kế tiếp không được chồng
-  lên hai nến đầu vào hiện tại.
+`color_pair` quyết định lệnh theo màu + loại râu.
+`shape_pair` đếm cặp chỉ cùng loại râu, dùng tham khảo; không phá ngang phiếu
+hoặc thay thế quyết định của `color_pair`.
 
-## Hai phương pháp
-
-1. `color_pair`: từng vị trí phải cùng màu, cùng loại râu và hình dạng cặp giống
-   từ 90%. Lấy cặp giống nhất; bằng điểm chọn cặp gần nhất. Màu cây kế tiếp là dự báo gốc.
-2. `shape_pair`: từng vị trí phải cùng loại râu, sau đó so hình học đã chuẩn hóa gồm thân có hướng, tỷ lệ thân, râu trên,
-   râu dưới và vị trí đóng cửa của cả hai nến. Chỉ cặp tốt nhất được dùng và điểm
-   giống phải từ 90%.
-
-## Chọn giữ hoặc đảo
-
-Mỗi phương pháp có sổ kết quả gốc riêng, tối đa 100 dự báo đã chấm gần nhất từ lần
-reset. Nếu thắng bằng hoặc nhiều hơn thua, tool giữ dự báo gốc. Nếu thua nhiều hơn
-thắng, tool đảo TĂNG/​GIẢM khi gửi lệnh. Việc đảo không sửa kết quả gốc.
-
-Hai ứng viên được xếp theo tỷ lệ hiệu quả sau giữ/đảo, sau đó theo số mẫu, điểm
-giống và thứ tự ổn định. Khi chưa có lịch sử, tỷ lệ khởi đầu là 50% và điểm giống
-được dùng để phá hòa.
-
-## Kết quả
-
-`Close >= Open` là XANH/TĂNG, `Close < Open` là ĐỎ/GIẢM. `pair_predictions`
-luôn ghi kết quả dự báo gốc. Bảng `signals` ghi hướng đã gửi và kết quả giao dịch
-thực tế. Không có kết quả HÒA trong runtime V3.7.9.
-
-## Quy tắc râu mới: wick_shape_v2
-
-Bốn loại là chỉ râu trên, chỉ râu dưới, hai râu, không râu. Chỉ sai số dấu
-phẩy động (4 ULP của giá) được bỏ qua; râu ngắn thực sự vẫn được tính.
-Thống kê chọn phương pháp chỉ lấy dự báo tạo theo wick_shape_v2, không dùng
-kết quả cũ để đánh giá công thức mới. Dữ liệu cũ được giữ nguyên.
+Snapshot lưu số xanh/đỏ của từng phương pháp, hướng đa số và rule wick_votes_v3.
+Thống kê kết quả chỉ đọc cùng rule, không xóa dữ liệu cũ.
+Close >= Open được phân loại XANH, Close < Open là ĐỎ như runtime trước.
+Ngang phiếu không phải kết quả nến hòa. Tỷ lệ phiếu lịch sử không phải xác suất thắng.
+Windows và cloud cùng dùng runtime_v379. Các runtime cũ vẫn là phụ thuộc kế thừa.

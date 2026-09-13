@@ -11,7 +11,6 @@ from models import Prediction
 from pair_pattern_model import (
     HISTORY_CANDLES,
     METHODS,
-    SHAPE_MIN_SIMILARITY,
     STATS_WINDOW,
     find_pair_matches,
     select_method,
@@ -38,7 +37,7 @@ CREATE TABLE IF NOT EXISTS pair_decisions (
 """
 
 METHOD_LABELS = {
-    "color_pair": "Màu + dáng nến",
+    "color_pair": "Màu + loại râu",
     "shape_pair": "Thế nến",
 }
 DIRECTION_LABELS = {"UP": "TĂNG", "DOWN": "GIẢM"}
@@ -66,7 +65,7 @@ class TwoMethodTelegram(CompactTelegramBotV375):
 
 
 class TradingSignalBotV3(previous.TradingSignalBotV3):
-    """V3.7.9: exact-color pair plus >=90% candlestick-shape pair."""
+    """V3.7.9: color/wick successor majority."""
 
     def __init__(self, config):
         super().__init__(config)
@@ -157,7 +156,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             rows = await (await self.db.conn.execute("""
                 SELECT p.result FROM pair_predictions p
                 JOIN pair_decisions d ON d.market_open_time=p.market_open_time
-                WHERE method=? AND json_extract(d.snapshot, '$.matching_rule')='wick_shape_v2'
+                WHERE method=? AND json_extract(d.snapshot, '$.matching_rule')='wick_votes_v3'
                 AND p.market_open_time>=? AND market_close_time<?
                 AND result IN ('WIN','LOSS')
                 ORDER BY p.market_open_time DESC LIMIT ?
@@ -189,13 +188,13 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                         return
 
                     history = await self._closed_m5_history(open_time)
-                    matches = find_pair_matches(history)
+                    matches = find_pair_matches(history, open_time)
                     stats = await self.pair_stats(open_time)
                     selected = select_method(matches, stats)
                     base = float(await self.db.get("base_bet", str(self.config.base_bet)))
                     step = int(await self.db.get("bet_step", "1"))
                     snapshot = {
-                        "matching_rule": "wick_shape_v2",
+                        "matching_rule": "wick_votes_v3",
                         "selected": selected,
                         "stats": stats,
                         "matches": {
@@ -241,7 +240,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                         open_time, snapshot["close_time"], snapshot["target_price"],
                         snapshot["signal_price"], selected["direction"],
                         selected["effective_rate"], selected["match"]["similarity"],
-                        selected["match"]["similarity"], selected["raw_stats"]["decided"],
+                        selected["match"]["similarity"], selected["match"].get("green_count", 0) + selected["match"].get("red_count", 0),
                         snapshot["bet_amount"], snapshot["bet_step"], snapshot["actual"],
                     )
                     await self.db.create_signal(p)
@@ -253,7 +252,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                         try:
                             await self.telegram.send(
                                 "⚠️ <b>KHÔNG NÊN VÀO LỆNH</b>\n"
-                                "Chưa tìm thấy cặp khớp loại râu và giống hình dạng từ 90% trong 24 giờ."
+                                "Cặp đúng màu + loại râu: không có mẫu hợp lệ hoặc số nến xanh bằng đỏ trong 24 giờ."
                             )
                             await self.db.set(key, "1")
                             await self._mark_signal_sent(open_time)
@@ -279,10 +278,9 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         lines = ["<b>THỐNG KÊ GỐC 2 PHƯƠNG PHÁP</b>"]
         for method in METHODS:
             s = stats[method]
-            mode = "đảo hướng" if s["losses"] > s["wins"] else "giữ hướng"
             lines.append(
                 f"• {METHOD_LABELS[method]}: ✅ {s['wins']} thắng • ❌ {s['losses']} thua "
-                f"• {mode}"
+                f"• chỉ tham khảo"
             )
         return "\n".join(lines)
 
@@ -296,15 +294,14 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         local_close = datetime.fromtimestamp((p.market_close_time + 1) / 1000, self.config.timezone)
         side = DIRECTION_LABELS[p.direction]
         icon = "🟢" if p.direction == "UP" else "🔴"
-        handling = "ĐẢO HƯỚNG" if selected["inverse"] else "GIỮ HƯỚNG"
         totals = await self._entry_totals_since_reset()
         return (
             f"{icon} <b>MUA {side}</b>\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"⏰ {local:%H:%M}–{local_close:%H:%M}\n"
             f"🎯 Phương pháp: <b>{METHOD_LABELS[selected['method']]}</b>\n"
-            f"🔎 Cặp giống: <b>{selected['match']['similarity']:.1%}</b>\n"
-            f"↔️ Xử lý: <b>{handling}</b>\n"
+            f"🔎 Sau các cặp 24h: 🟢 {selected['match'].get('green_count', 0)} xanh • 🔴 {selected['match'].get('red_count', 0)} đỏ\n"
+            f"🗳 Chọn màu chiếm đa số\n"
             f"📊 Gốc: ✅ {stats['wins']} thắng • ❌ {stats['losses']} thua\n"
             f"🏆 Lệnh thực tế: ✅ {totals['wins']} thắng • ❌ {totals['losses']} thua\n"
             f"💵 Giá: <code>{p.signal_price:,.2f}</code> • <b>LỆNH {p.bet_step}</b>: {p.bet_amount:.2f} USDT"
@@ -319,8 +316,8 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             match = snapshot["matches"].get(method)
             if match:
                 lines.append(
-                    f"• {METHOD_LABELS[method]}: {match['similarity']:.1%} → "
-                    f"{DIRECTION_LABELS[match['raw_direction']]} gốc"
+                    f"• {METHOD_LABELS[method]}: {match.get('green_count', 0)} xanh / "
+                    f"{match.get('red_count', 0)} đỏ → {DIRECTION_LABELS.get(match['raw_direction'], 'NGANG PHIẾU')}"
                 )
             else:
                 lines.append(f"• {METHOD_LABELS[method]}: không đạt điều kiện")
@@ -371,9 +368,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         return "\n".join(lines)
 
     async def _signal_calibration(self, p):
-        # The two-method selector has already decided whether the selected raw
-        # direction should be kept or inverted. The legacy agreement gate must
-        # not turn its second Telegram message into a contradictory NO BUY.
+        # The majority decision must also control the action message.
         snapshot = await self._pair_decision(p.market_open_time)
         return {"decided": 0, "win_rate": 0.0}, bool(snapshot and snapshot["selected"])
 
@@ -382,10 +377,10 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         return (
             self._pair_stats_text(await self.pair_stats(self.server_now_ms()))
             + f"\nDữ liệu dò: {HISTORY_CANDLES} nến M5 / 24 giờ."
-            + f"\nMỗi nến phải khớp loại râu; hình dạng cặp giống từ {SHAPE_MIN_SIMILARITY:.0%}."
-            + "\nMàu + dáng nến yêu cầu cùng màu; cả hai lấy cặp giống nhất."
-            + f"\nThống kê tối đa {STATS_WINDOW} kết quả gốc gần nhất."
-            + "\nThắng nhiều: giữ hướng. Thua nhiều: đảo lệnh nhưng giữ nguyên thống kê gốc."
+            + "\nKhớp màu và loại râu từng nến; không xét độ dài thân/râu."
+            + "\nĐếm tất cả nến sau cặp: xanh nhiều mua xanh, đỏ nhiều mua đỏ."
+            + "\nNgang phiếu hoặc không có mẫu: không mua. Không tự đảo lệnh."
+            + "\nThế nến chỉ thống kê loại râu để tham khảo."
         )
 
     async def stats_text(self):
@@ -419,9 +414,9 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         try:
             await self.telegram.send(
                 f"<b>BOT V{APP_VERSION} ĐÃ CHẠY</b>\n"
-                "Chỉ dùng 2 phương pháp: MÀU + DÁNG NẾN và THẾ NẾN.\n"
-                "Dò 24 giờ: khớp râu trên/râu dưới/hai râu/không râu; hình dạng giống từ 90%.\n"
-                "Phương pháp thua nhiều được đảo hướng lệnh, thống kê gốc vẫn giữ nguyên.",
+                "Quy tắc: ĐẾM CẶP MÀU + LOẠI RÂU (wick_votes_v3).\n"
+                "Dò 24 giờ: khớp màu và râu trên/râu dưới/hai râu/không râu; bỏ độ dài thân/râu.\n"
+                "Đếm nến sau mọi cặp phù hợp. Mua màu nhiều hơn; ngang phiếu thì không mua.",
                 enabled=await self.db.get("manual_enabled", "1") == "1",
             )
         except Exception as exc:
@@ -450,7 +445,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             await self.telegram.send(await self.actual_wins_text())
             return
         if kind == "callback" and (value == "toggle_inverse_signal" or value == "analysis_mode" or value.startswith("mode_")):
-            await self.telegram.send("V3.7.9 chỉ dùng Màu + dáng nến và Thế nến; tool tự chọn giữ hoặc đảo từng phương pháp.")
+            await self.telegram.send("V3.7.9 chỉ dùng Màu + loại râu và Thế nến; lệnh theo đa số cặp đúng màu + loại râu, không tự đảo.")
             return
         if kind == "message":
             command = value.split()[0].lower() if value.split() else ""
@@ -466,6 +461,6 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                 )
                 return
             if command in ("/mode", "/modes"):
-                await self.telegram.send("V3.7.9 chỉ có 2 phương pháp tự động: Màu + dáng nến và Thế nến.")
+                await self.telegram.send("V3.7.9 chỉ có 2 phương pháp tự động: Màu + loại râu và Thế nến.")
                 return
         await super().handle_telegram(kind, value, update)
