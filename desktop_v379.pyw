@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 import desktop_v35 as desktop35
-from runtime_v379 import APP_VERSION, TradingSignalBotV3
+from runtime_v380 import APP_VERSION, TradingSignalBotV3
 
 
 desktop35.APP_VERSION = APP_VERSION
