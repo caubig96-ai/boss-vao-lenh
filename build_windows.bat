@@ -49,5 +49,21 @@ echo MAU NEN NGAY SAU CAP GAN NHAT QUYET DINH TANG / GIAM
 echo VUNG 50-60 PHAN TRAM: XET KET QUA LENH TRUOC DE BAO UU TIEN
 echo DATABASE: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
+
+echo.
+echo ===== THU CHAY EXE =====
 start "" "%CD%\dist\BossVaoLenh.exe"
+timeout /t 2 /nobreak >nul
+tasklist /FI "IMAGENAME eq BossVaoLenh.exe" 2>nul | find /I "BossVaoLenh.exe" >nul
+if errorlevel 1 (
+    echo.
+    echo [CANH BAO] BossVaoLenh.exe khong khoi dong duoc.
+    echo Windows Device Guard/App Control co the dang chan EXE PyInstaller.
+    echo Dang chuyen sang chay desktop V3.8.1 bang pythonw.exe de van co system tray...
+    call "%CD%\run_desktop_v381.bat"
+    echo Da gui lenh khoi dong ban Python. Kiem tra khu vuc system tray ^(^> neu can hay bam mui ten ^^^^ de xem icon an^).
+) else (
+    echo BossVaoLenh.exe da khoi dong thanh cong.
+)
+
 pause
