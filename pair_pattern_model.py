@@ -9,22 +9,22 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass
 
-from candle_color_model import candle_shape
 
 
 METHODS = ("color_pair", "shape_pair")
 HISTORY_CANDLES = 24 * 60 // 5
-SHAPE_MIN_SIMILARITY = 0.90
 STATS_WINDOW = 100
 
 
 @dataclass(frozen=True, slots=True)
 class PairMatch:
     method: str
-    raw_direction: str
+    raw_direction: str | None
     similarity: float
     matched_open_time: int
     matched_next_open_time: int
+    green_count: int = 0
+    red_count: int = 0
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -42,74 +42,46 @@ def wick_type(candle) -> tuple[bool, bool]:
     return h - max(o, c) > tolerance, min(o, c) - l > tolerance
 
 
-def _shape_vector(candle) -> tuple[float, ...]:
-    shape = candle_shape(candle)
-    # Every value is normalized to 0..1. Signed body keeps bullish/bearish body
-    # orientation while wicks and close position describe the candlestick shape.
-    return (
-        (shape["signed_body"] + 1.0) / 2.0,
-        shape["body_ratio"],
-        shape["upper_wick"],
-        shape["lower_wick"],
-        shape["close_position"],
-    )
+def find_pair_matches(history, before_open_time=None) -> dict[str, PairMatch | None]:
+    """Count closed successors of every ordered color/wick and wick-only pair.
 
-
-def pair_shape_similarity(left_pair, right_pair) -> float:
-    """Return a bounded 0..1 similarity for two ordered two-candle patterns."""
-    left = _shape_vector(left_pair[0]) + _shape_vector(left_pair[1])
-    right = _shape_vector(right_pair[0]) + _shape_vector(right_pair[1])
-    distance = sum(abs(a - b) for a, b in zip(left, right)) / len(left)
-    return max(0.0, min(1.0, 1.0 - distance))
-
-
-def find_pair_matches(history) -> dict[str, PairMatch | None]:
-    """Forecast the next color with one color match and one shape match.
-
-    Both methods require matching wick types at each position and >=90% shape
-    similarity. The color method additionally requires matching candle colors.
-    Each uses its best matching pair; equal scores prefer the newest occurrence.
+    Body and wick lengths do not participate. No live or future candle can vote.
+    Historical triples must precede the two input candles and be consecutive M5s.
     """
-    candles = [c for c in history if getattr(c, "closed", False)][-HISTORY_CANDLES:]
-    if len(candles) < 5:
+    closed = [c for c in history if getattr(c, "closed", False) and c.interval == "5m"]
+    if not closed:
         return {method: None for method in METHODS}
-
+    if before_open_time is None:
+        before_open_time = max(c.open_time for c in closed) + 300_000
+    candles = sorted({c.open_time: c for c in closed
+                      if before_open_time - 86_400_000 <= c.open_time < before_open_time
+                      and c.close_time < before_open_time}.values(), key=lambda c: c.open_time)
+    empty = {method: None for method in METHODS}
+    if len(candles) < 5 or [c.open_time for c in candles[-2:]] != [before_open_time-600_000, before_open_time-300_000]:
+        return empty
     current = candles[-2:]
-    current_colors = tuple(candle_direction(c) for c in current)
-    current_wicks = tuple(wick_type(c) for c in current)
-    color_match = None
-    best_color = -math.inf
-    shape_match = None
-    best_shape = -math.inf
-
-    # i,i+1 is the candidate pair and i+2 is its known next candle. Stop at
-    # len-5 so the known successor never overlaps either candle in current.
-    for i in range(0, len(candles) - 4):
-        pair = candles[i:i + 2]
-        successor = candles[i + 2]
-        if tuple(wick_type(c) for c in pair) != current_wicks:
+    colors = tuple(candle_direction(c) for c in current)
+    wicks = tuple(wick_type(c) for c in current)
+    votes = {method: [] for method in METHODS}
+    for i in range(len(candles) - 4):
+        a, b, successor = candles[i:i+3]
+        if b.open_time-a.open_time != 300_000 or successor.open_time-b.open_time != 300_000:
             continue
-        similarity = pair_shape_similarity(current, pair)
-        if similarity < SHAPE_MIN_SIMILARITY:
+        if (wick_type(a), wick_type(b)) != wicks:
             continue
-        if tuple(candle_direction(c) for c in pair) == current_colors and similarity >= best_color:
-            best_color = similarity
-            color_match = PairMatch(
-                "color_pair", candle_direction(successor), similarity,
-                int(pair[0].open_time), int(successor.open_time),
-            )
-
-        # Equal scores prefer the newer occurrence.
-        if similarity >= best_shape:
-            best_shape = similarity
-            shape_match = PairMatch(
-                "shape_pair", candle_direction(successor), similarity,
-                int(pair[0].open_time), int(successor.open_time),
-            )
-
-    if shape_match is not None and shape_match.similarity < SHAPE_MIN_SIMILARITY:
-        shape_match = None
-    return {"color_pair": color_match, "shape_pair": shape_match}
+        votes["shape_pair"].append((a, successor))
+        if (candle_direction(a), candle_direction(b)) == colors:
+            votes["color_pair"].append((a, successor))
+    for method, occurrences in votes.items():
+        if not occurrences:
+            continue
+        green = sum(candle_direction(n) == "UP" for _, n in occurrences)
+        red = len(occurrences) - green
+        direction = "UP" if green > red else "DOWN" if red > green else None
+        a, successor = occurrences[-1]
+        empty[method] = PairMatch(method, direction, 1.0, int(a.open_time),
+                                 int(successor.open_time), green, red)
+    return empty
 
 
 def summarize(results) -> dict:
@@ -127,30 +99,17 @@ def summarize(results) -> dict:
 
 
 def select_method(matches: dict[str, PairMatch | None], stats: dict[str, dict]) -> dict | None:
-    """Choose the historically stronger normal or inverted method.
+    """The exact color + wick majority controls the order; never invert it.
 
-    Raw method results are immutable. A loss-heavy method only reverses the sent
-    direction; its raw LOSS history remains LOSS for future comparisons.
+    Wick-only counts remain an informational second method, never a tie fallback.
     """
-    candidates = []
-    for index, method in enumerate(METHODS):
-        match = matches.get(method)
-        if match is None:
-            continue
-        summary = stats[method]
-        inverse = summary["losses"] > summary["wins"]
-        effective_rate = summary["loss_rate"] if inverse else summary["win_rate"]
-        direction = match.raw_direction
-        if inverse:
-            direction = "DOWN" if direction == "UP" else "UP"
-        selected = {
-            "method": method,
-            "raw_direction": match.raw_direction,
-            "direction": direction,
-            "inverse": inverse,
-            "effective_rate": effective_rate,
-            "match": match.to_dict(),
-            "raw_stats": dict(summary),
-        }
-        candidates.append((effective_rate, summary["decided"], match.similarity, -index, selected))
-    return max(candidates, key=lambda item: item[:4])[4] if candidates else None
+    match = matches.get("color_pair")
+    if match is None or match.raw_direction is None:
+        return None
+    total = match.green_count + match.red_count
+    return {
+        "method": "color_pair", "raw_direction": match.raw_direction,
+        "direction": match.raw_direction, "inverse": False,
+        "effective_rate": max(match.green_count, match.red_count) / total if total else 0.5,
+        "match": match.to_dict(), "raw_stats": dict(stats["color_pair"]),
+    }

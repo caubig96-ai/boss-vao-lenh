@@ -8,11 +8,11 @@ Phiên bản hiện tại: **V3.7.9**. Tool dự báo màu nến BTCUSDT Futures
 
 - Khi một phiên M5 mới bắt đầu, tool lấy đúng **hai nến M5 đã đóng gần nhất**.
 - Dữ liệu dò tìm chỉ dùng **24 giờ gần nhất = 288 nến M5**.
-- **Màu + dáng nến:** mỗi vị trí phải cùng màu và cùng loại râu (chỉ trên, chỉ dưới, hai râu hoặc không râu); hình dạng cặp phải giống từ 90%. Lấy cặp giống nhất, nếu bằng điểm lấy cặp gần nhất; màu cây kế tiếp là dự báo gốc.
-- **Thế nến:** bắt buộc cùng loại râu ở từng vị trí, rồi so thân nến, râu trên, râu dưới và vị trí Close; chỉ nhận cặp giống từ **90%**, lấy duy nhất cặp giống nhất rồi xem màu cây kế tiếp.
+- **Màu + loại râu:** đếm tất cả cặp trùng màu và loại râu từng vị trí trong 24 giờ. Xanh phía sau nhiều hơn mua xanh; đỏ nhiều hơn mua đỏ; ngang phiếu hoặc không có mẫu thì không mua.
+- **Thế nến:** đếm cặp cùng loại râu để tham khảo, không thay thế quyết định màu + loại râu.
 - Hai phương pháp được chấm thắng/thua gốc độc lập, kể cả phương pháp không được chọn gửi lệnh.
-- Phương pháp thắng nhiều hơn thua sẽ giữ hướng. Phương pháp thua nhiều hơn thắng sẽ đảo hướng lệnh gửi, nhưng kết quả gốc vẫn ghi THUA.
-- Giữa hai phương pháp, tool ưu tiên phía có tỷ lệ hiệu quả lịch sử cao hơn sau khi xét giữ/đảo; tiếp theo là số mẫu và độ giống.
+- Không tự đảo hướng theo thống kê thắng/thua; kết quả gốc được giữ nguyên.
+- Không xét độ dài thân/râu, không dùng ngưỡng giống 90%. Hai nến đầu vào phải vừa đóng ngay trước phiên.
 - Nến `Close >= Open` được tính XANH; `Close < Open` được tính ĐỎ. Không có kết quả hòa.
 - Telegram có nút **LỆNH THẮNG THỰC TẾ** để xem các phiên thắng thật gần nhất.
 
@@ -22,8 +22,7 @@ nhưng `cloud_v3.py` và bản Windows mới chỉ khởi động `runtime_v379.
 ## Giới hạn thực sự
 
 - Tỷ lệ thắng/thua trong quá khứ không bảo đảm lệnh tiếp theo sẽ lặp lại.
-- Một phương pháp mới có ít mẫu có thể bị đảo hướng quá sớm; cần theo dõi nhiều phiên trước khi dùng tiền thật.
-- Mức giống 90% chỉ mô tả hình học thân/râu nến, không phải xác suất chắc chắn thắng 90%.
+- Số phiếu lịch sử không phải xác suất chắc chắn thắng lệnh kế tiếp.
 - Cần so tỷ lệ thắng thực tế với ngưỡng hòa vốn theo payout của nơi giao dịch.
 
 ## Dữ liệu thị trường và độ bền
