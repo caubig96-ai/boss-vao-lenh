@@ -8,8 +8,8 @@ Phiên bản hiện tại: **V3.7.9**. Tool dự báo màu nến BTCUSDT Futures
 
 - Khi một phiên M5 mới bắt đầu, tool lấy đúng **hai nến M5 đã đóng gần nhất**.
 - Dữ liệu dò tìm chỉ dùng **24 giờ gần nhất = 288 nến M5**.
-- **Cặp màu:** tìm lần gần nhất trong quá khứ có cùng thứ tự XANH/ĐỎ, rồi lấy màu cây nến đã đóng ngay sau cặp đó làm dự báo gốc.
-- **Thế nến:** so thân nến, râu trên, râu dưới và vị trí Close; chỉ nhận cặp giống từ **90%**, lấy duy nhất cặp giống nhất rồi xem màu cây kế tiếp.
+- **Màu + dáng nến:** mỗi vị trí phải cùng màu và cùng loại râu (chỉ trên, chỉ dưới, hai râu hoặc không râu); hình dạng cặp phải giống từ 90%. Lấy cặp giống nhất, nếu bằng điểm lấy cặp gần nhất; màu cây kế tiếp là dự báo gốc.
+- **Thế nến:** bắt buộc cùng loại râu ở từng vị trí, rồi so thân nến, râu trên, râu dưới và vị trí Close; chỉ nhận cặp giống từ **90%**, lấy duy nhất cặp giống nhất rồi xem màu cây kế tiếp.
 - Hai phương pháp được chấm thắng/thua gốc độc lập, kể cả phương pháp không được chọn gửi lệnh.
 - Phương pháp thắng nhiều hơn thua sẽ giữ hướng. Phương pháp thua nhiều hơn thắng sẽ đảo hướng lệnh gửi, nhưng kết quả gốc vẫn ghi THUA.
 - Giữa hai phương pháp, tool ưu tiên phía có tỷ lệ hiệu quả lịch sử cao hơn sau khi xét giữ/đảo; tiếp theo là số mẫu và độ giống.

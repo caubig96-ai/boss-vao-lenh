@@ -15,6 +15,7 @@ from pair_pattern_model import (
     pair_shape_similarity,
     select_method,
     summarize,
+    wick_type,
 )
 from runtime_v379 import TradingSignalBotV3, TwoMethodTelegram
 
@@ -25,6 +26,25 @@ def candle(index, open_price, high, low, close):
 
 
 class PairModelTests(unittest.TestCase):
+    def test_four_wick_types(self):
+        for h, l, expected in [(103,100,(True,False)), (102,99,(False,True)),
+                               (103,99,(True,True)), (102,100,(False,False))]:
+            self.assertEqual(wick_type(candle(0,100,h,l,102)), expected)
+
+    def test_same_colors_and_high_similarity_cannot_hide_wrong_wick_type(self):
+        a = candle(0,100,102.01,100,102)
+        b = candle(1,102,102,99.99,100)
+        current = [candle(3,100,102.01,99.99,102), candle(4,102,102,99.99,100)]
+        self.assertGreater(pair_shape_similarity([a,b], current), .9)
+        matches = find_pair_matches([a,b,candle(2,100,101,99,101),*current])
+        self.assertTrue(all(value is None for value in matches.values()))
+
+    def test_color_match_uses_real_shape_score_and_threshold(self):
+        history = [candle(0,100,110,90,101), candle(1,100,110,90,99),
+                   candle(2,100,102,99,101), candle(3,100,102.1,99.9,102),
+                   candle(4,102,102.1,99.9,100)]
+        self.assertIsNone(find_pair_matches(history)['color_pair'])
+
     def test_binary_color(self):
         self.assertEqual(candle_direction(candle(0, 100, 101, 99, 100)), "UP")
         self.assertEqual(candle_direction(candle(0, 100, 101, 98, 99)), "DOWN")
@@ -104,11 +124,24 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.db.close()
 
+    async def test_old_rule_results_are_preserved_but_excluded_from_ranking(self):
+        await self.db.conn.execute(
+            "INSERT INTO pair_predictions VALUES(0,299999,'color_pair','UP',1,0,0,'WIN')")
+        await self.db.conn.execute("INSERT INTO pair_decisions VALUES(0,'{}')")
+        self.assertEqual((await self.bot.pair_stats(300000))['color_pair']['decided'], 0)
+        await self.db.conn.execute(
+            "UPDATE pair_decisions SET snapshot=?", ('{"matching_rule":"wick_shape_v2"}',))
+        self.assertEqual((await self.bot.pair_stats(300000))['color_pair']['wins'], 1)
+
     async def test_decision_records_two_methods_and_inverse_result_stays_raw(self):
         await self.db.conn.executemany(
             "INSERT INTO pair_predictions VALUES(?,?,?,?,?,?,?,?)",
             [(i * 300_000, i * 300_000 + 299_999, "shape_pair", "UP", .95, 0, 600_000, "LOSS")
              for i in range(10)],
+        )
+        await self.db.conn.executemany(
+            "INSERT INTO pair_decisions VALUES(?,?)",
+            [(i * 300_000, '{"matching_rule":"wick_shape_v2"}') for i in range(10)],
         )
         await self.db.conn.commit()
         matches = {
