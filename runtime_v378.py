@@ -27,6 +27,17 @@ CREATE TABLE IF NOT EXISTS component_decisions (
 );
 """
 
+METHOD_LABELS = {
+    "knn": "kNN mẫu tương tự",
+    "sequence": "Chuỗi màu",
+    "body": "Thân nến",
+    "close_position": "Vị trí Close",
+    "wick": "Áp lực râu nến",
+    "regime": "Regime / cấu trúc",
+}
+RESULT_LABELS = {"WIN": "THẮNG", "LOSS": "THUA", "TIE": "HÒA", None: "--"}
+DIRECTION_LABELS = {"UP": "TĂNG", "DOWN": "GIẢM"}
+
 
 class SelectorTelegram(CompactTelegramBotV375):
     def keyboard(self, enabled=None):
@@ -165,8 +176,13 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                     key = f"component_no_buy:{open_time}"
                     if await self.db.get(key, "0") != "1" and await self._claim_signal_message(open_time):
                         try:
-                            await self.telegram.send("⚠️ <b>KHÔNG MUA</b>\nKhông có phương pháp đủ điều kiện.\n"
-                                                     + self._stats_text(snapshot["stats"]))
+                            counts = [s["decided"] for s in snapshot["stats"].values()]
+                            await self.telegram.send(
+                                "⚠️ <b>KHÔNG NÊN VÀO LỆNH</b>\n"
+                                "Chưa có phương pháp phù hợp với điều kiện lựa chọn.\n"
+                                f"📊 Mẫu đã chấm: <b>{min(counts) if counts else 0}/{MIN_SAMPLES}</b> tối thiểu\n"
+                                "📋 Bấm <b>TỶ LỆ NGƯỠNG</b> để xem thống kê 6 phương pháp."
+                            )
                             await self.db.set(key, "1")
                             await self._mark_signal_sent(open_time)
                         except Exception:
@@ -187,8 +203,9 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         lines = ["<b>THỐNG KÊ GỐC — KHÔNG ĐẢO KẾT QUẢ</b>"]
         for method in METHODS:
             s = stats[method]
-            lines.append(f"{method}: {s['wins']} thắng / {s['losses']} thua / {s['ties']} hòa"
-                         f" • thắng {s['win_rate']:.1%} • thua {s['loss_rate']:.1%} • gần nhất {s['last'] or '--'}")
+            lines.append(f"{METHOD_LABELS[method]}: ✅ {s['wins']} thắng • ❌ {s['losses']} thua"
+                         f" • ➖ {s['ties']} hòa • <b>{s['win_rate']:.1%}</b> thắng"
+                         f" • gần nhất {RESULT_LABELS.get(s['last'], '--')}")
         return "\n".join(lines)
 
     async def signal_text(self, p):
@@ -197,16 +214,31 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             return await super().signal_text(p)
         s = snapshot["selected"]
         side = "TĂNG" if p.direction == "UP" else "GIẢM"
+        icon = "🟢" if p.direction == "UP" else "🔴"
         local = datetime.fromtimestamp(p.market_open_time / 1000, self.config.timezone)
-        return (f"<b>MUA {side} • V{APP_VERSION}</b>\n{local:%H:%M} • {s['method']}"
-                f" • {'ĐẢO HƯỚNG GỬI' if s['inverse'] else 'GIỮ HƯỚNG GỐC'}\n"
-                f"Dự báo gốc: {s['raw_direction']} • Lệnh gửi: {p.direction}\n"
-                f"Giá {p.signal_price:,.2f} • LỆNH {p.bet_step}: {p.bet_amount:.2f} USDT\n"
-                + self._stats_text(snapshot["stats"])
-                + "\nTỷ lệ lịch sử không phải xác suất chắc chắn của lệnh kế tiếp.")
+        local_close = datetime.fromtimestamp((p.market_close_time + 1) / 1000, self.config.timezone)
+        stats = s["raw_stats"]
+        totals = await self._entry_totals_since_reset()
+        pairs = await self.pair_stats_since_reset()
+        handling = "ĐẢO HƯỚNG" if s["inverse"] else "GIỮ HƯỚNG GỐC"
+        rate_label = "tỷ lệ thua" if s["inverse"] else "tỷ lệ thắng"
+        return (
+            f"{icon} <b>MUA {side}</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"⏰ {local:%H:%M}–{local_close:%H:%M}\n"
+            f"🎯 Phương pháp: <b>{METHOD_LABELS[s['method']]}</b>\n"
+            f"↔️ Xử lý: <b>{handling}</b>\n"
+            f"📊 Lịch sử gốc: ✅ {stats['wins']} thắng • ❌ {stats['losses']} thua • {rate_label} <b>{s['ranking_rate']:.1%}</b>\n"
+            f"📋 Tổng lệnh gửi: ✅ {totals['wins']} thắng • ❌ {totals['losses']} thua\n"
+            f"🔗 Cặp: ✅ {pairs['win_pairs']} thắng • ❌ {pairs['loss_pairs']} thua\n"
+            f"💵 Giá: <code>{p.signal_price:,.2f}</code> • <b>LỆNH {p.bet_step}</b>: {p.bet_amount:.2f} USDT"
+        )
 
     async def detail_signal_text(self, p):
-        return await self.signal_text(p)
+        snapshot = await self._decision(p.market_open_time)
+        if snapshot is None:
+            return await super().detail_signal_text(p)
+        return await self.signal_text(p) + "\n\n" + self._stats_text(snapshot["stats"])
 
     async def result_text(self, row, close_price, result, pnl, open_price=None):
         text = await super().result_text(row, close_price, result, pnl, open_price)
@@ -214,8 +246,9 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         if snapshot and snapshot["selected"]:
             selected = snapshot["selected"]
             raw = ('LOSS' if result == 'WIN' else 'WIN') if selected['inverse'] and result != 'TIE' else result
-            text += (f"\nLệnh gửi: {result} • Phương pháp {selected['method']} gốc: {raw}"
-                     "\nThống kê phương pháp chỉ ghi kết quả gốc.")
+            text += (f"\n🎯 Phương pháp: <b>{METHOD_LABELS[selected['method']]}</b>"
+                     f"\n📊 Kết quả công thức gốc: <b>{RESULT_LABELS[raw]}</b>"
+                     f"\n↔️ Kết quả lệnh gửi: <b>{RESULT_LABELS[result]}</b>")
         return text
 
     async def _signal_calibration(self, p):
