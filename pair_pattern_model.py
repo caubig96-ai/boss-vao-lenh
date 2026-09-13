@@ -35,6 +35,13 @@ def candle_direction(candle) -> str:
     return "UP" if float(candle.close) >= float(candle.open) else "DOWN"
 
 
+def wick_type(candle) -> tuple[bool, bool]:
+    """Upper/lower wick presence; only float roundoff is treated as absent."""
+    o, h, l, c = map(float, (candle.open, candle.high, candle.low, candle.close))
+    tolerance = 4 * max(math.ulp(value) for value in (o, h, l, c))
+    return h - max(o, c) > tolerance, min(o, c) - l > tolerance
+
+
 def _shape_vector(candle) -> tuple[float, ...]:
     shape = candle_shape(candle)
     # Every value is normalized to 0..1. Signed body keeps bullish/bearish body
@@ -59,8 +66,9 @@ def pair_shape_similarity(left_pair, right_pair) -> float:
 def find_pair_matches(history) -> dict[str, PairMatch | None]:
     """Forecast the next color with one color match and one shape match.
 
-    For exact color ties, the newest historical pair is used. For shapes, only
-    the single best pair is used and it must be at least 90% similar.
+    Both methods require matching wick types at each position and >=90% shape
+    similarity. The color method additionally requires matching candle colors.
+    Each uses its best matching pair; equal scores prefer the newest occurrence.
     """
     candles = [c for c in history if getattr(c, "closed", False)][-HISTORY_CANDLES:]
     if len(candles) < 5:
@@ -68,7 +76,9 @@ def find_pair_matches(history) -> dict[str, PairMatch | None]:
 
     current = candles[-2:]
     current_colors = tuple(candle_direction(c) for c in current)
+    current_wicks = tuple(wick_type(c) for c in current)
     color_match = None
+    best_color = -math.inf
     shape_match = None
     best_shape = -math.inf
 
@@ -77,13 +87,18 @@ def find_pair_matches(history) -> dict[str, PairMatch | None]:
     for i in range(0, len(candles) - 4):
         pair = candles[i:i + 2]
         successor = candles[i + 2]
-        if tuple(candle_direction(c) for c in pair) == current_colors:
+        if tuple(wick_type(c) for c in pair) != current_wicks:
+            continue
+        similarity = pair_shape_similarity(current, pair)
+        if similarity < SHAPE_MIN_SIMILARITY:
+            continue
+        if tuple(candle_direction(c) for c in pair) == current_colors and similarity >= best_color:
+            best_color = similarity
             color_match = PairMatch(
-                "color_pair", candle_direction(successor), 1.0,
+                "color_pair", candle_direction(successor), similarity,
                 int(pair[0].open_time), int(successor.open_time),
             )
 
-        similarity = pair_shape_similarity(current, pair)
         # Equal scores prefer the newer occurrence.
         if similarity >= best_shape:
             best_shape = similarity

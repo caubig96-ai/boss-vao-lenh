@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS pair_decisions (
 """
 
 METHOD_LABELS = {
-    "color_pair": "Cặp màu",
+    "color_pair": "Màu + dáng nến",
     "shape_pair": "Thế nến",
 }
 DIRECTION_LABELS = {"UP": "TĂNG", "DOWN": "GIẢM"}
@@ -155,10 +155,12 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         stats = {}
         for method in METHODS:
             rows = await (await self.db.conn.execute("""
-                SELECT result FROM pair_predictions WHERE method=?
-                AND market_open_time>=? AND market_close_time<?
+                SELECT p.result FROM pair_predictions p
+                JOIN pair_decisions d ON d.market_open_time=p.market_open_time
+                WHERE method=? AND json_extract(d.snapshot, '$.matching_rule')='wick_shape_v2'
+                AND p.market_open_time>=? AND market_close_time<?
                 AND result IN ('WIN','LOSS')
-                ORDER BY market_open_time DESC LIMIT ?
+                ORDER BY p.market_open_time DESC LIMIT ?
             """, (method, reset, before, STATS_WINDOW))).fetchall()
             stats[method] = summarize(row["result"] for row in rows)
         return stats
@@ -193,6 +195,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                     base = float(await self.db.get("base_bet", str(self.config.base_bet)))
                     step = int(await self.db.get("bet_step", "1"))
                     snapshot = {
+                        "matching_rule": "wick_shape_v2",
                         "selected": selected,
                         "stats": stats,
                         "matches": {
@@ -250,7 +253,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                         try:
                             await self.telegram.send(
                                 "⚠️ <b>KHÔNG NÊN VÀO LỆNH</b>\n"
-                                "Không tìm thấy cặp thế nến đạt 90% và chưa có cặp màu hợp lệ trong 24 giờ."
+                                "Chưa tìm thấy cặp khớp loại râu và giống hình dạng từ 90% trong 24 giờ."
                             )
                             await self.db.set(key, "1")
                             await self._mark_signal_sent(open_time)
@@ -379,7 +382,8 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         return (
             self._pair_stats_text(await self.pair_stats(self.server_now_ms()))
             + f"\nDữ liệu dò: {HISTORY_CANDLES} nến M5 / 24 giờ."
-            + f"\nThế nến phải giống từ {SHAPE_MIN_SIMILARITY:.0%}; chỉ lấy cặp giống nhất."
+            + f"\nMỗi nến phải khớp loại râu; hình dạng cặp giống từ {SHAPE_MIN_SIMILARITY:.0%}."
+            + "\nMàu + dáng nến yêu cầu cùng màu; cả hai lấy cặp giống nhất."
             + f"\nThống kê tối đa {STATS_WINDOW} kết quả gốc gần nhất."
             + "\nThắng nhiều: giữ hướng. Thua nhiều: đảo lệnh nhưng giữ nguyên thống kê gốc."
         )
@@ -415,8 +419,8 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
         try:
             await self.telegram.send(
                 f"<b>BOT V{APP_VERSION} ĐÃ CHẠY</b>\n"
-                "Chỉ dùng 2 phương pháp: CẶP MÀU và THẾ NẾN.\n"
-                "Dò 2 nến M5 gần nhất trong lịch sử 24 giờ; thế nến yêu cầu giống từ 90%.\n"
+                "Chỉ dùng 2 phương pháp: MÀU + DÁNG NẾN và THẾ NẾN.\n"
+                "Dò 24 giờ: khớp râu trên/râu dưới/hai râu/không râu; hình dạng giống từ 90%.\n"
                 "Phương pháp thua nhiều được đảo hướng lệnh, thống kê gốc vẫn giữ nguyên.",
                 enabled=await self.db.get("manual_enabled", "1") == "1",
             )
@@ -446,7 +450,7 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
             await self.telegram.send(await self.actual_wins_text())
             return
         if kind == "callback" and (value == "toggle_inverse_signal" or value == "analysis_mode" or value.startswith("mode_")):
-            await self.telegram.send("V3.7.9 chỉ dùng Cặp màu và Thế nến; tool tự chọn giữ hoặc đảo từng phương pháp.")
+            await self.telegram.send("V3.7.9 chỉ dùng Màu + dáng nến và Thế nến; tool tự chọn giữ hoặc đảo từng phương pháp.")
             return
         if kind == "message":
             command = value.split()[0].lower() if value.split() else ""
@@ -462,6 +466,6 @@ class TradingSignalBotV3(previous.TradingSignalBotV3):
                 )
                 return
             if command in ("/mode", "/modes"):
-                await self.telegram.send("V3.7.9 chỉ có 2 phương pháp tự động: Cặp màu và Thế nến.")
+                await self.telegram.send("V3.7.9 chỉ có 2 phương pháp tự động: Màu + dáng nến và Thế nến.")
                 return
         await super().handle_telegram(kind, value, update)
