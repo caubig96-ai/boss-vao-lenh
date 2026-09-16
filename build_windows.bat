@@ -38,15 +38,26 @@ pyinstaller --noconfirm --clean --onefile --windowed ^
   desktop_v376.pyw
 if errorlevel 1 exit /b 1
 
+set "BOSS_EXE=%CD%\dist\BossVaoLenh.exe"
+echo ===== DANG KY TU KHOI DONG WINDOWS =====
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$exe=(Resolve-Path -LiteralPath '%BOSS_EXE%').Path; $run='HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'; Set-ItemProperty -Path $run -Name 'BossVaoLenh' -Value ([char]34 + $exe + [char]34)"
+if errorlevel 1 (
+    echo CANH BAO: KHONG DANG KY DUOC AUTO START.
+) else (
+    echo AUTO START: OK
+)
+
 echo.
 echo ===== BUILD THANH CONG =====
-echo EXE: %CD%\dist\BossVaoLenh.exe
+echo EXE: %BOSS_EXE%
 echo VERSION: 3.7.6
+echo KHOI DONG WINDOWS: CHAY AN O SYSTEM TRAY, KHONG TU HIEN MAT KHAU
+echo MO TOOL: BAM ICON TRAY -^> NHAP MAT KHAU -^> MO BANG
+echo TELEGRAM: GUI THONG BAO BOSS V3.7.6 DA KHOI DONG, CO TU THU LAI KHI MANG CHUA SAN SANG
 echo DAO TIN HIEU: GIU NGUYEN X/6 CUA HUONG GOC DE HIEN THI
 echo DAO: 4/6, 5/6, 6/6 HUONG GOC = KHONG NEN VAO
 echo DAO: CHI MUA NGAY KHI HUONG GOC <=3/6 VA HUONG DAO >=3/6
-echo TELEGRAM: NUT BAO CAO / DOI VON / TY LE / RESET / DAO TIN HIEU
 echo DATABASE: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
-start "" "%CD%\dist\BossVaoLenh.exe"
+start "" "%BOSS_EXE%"
 pause
