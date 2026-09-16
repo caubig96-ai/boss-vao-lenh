@@ -16,8 +16,9 @@ class VisibleStartupApplication(desktop35.BinanceKlineTrayApplication):
     def __init__(self):
         super().__init__()
         self._startup_error_shown = False
-        if self.config.telegram_token and self.config.telegram_chat_id:
-            self.root.after(350, self.request_password)
+        # Start silently in the Windows system tray. The password dialog is
+        # requested only when the user opens the tool from the tray icon (or
+        # sends the local OPEN command handled by the base TrayApplication).
         self.root.after(900, self._watch_startup)
 
     def _watch_startup(self) -> None:
