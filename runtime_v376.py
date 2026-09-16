@@ -190,20 +190,37 @@ class TradingSignalBotV3(v375.TradingSignalBotV3):
         return text
 
     async def safe_startup_message(self) -> None:
-        try:
-            enabled = await self.db.get("manual_enabled", "1") == "1"
-            mode = await self.current_signal_mode()
-            self.telegram.inverse_enabled = mode == v375.SIGNAL_MODE_INVERSE
-            extra = (
-                f"\n🔁 ĐẢO: 4/6, 5/6, 6/6 của hướng gốc = <b>KHÔNG NÊN VÀO</b>."
-                if mode == v375.SIGNAL_MODE_INVERSE else ""
-            )
-            await self.telegram.send(
-                f"🤖 <b>BOT V{APP_VERSION} ĐÃ CHẠY</b>\n"
-                "🎨 COLOR ENGINE • 6 cách phân tích nến\n"
-                f"↔️ Chế độ: <b>{self.signal_mode_label(mode)}</b>{extra}",
-                enabled=enabled,
-            )
-        except Exception as exc:
-            self.telegram.last_error = str(exc)
-            log.warning("Startup Telegram send failed: %s", exc)
+        async def send_with_retry() -> None:
+            delays = (0, 3, 8, 15, 30, 60)
+            for attempt, delay in enumerate(delays, start=1):
+                if delay:
+                    await asyncio.sleep(delay)
+                try:
+                    enabled = await self.db.get("manual_enabled", "1") == "1"
+                    mode = await self.current_signal_mode()
+                    self.telegram.inverse_enabled = mode == v375.SIGNAL_MODE_INVERSE
+                    extra = (
+                        "\n🔁 ĐẢO: 4/6, 5/6, 6/6 của hướng gốc = <b>KHÔNG NÊN VÀO</b>."
+                        if mode == v375.SIGNAL_MODE_INVERSE else ""
+                    )
+                    await self.telegram.send(
+                        f"✅ <b>BOSS VÀO LỆNH V{APP_VERSION} ĐÃ KHỞI ĐỘNG</b>\n"
+                        "🖥 Windows: chạy nền ở system tray\n"
+                        "🎨 COLOR ENGINE • 6 cách phân tích nến\n"
+                        f"↔️ Chế độ: <b>{self.signal_mode_label(mode)}</b>{extra}",
+                        enabled=enabled,
+                    )
+                    log.info("Telegram startup notice sent for V%s", APP_VERSION)
+                    return
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    self.telegram.last_error = str(exc)
+                    log.warning(
+                        "Startup Telegram send failed attempt %d/%d: %s",
+                        attempt,
+                        len(delays),
+                        exc,
+                    )
+
+        asyncio.create_task(send_with_retry(), name="telegram-startup-v376")
