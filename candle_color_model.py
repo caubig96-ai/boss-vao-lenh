@@ -161,13 +161,7 @@ def sequence_probability(history: list[Candle]) -> tuple[float, int, dict[int, i
             continue
         # Beta(1,1) prior limits extreme rates from tiny samples.
         probability = (green_weight + 1.0) / (observed_weight + 2.0)
-        # Consecutive `samples` come from a 1-candle-sliding window, so adjacent
-        # occurrences share (length-1) candles and are not independent draws.
-        # Dividing by `length` is a conservative block-bootstrap-style estimate
-        # of the *effective* (non-overlapping) sample count, so reliability no
-        # longer overstates how much independent evidence backs this pattern.
-        effective_samples = samples / length
-        reliability = min(1.0, effective_samples / 20.0)
+        reliability = min(1.0, samples / 20.0)
         probabilities.append((probability, base_weight * reliability))
         total_samples += samples
         by_length[length] = samples
@@ -292,16 +286,10 @@ def predict_next_color(history: list[Candle]) -> ColorForecast:
     green_probability = clamp(green_probability, 0.05, 0.95)
     direction = "UP" if green_probability >= 0.5 else "DOWN"
     confidence = green_probability if direction == "UP" else 1.0 - green_probability
-    # AGREEMENT_MARGIN is intentionally well above float noise: body/close_position/
-    # wick are all derived from the same OHLC shape of the same candles, so a
-    # near-0.5 reading from several of them at once is not independent
-    # confirmation. Requiring a real lean (>=0.04, i.e. >=54%/46%) before counting
-    # a method as "agreeing" avoids inflating displayed confidence from noise.
-    AGREEMENT_MARGIN = 0.04
     agreement = sum(
         1
         for probability in components.values()
-        if abs(probability - 0.5) >= AGREEMENT_MARGIN and ((probability > 0.5) == (direction == "UP"))
+        if abs(probability - 0.5) >= 0.01 and ((probability > 0.5) == (direction == "UP"))
     )
     return ColorForecast(
         direction=direction,

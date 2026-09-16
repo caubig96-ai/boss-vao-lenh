@@ -9,9 +9,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Compatibility marker for the frozen V3.7.9 regression test:
-# from runtime_v379 import APP_VERSION, TradingSignalBotV3
-
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CLOUD_ENV = ROOT / ".env.cloud"
 DEFAULT_CLOUD_DB = ROOT / "data" / "cloud-bot.db"
@@ -63,7 +60,7 @@ async def async_main() -> None:
     load_cloud_environment()
     configure_logging()
     from config import Config
-    from runtime_v381 import APP_VERSION, TradingSignalBotV3
+    from runtime_v376 import APP_VERSION, TradingSignalBotV3
 
     class CloudTradingSignalBot(TradingSignalBotV3):
         async def signal_text(self, prediction):

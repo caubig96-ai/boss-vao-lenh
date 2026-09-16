@@ -5,7 +5,6 @@ cd /d "%~dp0"
 rem Frozen regression markers for prior visible-startup releases:
 rem desktop_v372.pyw
 rem VERSION: 3.7.2
-rem Compatibility marker for the V3.7.9 regression test: desktop_v379.pyw
 
 echo.
 echo ===== BOSS VAO LENH V3 - DUNG BAN CU =====
@@ -23,7 +22,7 @@ python -m pip install --upgrade pip
 pip install -r requirements-windows.txt
 if errorlevel 1 exit /b 1
 
-echo ===== CHAY TEST WINDOWS / LOGIC V3.8.1 =====
+echo ===== CHAY TEST WINDOWS / LOGIC V3.7.6 =====
 python -m unittest discover -s tests -v
 if errorlevel 1 (
     echo TEST LOI - KHONG BUILD EXE.
@@ -31,39 +30,23 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo ===== BUILD BOSSVAOLENH V3.8.1 =====
+echo ===== BUILD BOSSVAOLENH V3.7.6 =====
 pyinstaller --noconfirm --clean --onefile --windowed ^
   --name BossVaoLenh ^
   --collect-all pystray ^
   --collect-all tzdata ^
-  desktop_v381.pyw
+  desktop_v376.pyw
 if errorlevel 1 exit /b 1
 
 echo.
 echo ===== BUILD THANH CONG =====
 echo EXE: %CD%\dist\BossVaoLenh.exe
-echo VERSION: 3.8.1
-echo CHON 1 TRONG 2 PHUONG PHAP: MAU + LOAI RAU / THE NEN
-echo TIM CAP NEN KHOP GAN NHAT TRONG 24H - KHONG LAY MAU CHIEM DA SO
-echo MAU NEN NGAY SAU CAP GAN NHAT QUYET DINH TANG / GIAM
-echo VUNG 50-60 PHAN TRAM: XET KET QUA LENH TRUOC DE BAO UU TIEN
+echo VERSION: 3.7.6
+echo DAO TIN HIEU: GIU NGUYEN X/6 CUA HUONG GOC DE HIEN THI
+echo DAO: 4/6, 5/6, 6/6 HUONG GOC = KHONG NEN VAO
+echo DAO: CHI MUA NGAY KHI HUONG GOC <=3/6 VA HUONG DAO >=3/6
+echo TELEGRAM: NUT BAO CAO / DOI VON / TY LE / RESET / DAO TIN HIEU
 echo DATABASE: %%LOCALAPPDATA%%\BossVaoLenh\data\bot.db
 echo LOG: %%LOCALAPPDATA%%\BossVaoLenh\logs\boss-v3.log
-
-echo.
-echo ===== THU CHAY EXE =====
 start "" "%CD%\dist\BossVaoLenh.exe"
-timeout /t 2 /nobreak >nul
-tasklist /FI "IMAGENAME eq BossVaoLenh.exe" 2>nul | find /I "BossVaoLenh.exe" >nul
-if errorlevel 1 (
-    echo.
-    echo [CANH BAO] BossVaoLenh.exe khong khoi dong duoc.
-    echo Windows Device Guard/App Control co the dang chan EXE PyInstaller.
-    echo Dang chuyen sang chay desktop V3.8.1 bang pythonw.exe de van co system tray...
-    call "%CD%\run_desktop_v381.bat"
-    echo Da gui lenh khoi dong ban Python. Kiem tra khu vuc system tray ^(^> neu can hay bam mui ten ^^^^ de xem icon an^).
-) else (
-    echo BossVaoLenh.exe da khoi dong thanh cong.
-)
-
 pause

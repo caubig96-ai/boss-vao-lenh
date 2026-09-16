@@ -1,29 +1,20 @@
 # Boss Vào Lệnh
 
-Phiên bản hiện tại: **V3.7.9**. Tool dự báo màu nến BTCUSDT Futures theo chu kỳ 5 phút bằng hai phương pháp cặp nến, gửi tín hiệu Telegram và lưu thống kê bền vững trong SQLite.
+Phiên bản hiện tại: **V3**. Tool phân tích BTCUSDT Futures theo chu kỳ 5 phút, dùng hai khung M1/M5, gửi tín hiệu Telegram và lưu thống kê bền vững trong SQLite.
 
-> Đây là phần mềm thống kê và gửi tín hiệu, không tự đặt lệnh Binance Prediction. Kết quả mô hình không bảo đảm lợi nhuận hay độ chính xác tuyệt đối — xem mục "Giới hạn thực sự" bên dưới trước khi dùng tiền thật.
+> Đây là phần mềm thống kê và gửi tín hiệu, không tự đặt lệnh Binance Prediction. Kết quả mô hình không bảo đảm lợi nhuận hay độ chính xác tuyệt đối.
 
-## Logic hai phương pháp V3.7.9
+## Logic phân tích V3
 
-- Khi một phiên M5 mới bắt đầu, tool lấy đúng **hai nến M5 đã đóng gần nhất**.
-- Dữ liệu dò tìm chỉ dùng **24 giờ gần nhất = 288 nến M5**.
-- **Màu + loại râu:** đếm tất cả cặp trùng màu và loại râu từng vị trí trong 24 giờ. Xanh phía sau nhiều hơn mua xanh; đỏ nhiều hơn mua đỏ; ngang phiếu hoặc không có mẫu thì không mua.
-- **Thế nến:** đếm cặp cùng loại râu để tham khảo, không thay thế quyết định màu + loại râu.
-- Hai phương pháp được chấm thắng/thua gốc độc lập, kể cả phương pháp không được chọn gửi lệnh.
-- Không tự đảo hướng theo thống kê thắng/thua; kết quả gốc được giữ nguyên.
-- Không xét độ dài thân/râu, không dùng ngưỡng giống 90%. Hai nến đầu vào phải vừa đóng ngay trước phiên.
-- Nến `Close >= Open` được tính XANH; `Close < Open` được tính ĐỎ. Không có kết quả hòa.
-- Telegram có nút **LỆNH THẮNG THỰC TẾ** để xem các phiên thắng thật gần nhất.
-
-Các engine 6 phương pháp và M1/M5 cũ còn trong repo để đọc database/phục vụ lịch sử,
-nhưng `cloud_v3.py` và bản Windows mới chỉ khởi động `runtime_v379.py`.
-
-## Giới hạn thực sự
-
-- Tỷ lệ thắng/thua trong quá khứ không bảo đảm lệnh tiếp theo sẽ lặp lại.
-- Số phiếu lịch sử không phải xác suất chắc chắn thắng lệnh kế tiếp.
-- Cần so tỷ lệ thắng thực tế với ngưỡng hòa vốn theo payout của nơi giao dịch.
+- M1 dùng **10 nến đã đóng gần nhất**.
+- M5 dùng **5 nến đã đóng gần nhất**.
+- Mỗi khung phân tích số nến xanh/đỏ, lực thân nến, dốc Close, cấu trúc High/Low và áp lực râu nến.
+- Nến gần nhất có trọng số lớn hơn để phản ứng nhanh với đảo chiều.
+- Khi M1 và M5 cùng hướng rõ ràng, engine cộng điểm đồng thuận.
+- Pattern M5 lịch sử vẫn được giữ làm lớp xác nhận phụ.
+- Chỉ nến đã đóng được dùng làm feature xu hướng; nến live không lọt vào phần phân tích trend.
+- Mọi phiên M5 hợp lệ vẫn được phân tích và báo như bình thường.
+- Khi độ tin cậy được xếp loại **CAO**, Telegram gửi thêm ngay sau tin chuẩn: `MUA TĂNG NGAY` hoặc `MUA GIẢM NGAY`.
 
 ## Dữ liệu thị trường và độ bền
 
@@ -63,7 +54,7 @@ Log Windows V3:
 
 Repo có entrypoint riêng `cloud_v3.py` để chạy headless trên Linux/Oracle Cloud VM. Bản cloud:
 
-- dùng cùng engine V3.7.9 và cùng logic hai cặp nến M5;
+- dùng cùng engine V3 và cùng logic M1/M5;
 - chạy độc lập với bản Windows;
 - dùng database riêng `data/cloud-bot.db`;
 - tin Telegram được gắn nhãn `CLOUD`;
@@ -166,9 +157,7 @@ python cloud_v3.py
 
 ## Lệnh Telegram
 
-- `/status` – trạng thái và thống kê.
-- `/methods` – thống kê gốc của Cặp màu và Thế nến.
-- `/wins` – các phiên thắng thực tế gần nhất.
+- `/status` – trạng thái, nguồn dữ liệu và thống kê.
 - `/setbet 1` – Lệnh 1 là 1 USDT; Lệnh 2 là 2 USDT.
 - `/setbalance 100` – đặt số dư theo dõi.
 - `/setpayout 80` – đặt tỷ lệ trả thưởng 80%.
