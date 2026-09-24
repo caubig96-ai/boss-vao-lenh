@@ -81,8 +81,8 @@ class BossPatternApplication:
 
         self.root = tk.Tk()
         self.root.title(f"Boss Vào Lệnh V{APP_VERSION}")
-        self.root.geometry("900x820")
-        self.root.minsize(860, 760)
+        self.root.geometry("900x900")
+        self.root.minsize(860, 820)
         self.root.configure(bg=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.hide_window)
 
@@ -102,6 +102,8 @@ class BossPatternApplication:
         self.start_balance_var = tk.StringVar(value="0")
         self.payout_var = tk.StringVar(value="80")
         self.telegram_var = tk.BooleanVar(value=True)
+        self.telegram_token_var = tk.StringVar(value=self.config.telegram_token)
+        self.telegram_chat_id_var = tk.StringVar(value=self.config.telegram_chat_id)
         self.save_status_var = tk.StringVar(value="")
         self.telegram_status_var = tk.StringVar(value="Telegram: chưa kiểm tra")
         self.mobile_url_var = tk.StringVar(value=f"iPhone: {lan_mobile_url(self.config.mobile_port)}")
@@ -262,6 +264,17 @@ class BossPatternApplication:
         self._field(form, 1, "Lệnh 2 (USDT)", self.bet2_var)
         self._field(form, 2, "Vốn đầu ngày (USDT)", self.start_balance_var)
         self._field(form, 3, "Trả thưởng (%)", self.payout_var)
+        self._secret_field(form, 4, "Telegram Bot Token", self.telegram_token_var)
+        self._field(form, 5, "Telegram Chat ID", self.telegram_chat_id_var)
+        tk.Label(
+            form,
+            text="Đã lưu Telegram rồi thì có thể để trống 2 ô trên và chỉ bấm TEST.",
+            bg=PANEL,
+            fg=MUTED,
+            font=("Segoe UI", 8),
+            anchor="w",
+            justify="left",
+        ).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(1, 3))
         check = tk.Checkbutton(
             form,
             text="Gửi lệnh qua Telegram",
@@ -273,7 +286,7 @@ class BossPatternApplication:
             selectcolor=BG,
             font=("Segoe UI", 10),
         )
-        check.grid(row=4, column=0, columnspan=2, sticky="w", pady=(9, 5))
+        check.grid(row=7, column=0, columnspan=2, sticky="w", pady=(7, 5))
         tk.Button(
             form,
             text="LƯU CÀI ĐẶT",
@@ -286,10 +299,10 @@ class BossPatternApplication:
             padx=16,
             pady=7,
             font=("Segoe UI", 10, "bold"),
-        ).grid(row=5, column=0, columnspan=2, sticky="ew", pady=(5, 3))
+        ).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(5, 3))
         tk.Button(
             form,
-            text="TEST TELEGRAM",
+            text="LƯU + TEST TELEGRAM",
             command=self.test_telegram,
             bg="#28313b",
             fg=TEXT,
@@ -299,19 +312,19 @@ class BossPatternApplication:
             padx=16,
             pady=7,
             font=("Segoe UI", 10, "bold"),
-        ).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(5, 3))
+        ).grid(row=9, column=0, columnspan=2, sticky="ew", pady=(5, 3))
         tk.Label(
             form, textvariable=self.telegram_status_var, bg=PANEL, fg=MUTED,
             font=("Segoe UI", 9), anchor="w", wraplength=330, justify="left"
-        ).grid(row=7, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        ).grid(row=10, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         tk.Label(
             form, textvariable=self.mobile_url_var, bg=PANEL, fg=BLUE_UI,
             font=("Segoe UI", 9, "bold"), anchor="w", wraplength=330, justify="left"
-        ).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        ).grid(row=11, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         tk.Label(
             form, textvariable=self.save_status_var, bg=PANEL, fg=MUTED,
             font=("Segoe UI", 9), anchor="w", wraplength=330, justify="left"
-        ).grid(row=9, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+        ).grid(row=12, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
         daily_body = tk.Frame(daily, bg=PANEL)
         daily_body.pack(fill="both", expand=True, padx=14, pady=(0, 12))
@@ -395,6 +408,25 @@ class BossPatternApplication:
         entry.grid(row=row, column=1, sticky="ew", pady=4)
         parent.grid_columnconfigure(1, weight=1)
 
+    def _secret_field(self, parent: tk.Frame, row: int, label: str, variable: tk.StringVar) -> None:
+        tk.Label(
+            parent, text=label, bg=PANEL, fg=MUTED, font=("Segoe UI", 9), anchor="w"
+        ).grid(row=row, column=0, sticky="w", pady=4, padx=(0, 10))
+        entry = tk.Entry(
+            parent,
+            textvariable=variable,
+            show="•",
+            bg=BG,
+            fg=TEXT,
+            insertbackground=TEXT,
+            relief="flat",
+            justify="right",
+            font=("Segoe UI", 10),
+            width=14,
+        )
+        entry.grid(row=row, column=1, sticky="ew", pady=4)
+        parent.grid_columnconfigure(1, weight=1)
+
     def _stat_line(self, parent: tk.Frame, name: str, value: str, bold: bool = False) -> tk.Label:
         row = tk.Frame(parent, bg=PANEL)
         row.pack(fill="x", pady=3)
@@ -450,13 +482,29 @@ class BossPatternApplication:
         if not self.engine.loop:
             messagebox.showwarning("Chưa sẵn sàng", "Engine đang khởi động.", parent=self.root)
             return
-        self.telegram_status_var.set("Telegram: đang gửi tin test...")
-        future = asyncio.run_coroutine_threadsafe(self.engine.test_telegram(), self.engine.loop)
+
+        token = self.telegram_token_var.get().strip()
+        chat_id = self.telegram_chat_id_var.get().strip()
+        if bool(token) != bool(chat_id):
+            messagebox.showerror(
+                "Thiếu Telegram",
+                "Nếu nhập mới, cần nhập đủ cả Bot Token và Chat ID.",
+                parent=self.root,
+            )
+            return
+
+        async def save_and_test():
+            if token and chat_id:
+                await self.engine.update_telegram_credentials(token, chat_id)
+            return await self.engine.test_telegram()
+
+        self.telegram_status_var.set("Telegram: đang lưu và gửi tin test...")
+        future = asyncio.run_coroutine_threadsafe(save_and_test(), self.engine.loop)
 
         def done_callback(done):
             try:
                 done.result()
-                self.root.after(0, lambda: self.telegram_status_var.set("Telegram: TEST OK - kiểm tra điện thoại"))
+                self.root.after(0, self._telegram_test_ok)
             except Exception as exc:
                 self.root.after(
                     0,
@@ -464,6 +512,11 @@ class BossPatternApplication:
                 )
 
         future.add_done_callback(done_callback)
+
+    def _telegram_test_ok(self) -> None:
+        self.telegram_status_var.set("Telegram: TEST OK - đã lưu và gửi thành công")
+        self.telegram_token_var.set("")
+        self.telegram_chat_id_var.set("")
 
     def _save_done(self, text: str) -> None:
         self.save_in_progress = False
@@ -573,7 +626,9 @@ class BossPatternApplication:
         else:
             self.detail_label.config(text="Chưa có lệnh đã chốt.")
 
-        self.telegram_status_var.set(f"Telegram: {snap.get('telegram_status', 'chưa có trạng thái')}")
+        configured = bool(snap.get("telegram_configured"))
+        prefix = "Telegram ✓" if configured else "Telegram ⚠"
+        self.telegram_status_var.set(f"{prefix}: {snap.get('telegram_status', 'chưa có trạng thái')}")
         if snap.get("mobile_status"):
             self.mobile_url_var.set(
                 f"iPhone: {lan_mobile_url(self.config.mobile_port)} • {snap.get('mobile_status')}"
