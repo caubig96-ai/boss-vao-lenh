@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CLOUD_ENV = ROOT / ".env.cloud"
 DEFAULT_CLOUD_DB = ROOT / "data" / "cloud-bot.db"
-DEFAULT_CLOUD_LOG = ROOT / "logs" / "cloud-v3.log"
+DEFAULT_CLOUD_LOG = ROOT / "logs" / "cloud-v4.log"
 
 
 def load_cloud_environment(env_file: str | Path | None = None) -> Path:
@@ -31,6 +31,8 @@ def load_cloud_environment(env_file: str | Path | None = None) -> Path:
         "CLOUD_TELEGRAM_CHAT_ID": "TELEGRAM_CHAT_ID",
         "CLOUD_SYMBOL": "SYMBOL",
         "CLOUD_BASE_BET": "BASE_BET",
+        "CLOUD_SECOND_BET": "SECOND_BET",
+        "CLOUD_START_BALANCE": "START_BALANCE",
         "CLOUD_PAYOUT_RATE": "PAYOUT_RATE",
         "CLOUD_DECISION_SECOND": "DECISION_SECOND",
         "CLOUD_MAX_BET": "MAX_BET",
@@ -60,19 +62,16 @@ async def async_main() -> None:
     load_cloud_environment()
     configure_logging()
     from config import Config
-    from runtime_v376 import APP_VERSION, TradingSignalBotV3
+    from runtime_v4 import APP_VERSION, PatternSignalBot
 
-    class CloudTradingSignalBot(TradingSignalBotV3):
-        async def signal_text(self, prediction):
-            return "☁️ <b>CLOUD</b>\n" + await super().signal_text(prediction)
-        async def result_text(self, row, close_price: float, result: str, pnl: float, open_price: float | None = None) -> str:
-            return "☁️ <b>CLOUD</b>\n" + await super().result_text(row, close_price, result, pnl, open_price)
-        async def status_text(self) -> str:
-            return "☁️ <b>CLOUD</b>\n" + await super().status_text()
+    class CloudPatternSignalBot(PatternSignalBot):
+        async def signal_text(self, signal):
+            return "☁️ <b>CLOUD</b>\n" + await super().signal_text(signal)
 
     config = Config()
     config.validate()
-    bot = CloudTradingSignalBot(config)
+    bot = CloudPatternSignalBot(config)
+    logging.getLogger(__name__).info("Starting cloud Boss V%s", APP_VERSION)
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         try:
