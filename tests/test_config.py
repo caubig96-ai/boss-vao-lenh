@@ -20,6 +20,10 @@ class ConfigTests(unittest.TestCase):
             config = Config()
         self.assertEqual(config.decision_second, 10)
 
+    def test_desktop_allows_missing_telegram_credentials(self):
+        config = Config(telegram_token="", telegram_chat_id="")
+        config.validate()
+
 
 if __name__ == "__main__":
     unittest.main()
