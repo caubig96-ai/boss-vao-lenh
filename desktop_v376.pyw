@@ -4,6 +4,7 @@ import asyncio
 import ctypes
 import logging
 import os
+import socket
 import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -32,6 +33,21 @@ log = logging.getLogger("boss-vao-lenh-desktop-v4")
 def persistent_root() -> Path:
     root = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA") or str(Path.home())
     return Path(root) / "BossVaoLenh"
+
+
+def lan_mobile_url(port: int) -> str:
+    ip = "127.0.0.1"
+    try:
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        probe.connect(("8.8.8.8", 80))
+        ip = probe.getsockname()[0]
+        probe.close()
+    except Exception:
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            pass
+    return f"http://{ip}:{int(port)}"
 
 
 def configure_logging(level_name: str) -> None:
@@ -87,6 +103,8 @@ class BossPatternApplication:
         self.payout_var = tk.StringVar(value="80")
         self.telegram_var = tk.BooleanVar(value=True)
         self.save_status_var = tk.StringVar(value="")
+        self.telegram_status_var = tk.StringVar(value="Telegram: chưa kiểm tra")
+        self.mobile_url_var = tk.StringVar(value=f"iPhone: {lan_mobile_url(self.config.mobile_port)}")
 
         self._build_ui()
         self.root.withdraw()
@@ -269,10 +287,31 @@ class BossPatternApplication:
             pady=7,
             font=("Segoe UI", 10, "bold"),
         ).grid(row=5, column=0, columnspan=2, sticky="ew", pady=(5, 3))
+        tk.Button(
+            form,
+            text="TEST TELEGRAM",
+            command=self.test_telegram,
+            bg="#28313b",
+            fg=TEXT,
+            activebackground="#36414d",
+            activeforeground=TEXT,
+            relief="flat",
+            padx=16,
+            pady=7,
+            font=("Segoe UI", 10, "bold"),
+        ).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(5, 3))
+        tk.Label(
+            form, textvariable=self.telegram_status_var, bg=PANEL, fg=MUTED,
+            font=("Segoe UI", 9), anchor="w", wraplength=330, justify="left"
+        ).grid(row=7, column=0, columnspan=2, sticky="ew", pady=(5, 0))
+        tk.Label(
+            form, textvariable=self.mobile_url_var, bg=PANEL, fg=BLUE_UI,
+            font=("Segoe UI", 9, "bold"), anchor="w", wraplength=330, justify="left"
+        ).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(5, 0))
         tk.Label(
             form, textvariable=self.save_status_var, bg=PANEL, fg=MUTED,
-            font=("Segoe UI", 9), anchor="w"
-        ).grid(row=6, column=0, columnspan=2, sticky="ew", pady=(4, 0))
+            font=("Segoe UI", 9), anchor="w", wraplength=330, justify="left"
+        ).grid(row=9, column=0, columnspan=2, sticky="ew", pady=(4, 0))
 
         daily_body = tk.Frame(daily, bg=PANEL)
         daily_body.pack(fill="both", expand=True, padx=14, pady=(0, 12))
@@ -330,7 +369,7 @@ class BossPatternApplication:
 
         footer = tk.Label(
             container,
-            text="Nguồn nến: Binance Futures M5. Nến live vừa kết thúc là nến thứ 5; kết quả gửi trước, lệnh mới gửi ngay sau khi khớp mẫu.",
+            text="Nguồn màu mặc định: Binance Prediction BTC Up/Down 5m (Predict.fun-backed). iPhone dùng cùng dữ liệu với Boss PC.",
             bg=BG,
             fg=MUTED,
             font=("Segoe UI", 9),
@@ -404,6 +443,25 @@ class BossPatternApplication:
                 self.root.after(0, lambda: self._save_done("Đã lưu cài đặt."))
             except Exception as exc:
                 self.root.after(0, lambda: self._save_failed(str(exc)))
+
+        future.add_done_callback(done_callback)
+
+    def test_telegram(self) -> None:
+        if not self.engine.loop:
+            messagebox.showwarning("Chưa sẵn sàng", "Engine đang khởi động.", parent=self.root)
+            return
+        self.telegram_status_var.set("Telegram: đang gửi tin test...")
+        future = asyncio.run_coroutine_threadsafe(self.engine.test_telegram(), self.engine.loop)
+
+        def done_callback(done):
+            try:
+                done.result()
+                self.root.after(0, lambda: self.telegram_status_var.set("Telegram: TEST OK - kiểm tra điện thoại"))
+            except Exception as exc:
+                self.root.after(
+                    0,
+                    lambda err=str(exc): self.telegram_status_var.set(f"Telegram LỖI: {err}"),
+                )
 
         future.add_done_callback(done_callback)
 
@@ -515,8 +573,13 @@ class BossPatternApplication:
         else:
             self.detail_label.config(text="Chưa có lệnh đã chốt.")
 
-        if snap.get("error"):
-            self.save_status_var.set(str(snap.get("error")))
+        self.telegram_status_var.set(f"Telegram: {snap.get('telegram_status', 'chưa có trạng thái')}")
+        if snap.get("mobile_status"):
+            self.mobile_url_var.set(
+                f"iPhone: {lan_mobile_url(self.config.mobile_port)} • {snap.get('mobile_status')}"
+            )
+        if snap.get("error") or snap.get("source_error"):
+            self.save_status_var.set(str(snap.get("error") or snap.get("source_error")))
         self.root.after(700, self._refresh_ui)
 
     def exit_application(self) -> None:
