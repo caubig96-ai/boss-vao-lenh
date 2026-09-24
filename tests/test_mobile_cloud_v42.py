@@ -16,11 +16,11 @@ class MobileCloudV42Tests(unittest.TestCase):
     def test_version(self):
         self.assertEqual(APP_VERSION, "4.2.1")
 
-    def test_mobile_password_defaults_to_app_password(self):
+    def test_mobile_password_can_be_configured_independently(self):
         cfg = Config(
             telegram_token="x",
             telegram_chat_id="1",
-            app_password="9876",
+            app_password="123",
             mobile_password="9876",
         )
         self.assertEqual(cfg.mobile_password, "9876")
