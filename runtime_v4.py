@@ -13,7 +13,7 @@ import aiosqlite
 
 from config import Config
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "4.0.1"
 BINANCE_REST = "https://fapi.binance.com"
 INTERVAL_MS = 300_000
 POLL_SECONDS = 2.0
@@ -247,7 +247,8 @@ class PatternSignalBot:
                 result TEXT,
                 actual_color TEXT,
                 settled_at INTEGER,
-                pnl REAL NOT NULL DEFAULT 0
+                pnl REAL NOT NULL DEFAULT 0,
+                result_notified INTEGER NOT NULL DEFAULT 0
             );
             CREATE INDEX IF NOT EXISTS idx_pattern_signals_target
                 ON pattern_signals(target_open_time);
@@ -266,6 +267,18 @@ class PatternSignalBot:
             );
             """
         )
+        cursor = await self.db.execute("PRAGMA table_info(pattern_signals)")
+        columns = {str(row["name"]) for row in await cursor.fetchall()}
+        if "result_notified" not in columns:
+            await self.db.execute(
+                "ALTER TABLE pattern_signals ADD COLUMN result_notified INTEGER NOT NULL DEFAULT 0"
+            )
+            # Existing settled V4 rows predate result Telegram messages. Do not replay
+            # an old backlog after upgrading; only new settlements are announced.
+            await self.db.execute(
+                "UPDATE pattern_signals SET result_notified=1 WHERE result IS NOT NULL"
+            )
+
         default_bet1 = float(self.config.base_bet)
         default_bet2 = float(getattr(self.config, "second_bet", default_bet1 * 2.0))
         default_start = float(getattr(self.config, "start_balance", 0.0))
@@ -385,44 +398,112 @@ class PatternSignalBot:
         end = datetime.fromtimestamp(close_time_exclusive / 1000, self.timezone)
         return f"{start:%H:%M}–{end:%H:%M}"
 
+    async def _day_stats(self, day: str) -> dict[str, float | int]:
+        assert self.db is not None
+        await self._ensure_day(day)
+        cursor = await self.db.execute(
+            "SELECT start_balance,pnl,end_balance,wins,losses,voids FROM pattern_daily WHERE day=?",
+            (day,),
+        )
+        row = await cursor.fetchone()
+        return {
+            "start_balance": float(row["start_balance"]),
+            "pnl": float(row["pnl"]),
+            "end_balance": float(row["end_balance"]),
+            "wins": int(row["wins"]),
+            "losses": int(row["losses"]),
+            "voids": int(row["voids"]),
+        }
+
     async def _settle_pending_from(self, candles: list[ClosedCandle]) -> None:
         for candle in candles:
             await self._settle_for_candle(candle)
 
-    async def _settle_for_candle(self, candle: ClosedCandle) -> None:
+    async def _settle_for_candle(self, candle: ClosedCandle) -> bool:
+        """Settle first, send the result card, then allow the next entry card."""
         assert self.db is not None
         cursor = await self.db.execute(
-            "SELECT * FROM pattern_signals WHERE target_open_time=? AND result IS NULL ORDER BY id DESC LIMIT 1",
+            "SELECT * FROM pattern_signals WHERE target_open_time=? ORDER BY id DESC LIMIT 1",
             (candle.open_time,),
         )
         row = await cursor.fetchone()
         if row is None:
-            return
-        actual = candle.color
-        result = result_for_direction(str(row["direction"]), actual)
-        payout_rate = float(await self._db_get("payout_rate", str(self.config.payout_rate)))
-        bet = float(row["bet_amount"])
-        pnl = bet * payout_rate if result == "WIN" else (-bet if result == "LOSS" else 0.0)
-        settled_at = candle.close_time
-        await self.db.execute(
-            "UPDATE pattern_signals SET result=?,actual_color=?,settled_at=?,pnl=? WHERE id=?",
-            (result, actual, settled_at, pnl, int(row["id"])),
-        )
-        next_step = next_bet_step(int(row["bet_step"]), result)
-        await self._db_set("current_step", next_step)
+            return True
 
-        day = self._local_day(candle.close_time)
-        await self._ensure_day(day)
-        win_inc = 1 if result == "WIN" else 0
-        loss_inc = 1 if result == "LOSS" else 0
-        void_inc = 1 if result == "VOID" else 0
+        result = str(row["result"] or "")
+        actual = str(row["actual_color"] or "") or candle.color
+        pnl = float(row["pnl"] or 0.0)
+        settled_at = int(row["settled_at"] or candle.close_time)
+
+        if not result:
+            actual = candle.color
+            result = result_for_direction(str(row["direction"]), actual)
+            payout_rate = float(await self._db_get("payout_rate", str(self.config.payout_rate)))
+            bet = float(row["bet_amount"])
+            pnl = bet * payout_rate if result == "WIN" else (-bet if result == "LOSS" else 0.0)
+            settled_at = candle.close_time
+            await self.db.execute(
+                "UPDATE pattern_signals "
+                "SET result=?,actual_color=?,settled_at=?,pnl=?,result_notified=0 WHERE id=?",
+                (result, actual, settled_at, pnl, int(row["id"])),
+            )
+            next_step = next_bet_step(int(row["bet_step"]), result)
+            await self._db_set("current_step", next_step)
+
+            day = self._local_day(candle.close_time)
+            await self._ensure_day(day)
+            win_inc = 1 if result == "WIN" else 0
+            loss_inc = 1 if result == "LOSS" else 0
+            void_inc = 1 if result == "VOID" else 0
+            await self.db.execute(
+                "UPDATE pattern_daily SET pnl=pnl+?, end_balance=start_balance+pnl+?, "
+                "wins=wins+?, losses=losses+?, voids=voids+?, updated_at=? WHERE day=?",
+                (pnl, pnl, win_inc, loss_inc, void_inc, settled_at, day),
+            )
+            await self.db.commit()
+            log.info("Settled %s as %s actual=%s pnl=%.2f", row["pattern"], result, actual, pnl)
+        else:
+            day = self._local_day(settled_at)
+
+        notified = int(row["result_notified"] or 0) == 1
+        if notified:
+            return True
+
+        telegram_enabled = await self._db_get("telegram_enabled", "1") == "1"
+        if not telegram_enabled:
+            await self.db.execute(
+                "UPDATE pattern_signals SET result_notified=1 WHERE id=?",
+                (int(row["id"]),),
+            )
+            await self.db.commit()
+            return True
+
+        stats = await self._day_stats(day)
+        settled = {
+            "direction": str(row["direction"]),
+            "bet_step": int(row["bet_step"]),
+            "bet_amount": float(row["bet_amount"]),
+            "target_open_time": int(row["target_open_time"]),
+            "target_close_time": int(row["target_open_time"]) + INTERVAL_MS,
+        }
+        try:
+            # This await is deliberate: the next M5 entry is not sent until the
+            # WIN/LOSS message for the candle that just closed has been delivered.
+            await self.telegram.send(
+                await self.result_text(settled, actual, result, pnl, stats)
+            )
+        except Exception as exc:
+            self.telegram.last_error = str(exc)
+            self._set_snapshot(error=f"Telegram kết quả: {exc}")
+            log.exception("Không gửi được Telegram result; giữ thứ tự result -> entry")
+            return False
+
         await self.db.execute(
-            "UPDATE pattern_daily SET pnl=pnl+?, end_balance=start_balance+pnl+?, "
-            "wins=wins+?, losses=losses+?, voids=voids+?, updated_at=? WHERE day=?",
-            (pnl, pnl, win_inc, loss_inc, void_inc, settled_at, day),
+            "UPDATE pattern_signals SET result_notified=1 WHERE id=?",
+            (int(row["id"]),),
         )
         await self.db.commit()
-        log.info("Settled %s as %s actual=%s pnl=%.2f", row["pattern"], result, actual, pnl)
+        return True
 
     async def _process_closed_candle(
         self,
@@ -432,7 +513,11 @@ class PatternSignalBot:
         allow_signal: bool,
     ) -> None:
         assert self.db is not None
-        await self._settle_for_candle(candle)
+        result_message_ready = await self._settle_for_candle(candle)
+        if not result_message_ready:
+            # Retry the result first on the next poll. Never put a fresh BUY card
+            # ahead of the WIN/LOSS card for the candle that has just finished.
+            return
         window = self._window_ending_at(candle, candles)
         if window:
             self._update_market_preview(window)
@@ -494,15 +579,44 @@ class PatternSignalBot:
         pattern = str(signal["pattern"])
         icons = " ".join(COLOR_ICON.get(c, "⚪") for c in pattern)
         frame = self._frame_text(int(signal["target_open_time"]), int(signal["target_close_time"]))
+        day = self._local_day(int(signal["target_open_time"]))
+        stats = await self._day_stats(day)
         return (
             f"{COLOR_ICON[direction]} <b>MUA {COLOR_LABEL[direction]}</b>\n"
             f"⏰ Khung giờ: <b>{frame}</b>\n"
-            f"🕯 5 nến vừa kết thúc: {icons}\n"
-            f"💵 Lệnh {int(signal['bet_step'])}: <b>{_money(float(signal['bet_amount']))} USDT</b>"
+            f"🕯 5 nến gần nhất đã đóng: {icons}\n"
+            f"💵 Lệnh {int(signal['bet_step'])}: <b>{_money(float(signal['bet_amount']))} USDT</b>\n"
+            f"📊 Thắng: <b>{stats['wins']}</b> • Thua: <b>{stats['losses']}</b>"
         )
 
-    async def result_text(self, *_args: Any, **_kwargs: Any) -> str:
-        return ""
+    async def result_text(
+        self,
+        settled: dict[str, Any],
+        actual_color: str | None,
+        result: str,
+        pnl: float,
+        stats: dict[str, float | int],
+    ) -> str:
+        direction = str(settled["direction"])
+        frame = self._frame_text(
+            int(settled["target_open_time"]), int(settled["target_close_time"])
+        )
+        if result == "WIN":
+            headline = "✅ <b>THẮNG</b>"
+        elif result == "LOSS":
+            headline = "❌ <b>THUA</b>"
+        else:
+            headline = "⚪ <b>HÒA / DOJI</b>"
+        actual_icon = COLOR_ICON.get(str(actual_color), "⚪")
+        actual_label = COLOR_LABEL.get(str(actual_color), "DOJI")
+        return (
+            f"{headline} • MUA {COLOR_LABEL[direction]}\n"
+            f"⏰ Khung giờ: <b>{frame}</b>\n"
+            f"🕯 Nến kết quả: {actual_icon} <b>{actual_label}</b>\n"
+            f"💵 Lệnh {int(settled['bet_step'])}: {_money(float(settled['bet_amount']))} USDT"
+            f" • P/L: <b>{float(pnl):+.2f} USDT</b>\n"
+            f"📊 Thắng: <b>{int(stats['wins'])}</b> • Thua: <b>{int(stats['losses'])}</b>"
+        )
 
     async def status_text(self) -> str:
         snap = self.snapshot()
