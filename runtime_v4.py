@@ -19,6 +19,7 @@ BINANCE_REST = "https://fapi.binance.com"
 INTERVAL_MS = 300_000
 POLL_SECONDS = 1.0
 FRESH_SIGNAL_GRACE_MS = 45_000
+PREDICTION_FRESH_SIGNAL_GRACE_MS = 120_000
 
 RED = "R"
 GREEN = "G"
@@ -402,7 +403,7 @@ class PatternSignalBot:
         stored = int(await self._db_get("last_source_open_time", "0"))
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         if stored <= 0:
-            if now_ms - latest.close_time <= FRESH_SIGNAL_GRACE_MS:
+            if now_ms - latest.close_time <= (PREDICTION_FRESH_SIGNAL_GRACE_MS if self.config.prediction_source == "predictfun" else FRESH_SIGNAL_GRACE_MS):
                 await self._process_closed_candle(latest, candles, allow_signal=True)
             else:
                 await self._db_set("last_source_open_time", latest.open_time)
@@ -413,7 +414,7 @@ class PatternSignalBot:
                 if candle.open_time <= stored:
                     continue
                 is_latest = candle.open_time == latest.open_time
-                allow_signal = is_latest and now_ms - candle.close_time <= FRESH_SIGNAL_GRACE_MS
+                allow_signal = is_latest and now_ms - candle.close_time <= (PREDICTION_FRESH_SIGNAL_GRACE_MS if self.config.prediction_source == "predictfun" else FRESH_SIGNAL_GRACE_MS)
                 await self._process_closed_candle(candle, candles, allow_signal=allow_signal)
         self._update_market_preview(candles[-5:])
         status = (
@@ -812,7 +813,7 @@ class PatternSignalBot:
                 if candle.open_time <= stored:
                     continue
                 is_latest = candle.open_time == latest.open_time
-                allow_signal = is_latest and now_ms - candle.close_time <= FRESH_SIGNAL_GRACE_MS
+                allow_signal = is_latest and now_ms - candle.close_time <= (PREDICTION_FRESH_SIGNAL_GRACE_MS if self.config.prediction_source == "predictfun" else FRESH_SIGNAL_GRACE_MS)
                 await self._process_closed_candle(candle, candles, allow_signal=allow_signal)
         else:
             await self._settle_pending_from(candles[-8:])
