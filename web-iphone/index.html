@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e1217">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Boss 5 Nến — iPhone</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1217;--panel:#171d24;--line:#29323d;--txt:#f4f7f9;--muted:#96a3b0;--g:#09c878;--r:#ff4b4b;--b:#4ca5ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:620px;margin:auto;padding:calc(14px + env(safe-area-inset-top)) 13px calc(30px + env(safe-area-inset-bottom))}
+h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-height:1.45}.card{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:15px;margin:11px 0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
+.candles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
+.history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}
+input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800}.secondary{background:#303944}.danger{background:#642b2b}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
+details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
+</style>
+</head>
+<body><main>
+<div class="row">
+  <div><h1>Boss 5 Nến</h1><div class="sub">Web chạy trực tiếp trên iPhone • không có Boss Cloud</div></div>
+  <button class="secondary" onclick="refreshNow()">↻</button>
+</div>
+
+<section class="card" id="setupCard">
+  <b>Kết nối dữ liệu Prediction</b>
+  <div class="note" style="margin:6px 0 12px">Predict.fun Mainnet yêu cầu API key. Key chỉ được lưu trên iPhone nếu anh bật “Ghi nhớ”.</div>
+  <div class="field"><div class="label">Predict API Key</div><input id="apiKey" type="password" autocomplete="off"></div>
+  <label class="row" style="justify-content:flex-start;margin:10px 0"><input id="rememberKey" type="checkbox" style="width:auto"> <span>Ghi nhớ API key trên iPhone này</span></label>
+  <button style="width:100%" onclick="connect()">KẾT NỐI & TẢI LỊCH SỬ</button>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <div id="loadText" class="status" style="margin-top:7px"></div>
+</section>
+
+<section class="card">
+  <div class="label">5 kết quả BTC Up/Down 5m gần nhất đã phân xử</div>
+  <div class="candles" id="candles"></div>
+  <div class="row">
+    <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
+    <div style="text-align:right"><b id="frame">--:--–--:--</b><div class="label" id="bet">--</div></div>
+  </div>
+  <div id="freshness" class="note" style="margin-top:8px"></div>
+</section>
+
+<section class="card">
+  <div class="stats">
+    <div class="stat"><span class="label">Thắng</span><b class="green" id="wins">0</b></div>
+    <div class="stat"><span class="label">Thua</span><b class="red" id="losses">0</b></div>
+    <div class="stat"><span class="label">Lãi/lỗ đã tính</span><b id="pnl">0.00 USDT</b></div>
+    <div class="stat"><span class="label">Số dư</span><b id="balance">0.00 USDT</b></div>
+  </div>
+  <div class="note" style="margin-top:8px">Các thống kê trên dựa trên lịch sử đã lưu trong iPhone. Khi mở web lại, tool tự tải các vòng mới và tính tiếp.</div>
+</section>
+
+<section class="card">
+  <details>
+    <summary>Cài đặt tiền lệnh</summary>
+    <div class="grid2" style="margin-top:12px">
+      <div class="field"><div class="label">Lệnh 1</div><input id="bet1" inputmode="decimal"></div>
+      <div class="field"><div class="label">Lệnh 2</div><input id="bet2" inputmode="decimal"></div>
+      <div class="field"><div class="label">Vốn bắt đầu</div><input id="startBalance" inputmode="decimal"></div>
+      <div class="field"><div class="label">Trả thưởng %</div><input id="payout" inputmode="decimal"></div>
+      <button class="wide" onclick="saveMoney()">LƯU CÀI ĐẶT</button>
+    </div>
+  </details>
+</section>
+
+<section class="card">
+  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua</div></div><span id="count" class="label">0 lệnh</span></div>
+  <div class="history" id="history" style="margin-top:12px"></div>
+</section>
+
+<section class="card">
+  <div class="label">Trạng thái</div>
+  <div id="status" class="status"></div>
+</section>
+
+<div class="note">Quan trọng: bản này không có máy chủ chạy nền. Khi Safari/PWA bị đóng, bị iOS treo nền hoặc điện thoại tắt, tool không thể tiếp tục theo dõi 5 phút hay tự gửi Telegram. Khi mở lại, nó sẽ tải lịch sử mới nhất rồi cập nhật.</div>
+</main>
+<script>
+const PATTERNS={RGGRR:"R",GRRGR:"R",GGRRR:"G",RRGGR:"G",RGGRG:"G",GRRGG:"G",GGRRG:"R",RRGGG:"R",RGGGR:"G",RRRGR:"R",GGGRR:"G",GRRRR:"R",RGRRR:"G",GRGGR:"R",RRGRR:"R",GGRGR:"G",RGGGG:"G",RRRGG:"R",GGGRG:"G",GRRRG:"R",RGRRG:"G",GRGGG:"R",RRGRG:"R",GGRGG:"G"};
+const API="https://api.predict.fun";
+const INTERVAL=300;
+const $=id=>document.getElementById(id);
+let runtimeKey=sessionStorage.getItem("predict_api_key")||"";
+let rounds=JSON.parse(localStorage.getItem("boss_rounds")||"[]");
+let pollTimer=null;
+let busy=false;
+
+function loadPrefs(){
+  const saved=localStorage.getItem("predict_api_key");
+  if(saved){runtimeKey=saved;$("apiKey").value=saved;$("rememberKey").checked=true}
+  $("bet1").value=localStorage.getItem("bet1")||"1";
+  $("bet2").value=localStorage.getItem("bet2")||"2";
+  $("startBalance").value=localStorage.getItem("startBalance")||"0";
+  $("payout").value=localStorage.getItem("payout")||"80";
+}
+function n(id,fallback=0){const v=Number(String($(id).value).replace(",","."));return Number.isFinite(v)?v:fallback}
+function saveMoney(){
+  localStorage.setItem("bet1",n("bet1",1));localStorage.setItem("bet2",n("bet2",2));
+  localStorage.setItem("startBalance",n("startBalance",0));localStorage.setItem("payout",n("payout",80));
+  render();setStatus("Đã lưu cài đặt tiền lệnh.","ok")
+}
+function setStatus(text,type=""){ $("status").className="status "+type;$("status").textContent=text }
+function progress(done,total,text){$("bar").style.width=(total?Math.round(done/total*100):0)+"%";$("loadText").textContent=text||""}
+function slug(ts){return "btc-updown-5m-"+ts}
+function side(v){
+  const x=String(v||"").trim().toUpperCase();
+  if(["UP","YES","GREEN","HIGHER","ABOVE"].includes(x))return"G";
+  if(["DOWN","NO","RED","LOWER","BELOW"].includes(x))return"R";
+  return null
+}
+function parseColor(payload){
+  const d=payload?.data||payload||{};const markets=d.markets||[];const m=markets[0]||{};
+  let c=side(m?.resolution?.name||m?.resolution?.winner||m?.resolution?.winningOutcome);if(c)return c;
+  for(const o of (m.outcomes||[])){if(String(o?.status||"").toUpperCase()==="WON"){c=side(o?.name);if(c)return c}}
+  const crypto=d?.variantDetails?.crypto||m?.variantData||{};
+  const a=Number(crypto.startPrice),b=Number(crypto.endPrice);
+  if(Number.isFinite(a)&&Number.isFinite(b)&&a>0&&b>0&&a!==b)return b>a?"G":"R";
+  return null
+}
+async function fetchRound(ts){
+  const r=await fetch(API+"/v1/categories/"+slug(ts),{headers:{"Accept":"application/json","x-api-key":runtimeKey},cache:"no-store"});
+  if(r.status===401||r.status===403)throw new Error("API key không hợp lệ hoặc chưa được cấp quyền.");
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error("Predict API HTTP "+r.status);
+  const j=await r.json();const c=parseColor(j);return c?{t:ts,c}:null
+}
+function mergeRounds(items){
+  const map=new Map(rounds.map(x=>[x.t,x]));items.filter(Boolean).forEach(x=>map.set(x.t,x));
+  rounds=[...map.values()].sort((a,b)=>a.t-b.t).slice(-600);
+  localStorage.setItem("boss_rounds",JSON.stringify(rounds));
+}
+async function mapLimit(values,limit,fn,onProgress){
+  let i=0,done=0,out=new Array(values.length);
+  async function worker(){while(true){const k=i++;if(k>=values.length)return;try{out[k]=await fn(values[k])}catch(e){out[k]={error:e}}done++;onProgress?.(done,values.length)}}
+  await Promise.all(Array.from({length:limit},worker));return out
+}
+async function connect(){
+  if(busy)return;let key=$("apiKey").value.trim()||runtimeKey;if(!key){setStatus("Nhập Predict API Key trước.","err");return}
+  runtimeKey=key;sessionStorage.setItem("predict_api_key",key);
+  if($("rememberKey").checked)localStorage.setItem("predict_api_key",key);else localStorage.removeItem("predict_api_key");
+  busy=true;setStatus("Đang tải lịch sử Prediction...");try{
+    const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
+    const count=150;const starts=Array.from({length:count},(_,k)=>latest-(count-1-k)*INTERVAL);
+    const res=await mapLimit(starts,6,fetchRound,(d,t)=>progress(d,t,"Đang tải "+d+"/"+t+" vòng..."));
+    const firstErr=res.find(x=>x&&x.error)?.error;if(firstErr && !res.some(x=>x&&x.c))throw firstErr;
+    mergeRounds(res.filter(x=>x&&x.c));progress(1,1,"Đã tải xong.");render();
+    setStatus("Đã kết nối. Tool sẽ kiểm tra vòng mới mỗi 20 giây khi trang đang mở.","ok");
+    startPolling();
+  }catch(e){setStatus(String(e.message||e)+"\nNếu trình duyệt báo CORS/network dù API key đúng, Predict.fun đang chặn gọi trực tiếp từ web; trường hợp đó web thuần không thể lấy dữ liệu mà không có proxy/server.","err")}
+  finally{busy=false}
+}
+async function refreshNow(){
+  if(!runtimeKey){setStatus("Chưa có API key. Mở phần kết nối ở trên.","err");return}
+  try{
+    const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
+    const starts=Array.from({length:10},(_,k)=>latest-(9-k)*INTERVAL);
+    const res=await mapLimit(starts,4,fetchRound);mergeRounds(res.filter(x=>x&&x.c));render();setStatus("Đã cập nhật "+new Date().toLocaleTimeString(),"ok")
+  }catch(e){setStatus(String(e.message||e),"err")}
+}
+function startPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000)}
+function consecutive(a,b){return b.t-a.t===INTERVAL}
+function buildSignals(){
+  const out=[];for(let i=4;i<rounds.length;i++){
+    const w=rounds.slice(i-4,i+1);if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
+    const p=w.map(x=>x.c).join("");const pred=PATTERNS[p];if(!pred)continue;
+    const targetT=w[4].t+INTERVAL;const actual=rounds.find(x=>x.t===targetT);
+    out.push({sourceT:w[4].t,targetT,pattern:p,pred,actual:actual?.c||null});
+  }return out
+}
+function compute(){
+  const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
+  let step=1,pnl=0,wins=0,losses=0;const settled=[];
+  for(const s of buildSignals()){
+    const amount=step===2?bet2:bet1;s.step=step;s.amount=amount;
+    if(s.actual){s.win=s.pred===s.actual;if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}settled.push(s);step=(step===1&&s.win)?2:1}
+  }
+  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled}
+}
+function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+function latestWindow(){
+  if(rounds.length<5)return null;for(let end=rounds.length-1;end>=4;end--){const w=rounds.slice(end-4,end+1);if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w}return null
+}
+function render(){
+  const w=latestWindow(),calc=compute();$("candles").innerHTML="";
+  const colors=w?w.map(x=>x.c):[];for(let i=0;i<5;i++){const d=document.createElement("div");const c=colors[i]||"";d.className="dot "+(c==="G"?"g":c==="R"?"r":"");d.textContent=c?"●":"·";$("candles").appendChild(d)}
+  let pred=null,targetT=null;
+  if(w){const p=w.map(x=>x.c).join("");pred=PATTERNS[p]||null;targetT=w[4].t+INTERVAL}
+  $("buy").textContent=pred==="G"?"MUA XANH":pred==="R"?"MUA ĐỎ":w?"KHÔNG KHỚP MẪU":"CHỜ DỮ LIỆU";
+  $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
+  $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
+  const nextAmount=calc.step===2?calc.bet2:calc.bet1;$("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
+  if(targetT){const age=Math.floor(Date.now()/1000)-targetT;$("freshness").textContent=age<0?"Vòng kế tiếp chưa bắt đầu.":age<120?"Tín hiệu đang trong vòng hiện tại.":"Dữ liệu phân xử tới muộn; không nên coi đây là tín hiệu vào lệnh tức thời."}else $("freshness").textContent="";
+  $("wins").textContent=calc.wins;$("losses").textContent=calc.losses;$("pnl").textContent=(calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT";$("pnl").className=calc.pnl>0?"green":calc.pnl<0?"red":"";
+  $("balance").textContent=(calc.start+calc.pnl).toFixed(2)+" USDT";
+  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+" lệnh";$("history").innerHTML="";const padded=Array(100-hist.length).fill(null).concat(hist);
+  padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
+}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&runtimeKey)refreshNow()});
+loadPrefs();render();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body></html>
