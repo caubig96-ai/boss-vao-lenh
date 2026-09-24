@@ -38,6 +38,12 @@ def load_cloud_environment(env_file: str | Path | None = None) -> Path:
         "CLOUD_MAX_BET": "MAX_BET",
         "CLOUD_TIMEZONE": "TIMEZONE",
         "CLOUD_LOG_LEVEL": "LOG_LEVEL",
+        "CLOUD_PREDICTION_SOURCE": "PREDICTION_SOURCE",
+        "CLOUD_PREDICT_API_BASE": "PREDICT_API_BASE",
+        "CLOUD_PREDICT_API_KEY": "PREDICT_API_KEY",
+        "CLOUD_MOBILE_ENABLED": "MOBILE_ENABLED",
+        "CLOUD_MOBILE_HOST": "MOBILE_HOST",
+        "CLOUD_MOBILE_PORT": "MOBILE_PORT",
     }
     for cloud_name, standard_name in mappings.items():
         value = os.getenv(cloud_name, "").strip()
