@@ -1,6 +1,6 @@
-# Boss Vào Lệnh V4.2.0
+# Boss Vào Lệnh V4.2.1
 
-V4.2 is the five-result Prediction build with an always-on cloud mode and a password-protected iPhone control panel. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
+V4.2.1 is the five-result Prediction build with an always-on cloud mode and a password-protected iPhone control panel. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
 
 ## Active signal rule
 
@@ -76,7 +76,7 @@ The desktop panel now has a **TEST TELEGRAM** button. Press it after rebuilding.
 
 ## iPhone dashboard
 
-V4.2 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
+V4.2.1 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
 
 ```text
 http://192.168.1.20:8765
@@ -192,7 +192,7 @@ CLOUD_MOBILE_PORT=8765
 CLOUD_MOBILE_PASSWORD=choose-a-private-password
 ```
 
-V4.2 Telegram is send-only, so the cloud and Windows builds may use the same Telegram bot token if desired.
+V4.2.1 Telegram is send-only, so the cloud and Windows builds may use the same Telegram bot token if desired.
 
 Install or upgrade on Oracle Cloud:
 
@@ -220,3 +220,18 @@ The iPhone panel is password protected. It can:
 - send a TEST TELEGRAM message.
 
 For public Internet use, HTTPS through a reverse proxy/tunnel is preferable to plain HTTP. The built-in password prevents casual access but does not encrypt traffic by itself.
+
+
+## Telegram credentials on Windows
+
+Starting with V4.2.1, the Windows EXE does **not** require `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` just to open. Boss opens normally even when Telegram has never been configured.
+
+In the desktop panel:
+
+1. Enter **Telegram Bot Token**.
+2. Enter **Telegram Chat ID**.
+3. Press **LƯU + TEST TELEGRAM**.
+4. Boss stores the credentials in its persistent SQLite database and sends a test message immediately.
+5. On later launches the two boxes may be left blank; the stored credentials continue to be used.
+
+If Prediction data is temporarily unavailable, the desktop panel and Telegram setup remain alive and the market engine keeps retrying in the background.
