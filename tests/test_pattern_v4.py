@@ -20,7 +20,7 @@ from runtime_v4 import (
 
 class PatternV4Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "4.2.0")
+        self.assertEqual(APP_VERSION, "4.2.1")
 
     def test_exact_24_patterns_from_reference_image(self):
         expected = {
