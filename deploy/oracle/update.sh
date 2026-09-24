@@ -26,3 +26,4 @@ sudo systemctl --no-pager --full status "$SERVICE_NAME" || true
 echo
 echo "Updated to: $(git rev-parse --short HEAD)"
 echo "Logs: journalctl -u $SERVICE_NAME -f"
+echo "iPhone check: bash $ROOT/deploy/oracle/mobile_public.sh"
