@@ -153,7 +153,13 @@ class MobileWebServer:
 
     def _authorized(self, request: web.Request) -> bool:
         value = request.cookies.get("boss_session", "")
-        return bool(value) and hmac.compare_digest(value, self.cookie_value)
+        if value and hmac.compare_digest(value, self.cookie_value):
+            return True
+        auth = request.headers.get("Authorization", "").strip()
+        if auth.lower().startswith("bearer "):
+            supplied = auth[7:].strip()
+            return bool(supplied) and hmac.compare_digest(supplied, self.password)
+        return False
 
     def _need_auth(self, request: web.Request, *, api: bool = False):
         if self._authorized(request):
