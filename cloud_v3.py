@@ -23,9 +23,8 @@ def load_cloud_environment(env_file: str | Path | None = None) -> Path:
     chat_id = os.getenv("CLOUD_TELEGRAM_CHAT_ID", "").strip()
     if not token or not chat_id:
         raise ValueError("Cloud cần CLOUD_TELEGRAM_BOT_TOKEN và CLOUD_TELEGRAM_CHAT_ID trong .env.cloud.")
-    existing_desktop_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-    if existing_desktop_token and existing_desktop_token == token:
-        raise ValueError("Cloud và Windows phải dùng 2 Telegram bot token khác nhau.")
+    # V4.2 Telegram is send-only, so cloud and desktop may share one bot token
+    # if the operator wants. There is no getUpdates polling conflict anymore.
     mappings = {
         "CLOUD_TELEGRAM_BOT_TOKEN": "TELEGRAM_BOT_TOKEN",
         "CLOUD_TELEGRAM_CHAT_ID": "TELEGRAM_CHAT_ID",
@@ -44,6 +43,7 @@ def load_cloud_environment(env_file: str | Path | None = None) -> Path:
         "CLOUD_MOBILE_ENABLED": "MOBILE_ENABLED",
         "CLOUD_MOBILE_HOST": "MOBILE_HOST",
         "CLOUD_MOBILE_PORT": "MOBILE_PORT",
+        "CLOUD_MOBILE_PASSWORD": "MOBILE_PASSWORD",
     }
     for cloud_name, standard_name in mappings.items():
         value = os.getenv(cloud_name, "").strip()
@@ -71,8 +71,19 @@ async def async_main() -> None:
     from runtime_v4 import APP_VERSION, PatternSignalBot
 
     class CloudPatternSignalBot(PatternSignalBot):
+        async def setup(self):
+            await super().setup()
+            if os.getenv("CLOUD_TELEGRAM_STARTUP_TEST", "1").strip().lower() not in {"0", "false", "no", "off"}:
+                try:
+                    await self.test_telegram()
+                except Exception:
+                    logging.getLogger(__name__).exception("Cloud Telegram startup test failed")
+
         async def signal_text(self, signal):
             return "☁️ <b>CLOUD</b>\n" + await super().signal_text(signal)
+
+        async def result_text(self, *args, **kwargs):
+            return "☁️ <b>CLOUD</b>\n" + await super().result_text(*args, **kwargs)
 
     config = Config()
     config.validate()
