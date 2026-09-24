@@ -1,0 +1,42 @@
+name: BossVaoLenhIOS
+options:
+  bundleIdPrefix: com.bossvaolenh
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0.0
+targets:
+  BossVaoLenhIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: BossVaoLenhIOS
+    info:
+      path: BossVaoLenhIOS/Info.plist
+      properties:
+        CFBundleDisplayName: Boss Vào Lệnh
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bossvaolenh.ios
+        PRODUCT_NAME: BossVaoLenh
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+schemes:
+  BossVaoLenhIOS:
+    build:
+      targets:
+        BossVaoLenhIOS: all
+    run:
+      config: Debug
+    archive:
+      config: Release
