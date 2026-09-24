@@ -1,6 +1,6 @@
-# Boss Vào Lệnh V4.1.0
+# Boss Vào Lệnh V4.2.0
 
-V4.1 is the five-result Prediction build. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
+V4.2 is the five-result Prediction build with an always-on cloud mode and a password-protected iPhone control panel. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
 
 ## Active signal rule
 
@@ -76,7 +76,7 @@ The desktop panel now has a **TEST TELEGRAM** button. Press it after rebuilding.
 
 ## iPhone dashboard
 
-V4.1 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
+V4.2 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
 
 ```text
 http://192.168.1.20:8765
@@ -160,3 +160,63 @@ python -m unittest discover -s tests -v
 ## Important
 
 The pattern table is a fixed rule supplied by the operator. The software records and applies that rule; it does not guarantee profitability or future market outcomes. Test with non-production funds before relying on it operationally.
+
+
+## Always-on iPhone cloud mode
+
+This is the recommended daily setup when the PC should stay off.
+
+The architecture is:
+
+```text
+BTC Up/Down 5m Prediction -> Oracle Cloud Boss (24/7) -> Telegram
+                                            -> iPhone web app
+```
+
+The cloud process is installed as a `systemd` service with `Restart=always` and is enabled at boot. The iPhone is only a remote screen/controller: turning the iPhone off, closing Safari, or turning the PC off does not stop the Boss.
+
+Configure `.env.cloud`:
+
+```env
+CLOUD_TELEGRAM_BOT_TOKEN=...
+CLOUD_TELEGRAM_CHAT_ID=...
+CLOUD_TELEGRAM_STARTUP_TEST=1
+
+CLOUD_PREDICTION_SOURCE=predictfun
+CLOUD_PREDICT_API_BASE=https://api.predict.fun
+CLOUD_PREDICT_API_KEY=...
+
+CLOUD_MOBILE_ENABLED=1
+CLOUD_MOBILE_HOST=0.0.0.0
+CLOUD_MOBILE_PORT=8765
+CLOUD_MOBILE_PASSWORD=choose-a-private-password
+```
+
+V4.2 Telegram is send-only, so the cloud and Windows builds may use the same Telegram bot token if desired.
+
+Install or upgrade on Oracle Cloud:
+
+```bash
+bash deploy/oracle/install.sh
+# later:
+bash deploy/oracle/update.sh
+```
+
+Then verify the phone endpoint:
+
+```bash
+bash deploy/oracle/mobile_public.sh
+```
+
+The helper prints the server's public IPv4 URL. Oracle Cloud must allow inbound TCP to the configured mobile port (default `8765`). Once that ingress rule exists, the iPhone can open the URL using any Wi-Fi or 4G/5G connection; it does not need to be on the same network as the server or PC.
+
+The iPhone panel is password protected. It can:
+
+- display the latest five resolved Prediction colors;
+- display the next BUY color and stake step;
+- display P/L and 100 recent V/X results;
+- change Lệnh 1, Lệnh 2, starting balance and payout;
+- enable/disable Telegram sends;
+- send a TEST TELEGRAM message.
+
+For public Internet use, HTTPS through a reverse proxy/tunnel is preferable to plain HTTP. The built-in password prevents casual access but does not encrypt traffic by itself.
