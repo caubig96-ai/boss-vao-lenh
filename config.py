@@ -18,6 +18,13 @@ def _int(name: str, default: int) -> int:
     return int(os.getenv(name, str(default)))
 
 
+def _bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _default_database_path() -> str:
     """Use one stable Windows database so rebuilding/moving the EXE cannot reset stats."""
     if os.name == "nt":
@@ -52,6 +59,17 @@ class Config:
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO").upper())
     app_password: str = field(default_factory=lambda: os.getenv("APP_PASSWORD", "123"))
 
+    # V4.1 defaults to the Prediction-market result source. "futures" remains
+    # available only as an explicit diagnostic fallback.
+    prediction_source: str = field(default_factory=lambda: os.getenv("PREDICTION_SOURCE", "predictfun").strip().lower())
+    predict_api_base: str = field(default_factory=lambda: os.getenv("PREDICT_API_BASE", "https://api.predict.fun").strip())
+    predict_api_key: str = field(default_factory=lambda: os.getenv("PREDICT_API_KEY", "").strip())
+
+    # Read-only iPhone dashboard served by the same Boss process.
+    mobile_enabled: bool = field(default_factory=lambda: _bool("MOBILE_ENABLED", True))
+    mobile_host: str = field(default_factory=lambda: os.getenv("MOBILE_HOST", "0.0.0.0").strip())
+    mobile_port: int = field(default_factory=lambda: _int("MOBILE_PORT", 8765))
+
     @property
     def timezone(self):
         try:
@@ -74,3 +92,7 @@ class Config:
             raise ValueError("PAYOUT_RATE phải nằm trong khoảng (0, 2]")
         if not 10 <= self.decision_second <= 20:
             raise ValueError("DECISION_SECOND phải nằm trong khoảng 10–20")
+        if self.prediction_source not in {"predictfun", "futures"}:
+            raise ValueError("PREDICTION_SOURCE chỉ nhận predictfun hoặc futures")
+        if not 1 <= self.mobile_port <= 65535:
+            raise ValueError("MOBILE_PORT không hợp lệ")
