@@ -12,11 +12,12 @@ import aiohttp
 import aiosqlite
 
 from config import Config
+from prediction_source import PredictionHistorySource
 
-APP_VERSION = "4.0.1"
+APP_VERSION = "4.1.0"
 BINANCE_REST = "https://fapi.binance.com"
 INTERVAL_MS = 300_000
-POLL_SECONDS = 2.0
+POLL_SECONDS = 1.0
 FRESH_SIGNAL_GRACE_MS = 45_000
 
 RED = "R"
@@ -94,6 +95,7 @@ class ClosedCandle:
     close_time: int
     open: float
     close: float
+    resolved_color: str | None = None
 
     @classmethod
     def from_binance(cls, row: list[Any]) -> "ClosedCandle":
@@ -106,7 +108,7 @@ class ClosedCandle:
 
     @property
     def color(self) -> str | None:
-        return candle_color(self.open, self.close)
+        return self.resolved_color or candle_color(self.open, self.close)
 
 
 class TelegramSignalSender:
@@ -150,6 +152,8 @@ class PatternSignalBot:
         self.db: aiosqlite.Connection | None = None
         self.http: aiohttp.ClientSession | None = None
         self.telegram = TelegramSignalSender(config.telegram_token, config.telegram_chat_id)
+        self.prediction_history: PredictionHistorySource | None = None
+        self.mobile_server = None
         self.stop_event = asyncio.Event()
         self.loop: asyncio.AbstractEventLoop | None = None
         self._state_lock = threading.RLock()
@@ -160,6 +164,11 @@ class PatternSignalBot:
             "status": "Đang khởi động...",
             "error": "",
             "symbol": config.symbol,
+            "source_label": "Binance Prediction BTC Up/Down 5m" if config.prediction_source == "predictfun" else "Binance Futures M5",
+            "source_error": "",
+            "telegram_status": "Chưa gửi / chưa kiểm tra",
+            "mobile_status": "Chưa khởi động",
+            "mobile_port": int(config.mobile_port),
             "colors": [],
             "pattern": "-----",
             "recommendation": None,
@@ -296,6 +305,17 @@ class PatternSignalBot:
                 "INSERT OR IGNORE INTO pattern_settings(key,value) VALUES(?,?)",
                 (key, str(value)),
             )
+        previous_source = await self._db_get("market_data_source", "")
+        current_source = self.config.prediction_source
+        if previous_source != current_source:
+            # V4.0 used Futures candle colors. Those results are not comparable
+            # with Binance Prediction/Predict.fun resolutions, so start clean when
+            # switching sources instead of mixing two different color histories.
+            await self.db.execute("DELETE FROM pattern_signals")
+            await self.db.execute("DELETE FROM pattern_daily")
+            await self._db_set("current_step", 1)
+            await self._db_set("last_source_open_time", 0)
+            await self._db_set("market_data_source", current_source)
         await self.db.commit()
         await self._ensure_day(self._local_day())
 
@@ -325,6 +345,12 @@ class PatternSignalBot:
         self.loop = asyncio.get_running_loop()
         await self._open_database()
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
+        if self.config.prediction_source == "predictfun":
+            self.prediction_history = PredictionHistorySource(
+                self.http,
+                self.config.predict_api_base,
+                self.config.predict_api_key,
+            )
         await self.telegram.open()
         await self._initial_market_sync()
         await self._refresh_snapshot()
@@ -339,6 +365,27 @@ class PatternSignalBot:
     async def _fetch_closed(self, limit: int = 30) -> list[ClosedCandle]:
         if not self.http:
             raise RuntimeError("HTTP session chưa mở")
+
+        if self.config.prediction_source == "predictfun":
+            if self.prediction_history is None:
+                raise RuntimeError("Prediction source chưa khởi tạo")
+            rounds = await self.prediction_history.recent(limit)
+            if len(rounds) < 5:
+                detail = self.prediction_history.last_error or "chưa đủ 5 vòng đã phân xử"
+                self._set_snapshot(source_error=detail)
+                raise RuntimeError(f"Không lấy đủ lịch sử Binance Prediction: {detail}")
+            self._set_snapshot(source_error=self.prediction_history.last_error)
+            return [
+                ClosedCandle(
+                    open_time=item.open_time,
+                    close_time=item.close_time,
+                    open=0.0,
+                    close=0.0,
+                    resolved_color=item.color,
+                )
+                for item in rounds
+            ]
+
         params = {"symbol": self.config.symbol, "interval": "5m", "limit": max(6, min(200, limit))}
         async with self.http.get(f"{BINANCE_REST}/fapi/v1/klines", params=params) as response:
             response.raise_for_status()
@@ -349,7 +396,7 @@ class PatternSignalBot:
     async def _initial_market_sync(self) -> None:
         candles = await self._fetch_closed(40)
         if len(candles) < 5:
-            raise RuntimeError("Không lấy đủ 5 nến M5 đã đóng từ Binance")
+            raise RuntimeError("Không lấy đủ 5 kết quả 5 phút đã chốt")
         await self._settle_pending_from(candles)
         latest = candles[-1]
         stored = int(await self._db_get("last_source_open_time", "0"))
@@ -369,13 +416,24 @@ class PatternSignalBot:
                 allow_signal = is_latest and now_ms - candle.close_time <= FRESH_SIGNAL_GRACE_MS
                 await self._process_closed_candle(candle, candles, allow_signal=allow_signal)
         self._update_market_preview(candles[-5:])
-        self._set_snapshot(connected=True, status="Đang theo dõi nến M5 Binance", error="")
+        status = (
+            "Đang theo dõi Binance Prediction BTC Up/Down 5m"
+            if self.config.prediction_source == "predictfun"
+            else "Đang theo dõi nến M5 Binance Futures"
+        )
+        self._set_snapshot(connected=True, status=status, error="")
 
     def _window_ending_at(self, candle: ClosedCandle, candles: list[ClosedCandle]) -> list[ClosedCandle]:
         index = next((i for i, item in enumerate(candles) if item.open_time == candle.open_time), -1)
         if index < 4:
             return []
-        return candles[index - 4:index + 1]
+        window = candles[index - 4:index + 1]
+        if any(
+            window[i].open_time - window[i - 1].open_time != INTERVAL_MS
+            for i in range(1, len(window))
+        ):
+            return []
+        return window
 
     def _update_market_preview(self, candles: list[ClosedCandle]) -> None:
         colors = [c.color for c in candles[-5:]]
@@ -492,6 +550,10 @@ class PatternSignalBot:
             await self.telegram.send(
                 await self.result_text(settled, actual, result, pnl, stats)
             )
+            self._set_snapshot(
+                telegram_status=f"OK • đã gửi kết quả {datetime.now(self.timezone):%H:%M:%S}",
+                error="",
+            )
         except Exception as exc:
             self.telegram.last_error = str(exc)
             self._set_snapshot(error=f"Telegram kết quả: {exc}")
@@ -568,6 +630,10 @@ class PatternSignalBot:
         if telegram_enabled:
             try:
                 await self.telegram.send(await self.signal_text(signal))
+                self._set_snapshot(
+                    telegram_status=f"OK • đã gửi lệnh {datetime.now(self.timezone):%H:%M:%S}",
+                    error="",
+                )
                 log.info("Telegram signal sent: %s -> %s", pattern, direction)
             except Exception as exc:
                 self.telegram.last_error = str(exc)
@@ -584,7 +650,7 @@ class PatternSignalBot:
         return (
             f"{COLOR_ICON[direction]} <b>MUA {COLOR_LABEL[direction]}</b>\n"
             f"⏰ Khung giờ: <b>{frame}</b>\n"
-            f"🕯 5 nến gần nhất đã đóng: {icons}\n"
+            f"🕯 5 kết quả Prediction gần nhất: {icons}\n"
             f"💵 Lệnh {int(signal['bet_step'])}: <b>{_money(float(signal['bet_amount']))} USDT</b>\n"
             f"📊 Thắng: <b>{stats['wins']}</b> • Thua: <b>{stats['losses']}</b>"
         )
@@ -622,9 +688,22 @@ class PatternSignalBot:
         snap = self.snapshot()
         return (
             f"BOSS V{APP_VERSION} • {snap['symbol']}\n"
+            f"Nguồn: {snap['source_label']}\n"
             f"Mẫu: {snap['pattern']} • Khung: {snap['frame']}\n"
             f"Hôm nay: {_money(snap['daily_pnl'])} USDT"
         )
+
+    async def test_telegram(self) -> int:
+        message_id = await self.telegram.send(
+            f"🧪 <b>TEST TELEGRAM BOSS V{APP_VERSION}</b>\n"
+            f"✅ Telegram đang nhận tin từ Boss.\n"
+            f"📡 Nguồn màu: {self.snapshot()['source_label']}"
+        )
+        self._set_snapshot(
+            telegram_status=f"OK • test thành công {datetime.now(self.timezone):%H:%M:%S}",
+            error="",
+        )
+        return message_id
 
     async def update_settings(
         self,
@@ -739,24 +818,55 @@ class PatternSignalBot:
             await self._settle_pending_from(candles[-8:])
         self._update_market_preview(candles[-5:])
         await self._refresh_snapshot()
-        self._set_snapshot(connected=True, status="Đang theo dõi nến M5 Binance", error="")
+        status = (
+            "Đang theo dõi Binance Prediction BTC Up/Down 5m"
+            if self.config.prediction_source == "predictfun"
+            else "Đang theo dõi nến M5 Binance Futures"
+        )
+        source_error = self.prediction_history.last_error if self.prediction_history else ""
+        self._set_snapshot(connected=True, status=status, source_error=source_error, error="")
 
     async def run(self) -> None:
         try:
             await self.setup()
+            if self.config.mobile_enabled:
+                try:
+                    from mobile_web import MobileWebServer
+                    self.mobile_server = MobileWebServer(
+                        self, self.config.mobile_host, self.config.mobile_port
+                    )
+                    await self.mobile_server.start()
+                    self._set_snapshot(
+                        mobile_status=f"Đang chạy cổng {self.config.mobile_port}"
+                    )
+                except Exception as exc:
+                    log.exception("Không mở được iPhone dashboard")
+                    self._set_snapshot(mobile_status=f"Lỗi: {exc}")
+                    self.mobile_server = None
             while not self.stop_event.is_set():
                 try:
                     await self._poll_once()
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
-                    log.exception("V4 polling error")
-                    self._set_snapshot(connected=False, status="Mất kết nối, đang thử lại...", error=str(exc))
+                    log.exception("V4.1 polling error")
+                    source_error = self.prediction_history.last_error if self.prediction_history else ""
+                    self._set_snapshot(
+                        connected=False,
+                        status="Mất kết nối, đang thử lại...",
+                        error=str(exc),
+                        source_error=source_error,
+                    )
                 try:
                     await asyncio.wait_for(self.stop_event.wait(), timeout=POLL_SECONDS)
                 except asyncio.TimeoutError:
                     pass
         finally:
+            if self.mobile_server is not None:
+                try:
+                    await self.mobile_server.stop()
+                except Exception:
+                    log.exception("Không dừng được iPhone dashboard")
             await self.close()
 
 
