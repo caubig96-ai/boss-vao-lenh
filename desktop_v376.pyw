@@ -192,7 +192,7 @@ class BossPatternApplication:
         )
         self.connection_label.pack(side="right", pady=(8, 0))
 
-        signal = self._section(container, "5 nến vừa kết thúc → lệnh nến kế tiếp")
+        signal = self._section(container, "4 nến trước + nến live M5 vừa kết thúc → lệnh nến kế tiếp")
         signal.pack(fill="x", pady=(0, 12))
         body = tk.Frame(signal, bg=PANEL)
         body.pack(fill="x", padx=14, pady=(0, 14))
@@ -330,7 +330,7 @@ class BossPatternApplication:
 
         footer = tk.Label(
             container,
-            text="Nguồn nến: Binance Futures M5 theo SYMBOL. Telegram chỉ gửi khi 5 nến khớp đúng bảng mẫu.",
+            text="Nguồn nến: Binance Futures M5. Nến live vừa kết thúc là nến thứ 5; kết quả gửi trước, lệnh mới gửi ngay sau khi khớp mẫu.",
             bg=BG,
             fg=MUTED,
             font=("Segoe UI", 9),
