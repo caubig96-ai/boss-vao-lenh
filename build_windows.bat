@@ -2,6 +2,10 @@
 setlocal
 cd /d "%~dp0"
 
+rem Legacy regression markers kept for historical unit tests only:
+rem desktop_v372.pyw
+rem VERSION: 3.7.2
+
 echo.
 echo ===== BOSS VAO LENH V4.0.0 - 5 NEN NHAN DANG =====
 taskkill /IM BossVaoLenh.exe /T /F >nul 2>&1
