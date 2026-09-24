@@ -1,10 +1,10 @@
-# Boss Vào Lệnh V4.0.1
+# Boss Vào Lệnh V4.1.0
 
-V4 is a clean five-candle pattern build. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus.
+V4.1 is the five-result Prediction build. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
 
 ## Active signal rule
 
-The tool reads official Binance Futures M5 candles for `SYMBOL`. The fifth candle is the M5 candle that was live and has just finished closing; the other four are the four candles immediately before it. As soon as that live candle closes, the tool evaluates those five closed colors and targets the M5 candle that starts immediately afterward. A signal is sent only when the five colors match one of the 24 fixed rows below. `G` = green, `R` = red.
+Default source: `PREDICTION_SOURCE=predictfun`. Boss reads the resolved BTC Up/Down 5m market sequence used by Binance Prediction's Predict.fun-backed market. The newest resolved 5-minute round is color number five; the other four are the four consecutive rounds immediately before it. As soon as settlement is published, Boss evaluates those five colors and targets the following 5-minute round. `G` = UP/green, `R` = DOWN/red. The old Binance Futures M5 source remains only as an explicit diagnostic fallback with `PREDICTION_SOURCE=futures`.
 
 | 5 closed candles | Buy |
 |---|---|
@@ -54,7 +54,7 @@ Immediately after it, when the new five-candle group matches:
 ```text
 🟢 MUA XANH
 ⏰ Khung giờ: 10:05–10:10
-🕯 5 nến gần nhất đã đóng: 🔴 🟢 🟢 🔴 🔴
+🕯 5 kết quả Prediction gần nhất: 🔴 🟢 🟢 🔴 🔴
 💵 Lệnh 2: 2.00 USDT
 📊 Thắng: 7 • Thua: 3
 ```
@@ -69,6 +69,22 @@ The desktop panel has separate values for `Lệnh 1` and `Lệnh 2`.
 - A doji result is void and is excluded from the V/X history.
 
 P/L uses the configured payout rate. A win adds `bet × payout_rate`; a loss subtracts the bet amount.
+
+## Telegram check
+
+The desktop panel now has a **TEST TELEGRAM** button. Press it after rebuilding. A successful test sends one manual diagnostic message to the configured Telegram chat and the panel shows an OK timestamp. If the bot token/chat ID is wrong or Telegram is unreachable, the exact error is shown in the panel and log.
+
+## iPhone dashboard
+
+V4.1 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
+
+```text
+http://192.168.1.20:8765
+```
+
+Connect the iPhone and PC to the same Wi-Fi, open that address in Safari, then use **Share → Add to Home Screen**. The phone view contains the five latest Prediction colors, next signal, stake step, daily P/L and the 100-result V/X grid.
+
+If Windows Firewall blocks the page, allow `BossVaoLenh.exe` on Private networks. The phone dashboard is read-only.
 
 ## Desktop panel
 
@@ -93,6 +109,11 @@ Copy `.env.example` to `.env` and add your Telegram credentials:
 ```env
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
+PREDICTION_SOURCE=predictfun
+PREDICT_API_BASE=https://api.predict.fun
+PREDICT_API_KEY=
+MOBILE_ENABLED=1
+MOBILE_PORT=8765
 SYMBOL=BTCUSDT
 BASE_BET=1
 SECOND_BET=2
@@ -126,7 +147,7 @@ nano .env.cloud
 bash deploy/oracle/install.sh
 ```
 
-The cloud process uses the same result-first flow: settle and announce WIN/LOSS first, then send the next BUY card when the latest five-candle group matches.
+The cloud process uses the same result-first flow and the same Prediction-market source. The cloud phone dashboard is disabled by default; enable it only after configuring a firewall and HTTPS/reverse proxy.
 
 ## Tests
 
@@ -134,7 +155,7 @@ The cloud process uses the same result-first flow: settle and announce WIN/LOSS 
 python -m unittest discover -s tests -v
 ```
 
-`tests/test_pattern_v4.py` locks the 24 reference patterns and the Lệnh 1 → Lệnh 2 → Lệnh 1 progression so future edits cannot silently alter them.
+`tests/test_pattern_v4.py` locks the 24 reference patterns and the Lệnh 1 → Lệnh 2 → Lệnh 1 progression. `tests/test_prediction_source_v41.py` locks the Prediction winner parsing and the `btc-updown-5m-<timestamp>` slug format.
 
 ## Important
 
