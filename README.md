@@ -235,3 +235,30 @@ In the desktop panel:
 5. On later launches the two boxes may be left blank; the stored credentials continue to be used.
 
 If Prediction data is temporarily unavailable, the desktop panel and Telegram setup remain alive and the market engine keeps retrying in the background.
+
+
+## Native iOS app
+
+The primary iPhone client is now a native **SwiftUI** app under:
+
+```text
+ios/BossVaoLenhIOS
+```
+
+It is not a Safari wrapper and does not use `WKWebView`. The app connects directly to the cloud API using a Bearer password and stores the cloud password in the iOS Keychain.
+
+Native iOS features:
+
+- latest five resolved BTC Up/Down 5m colors;
+- BUY GREEN / BUY RED for the next round;
+- Lệnh 1 / Lệnh 2 amount;
+- daily wins, losses, P/L and end balance;
+- latest 100 V/X outcomes;
+- edit bet amounts, starting balance and payout;
+- enable/disable Telegram;
+- TEST TELEGRAM;
+- pull-to-refresh and foreground auto-refresh.
+
+The Oracle Cloud process remains the always-on engine. Closing the native iOS app or turning the iPhone off does not stop Boss.
+
+Build/install instructions are in `ios/BossVaoLenhIOS/README.md`. Native iOS installation requires Apple code signing. A Mac with Xcode plus an Apple ID can install to a personal iPhone; TestFlight/App Store distribution normally uses an Apple Developer membership.
