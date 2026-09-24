@@ -29,9 +29,6 @@ def _default_database_path() -> str:
 
 def _database_path() -> str:
     configured = os.getenv("DATABASE_PATH", "").strip()
-    # Old .env files contain DATABASE_PATH=data/bot.db. In a one-file Windows
-    # build that path follows the EXE/cwd and creates a fresh DB after rebuilds.
-    # Keep custom absolute paths, but never use a relative DB path on Windows.
     if os.name == "nt":
         if configured and os.path.isabs(configured):
             return configured
@@ -45,6 +42,8 @@ class Config:
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     symbol: str = field(default_factory=lambda: os.getenv("SYMBOL", "BTCUSDT").upper())
     base_bet: float = field(default_factory=lambda: _float("BASE_BET", 1.0))
+    second_bet: float = field(default_factory=lambda: _float("SECOND_BET", 2.0))
+    start_balance: float = field(default_factory=lambda: _float("START_BALANCE", 0.0))
     payout_rate: float = field(default_factory=lambda: _float("PAYOUT_RATE", 0.80))
     decision_second: int = field(default_factory=lambda: _int("DECISION_SECOND", 10))
     max_bet: float = field(default_factory=lambda: _float("MAX_BET", 50.0))
@@ -67,6 +66,10 @@ class Config:
             raise ValueError("TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID là bắt buộc")
         if self.base_bet <= 0 or self.base_bet > self.max_bet:
             raise ValueError("BASE_BET phải lớn hơn 0 và không vượt MAX_BET")
+        if self.second_bet <= 0:
+            raise ValueError("SECOND_BET phải lớn hơn 0")
+        if self.start_balance < 0:
+            raise ValueError("START_BALANCE không được âm")
         if not 0 < self.payout_rate <= 2:
             raise ValueError("PAYOUT_RATE phải nằm trong khoảng (0, 2]")
         if not 10 <= self.decision_second <= 20:
