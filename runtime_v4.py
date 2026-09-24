@@ -14,7 +14,7 @@ import aiosqlite
 from config import Config
 from prediction_source import PredictionHistorySource
 
-APP_VERSION = "4.1.0"
+APP_VERSION = "4.2.0"
 BINANCE_REST = "https://fapi.binance.com"
 INTERVAL_MS = 300_000
 POLL_SECONDS = 1.0
@@ -834,7 +834,10 @@ class PatternSignalBot:
                 try:
                     from mobile_web import MobileWebServer
                     self.mobile_server = MobileWebServer(
-                        self, self.config.mobile_host, self.config.mobile_port
+                        self,
+                        self.config.mobile_host,
+                        self.config.mobile_port,
+                        self.config.mobile_password,
                     )
                     await self.mobile_server.start()
                     self._set_snapshot(
