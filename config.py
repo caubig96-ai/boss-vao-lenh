@@ -69,6 +69,11 @@ class Config:
     mobile_enabled: bool = field(default_factory=lambda: _bool("MOBILE_ENABLED", True))
     mobile_host: str = field(default_factory=lambda: os.getenv("MOBILE_HOST", "0.0.0.0").strip())
     mobile_port: int = field(default_factory=lambda: _int("MOBILE_PORT", 8765))
+    mobile_password: str = field(
+        default_factory=lambda: os.getenv(
+            "MOBILE_PASSWORD", os.getenv("APP_PASSWORD", "123")
+        )
+    )
 
     @property
     def timezone(self):
@@ -96,3 +101,5 @@ class Config:
             raise ValueError("PREDICTION_SOURCE chỉ nhận predictfun hoặc futures")
         if not 1 <= self.mobile_port <= 65535:
             raise ValueError("MOBILE_PORT không hợp lệ")
+        if self.mobile_enabled and len(self.mobile_password) < 4:
+            raise ValueError("MOBILE_PASSWORD phải có ít nhất 4 ký tự")
