@@ -20,7 +20,7 @@ main{max-width:440px;margin:auto;padding:80px 18px}section{background:#171d24;bo
 h1{margin:0 0 8px;font-size:25px}.muted{color:#93a0ad;font-size:13px;margin-bottom:18px}input,button{width:100%;border:0;border-radius:12px;padding:14px;font-size:16px}
 input{background:#0f1318;color:white;border:1px solid #28313b;margin-bottom:12px}button{background:#4ba3ff;color:white;font-weight:800}.err{color:#ff8585;margin-top:12px}
 </style></head><body><main><section>
-<h1>Boss 5 Nến</h1><div class="muted">Đăng nhập giao diện iPhone</div>
+<h1>Boss 5 Nến</h1><div class="muted">Đăng nhập Boss Web</div>
 <form method="post" action="/login">
 <input type="password" name="password" placeholder="Mật khẩu" autocomplete="current-password" autofocus>
 <button type="submit">MỞ BOSS</button>
@@ -93,7 +93,7 @@ input{background:#0f1318;color:white;border:1px solid var(--line);width:100%}.fo
   <div id="error" class="err"></div>
 </section>
 
-<div class="foot">Boss chạy trên cloud 24/7. Anh có thể tắt PC và tắt iPhone; server vẫn tiếp tục đọc kết quả 5 phút, lưu lịch sử và gửi Telegram. Khi cần xem lại, chỉ mở biểu tượng Boss trên iPhone.</div>
+<div class="foot">Boss chạy trên cloud 24/7. Có thể tắt PC và tắt điện thoại; server vẫn tiếp tục đọc kết quả 5 phút, lưu lịch sử và gửi Telegram. Khi cần xem lại, mở Boss Web bằng Safari/Chrome hoặc biểu tượng đã thêm vào màn hình chính.</div>
 </main>
 <script>
 const $=id=>document.getElementById(id);let loaded=false;
@@ -184,7 +184,7 @@ class MobileWebServer:
         await self.runner.setup()
         site = web.TCPSite(self.runner, self.host, self.port)
         await site.start()
-        log.info("iPhone dashboard listening on %s:%s", self.host, self.port)
+        log.info("Boss mobile web listening on %s:%s", self.host, self.port)
 
     async def stop(self) -> None:
         if self.runner:
