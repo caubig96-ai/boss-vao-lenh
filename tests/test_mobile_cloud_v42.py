@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class MobileCloudV42Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "4.2.0")
+        self.assertEqual(APP_VERSION, "4.2.1")
 
     def test_mobile_password_defaults_to_app_password(self):
         cfg = Config(
