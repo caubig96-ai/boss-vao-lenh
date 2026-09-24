@@ -85,8 +85,9 @@ class Config:
             raise
 
     def validate(self) -> None:
-        if not self.telegram_token or not self.telegram_chat_id:
-            raise ValueError("TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID là bắt buộc")
+        # Telegram is optional at desktop startup. Credentials can be entered
+        # and persisted from the Boss UI. Cloud still validates them in
+        # load_cloud_environment() before Config is created.
         if self.base_bet <= 0 or self.base_bet > self.max_bet:
             raise ValueError("BASE_BET phải lớn hơn 0 và không vượt MAX_BET")
         if self.second_bet <= 0:
