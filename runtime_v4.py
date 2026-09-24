@@ -387,7 +387,19 @@ class PatternSignalBot:
                 self.config.predict_api_key,
             )
         await self.telegram.open()
-        await self._initial_market_sync()
+        try:
+            await self._initial_market_sync()
+        except Exception as exc:
+            # The control panel and Telegram configuration must remain usable
+            # even when the market source is temporarily unavailable.
+            log.exception("Initial market sync failed; continuing in retry mode")
+            source_error = self.prediction_history.last_error if self.prediction_history else ""
+            self._set_snapshot(
+                connected=False,
+                status="Nguồn dữ liệu chưa sẵn sàng • Boss sẽ tự thử lại",
+                error=str(exc),
+                source_error=source_error,
+            )
         await self._refresh_snapshot()
 
     async def close(self) -> None:
