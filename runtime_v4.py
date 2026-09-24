@@ -14,7 +14,7 @@ import aiosqlite
 from config import Config
 from prediction_source import PredictionHistorySource
 
-APP_VERSION = "4.2.0"
+APP_VERSION = "4.2.1"
 BINANCE_REST = "https://fapi.binance.com"
 INTERVAL_MS = 300_000
 POLL_SECONDS = 1.0
@@ -116,10 +116,21 @@ class TelegramSignalSender:
     """One-way Telegram sender. V4 does not poll commands or send result/status cards."""
 
     def __init__(self, token: str, chat_id: str):
-        self.base_url = f"https://api.telegram.org/bot{token}"
-        self.chat_id = str(chat_id)
+        self.token = ""
+        self.base_url = ""
+        self.chat_id = ""
         self.session: aiohttp.ClientSession | None = None
         self.last_error = ""
+        self.configure(token, chat_id)
+
+    def configure(self, token: str, chat_id: str) -> None:
+        self.token = str(token or "").strip()
+        self.chat_id = str(chat_id or "").strip()
+        self.base_url = f"https://api.telegram.org/bot{self.token}" if self.token else ""
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.token and self.chat_id)
 
     async def open(self) -> None:
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
@@ -129,6 +140,8 @@ class TelegramSignalSender:
             await self.session.close()
 
     async def send(self, text: str) -> int:
+        if not self.is_configured:
+            raise RuntimeError("Telegram chưa cấu hình. Hãy nhập Bot Token và Chat ID trong Boss.")
         if not self.session:
             raise RuntimeError("Telegram session chưa mở")
         payload = {
@@ -167,7 +180,8 @@ class PatternSignalBot:
             "symbol": config.symbol,
             "source_label": "Binance Prediction BTC Up/Down 5m" if config.prediction_source == "predictfun" else "Binance Futures M5",
             "source_error": "",
-            "telegram_status": "Chưa gửi / chưa kiểm tra",
+            "telegram_status": "Chưa cấu hình" if not self.telegram.is_configured else "Đã cấu hình • chưa kiểm tra",
+            "telegram_configured": self.telegram.is_configured,
             "mobile_status": "Chưa khởi động",
             "mobile_port": int(config.mobile_port),
             "colors": [],
@@ -300,12 +314,32 @@ class PatternSignalBot:
             "current_step": 1,
             "default_start_balance": default_start,
             "last_source_open_time": 0,
+            "telegram_token": self.config.telegram_token,
+            "telegram_chat_id": self.config.telegram_chat_id,
         }
         for key, value in defaults.items():
             await self.db.execute(
                 "INSERT OR IGNORE INTO pattern_settings(key,value) VALUES(?,?)",
                 (key, str(value)),
             )
+        saved_token = await self._db_get("telegram_token", self.config.telegram_token)
+        saved_chat_id = await self._db_get("telegram_chat_id", self.config.telegram_chat_id)
+        if not saved_token and self.config.telegram_token:
+            saved_token = self.config.telegram_token
+            await self._db_set("telegram_token", saved_token)
+        if not saved_chat_id and self.config.telegram_chat_id:
+            saved_chat_id = self.config.telegram_chat_id
+            await self._db_set("telegram_chat_id", saved_chat_id)
+        self.telegram.configure(saved_token, saved_chat_id)
+        self._set_snapshot(
+            telegram_configured=self.telegram.is_configured,
+            telegram_status=(
+                "Đã cấu hình • chưa kiểm tra"
+                if self.telegram.is_configured
+                else "Chưa cấu hình Bot Token / Chat ID"
+            ),
+        )
+
         previous_source = await self._db_get("market_data_source", "")
         current_source = self.config.prediction_source
         if previous_source != current_source:
@@ -529,6 +563,17 @@ class PatternSignalBot:
             return True
 
         telegram_enabled = await self._db_get("telegram_enabled", "1") == "1"
+        if telegram_enabled and not self.telegram.is_configured:
+            self._set_snapshot(
+                telegram_status="Chưa cấu hình Bot Token / Chat ID",
+                telegram_configured=False,
+            )
+            await self.db.execute(
+                "UPDATE pattern_signals SET result_notified=1 WHERE id=?",
+                (int(row["id"]),),
+            )
+            await self.db.commit()
+            return True
         if not telegram_enabled:
             await self.db.execute(
                 "UPDATE pattern_signals SET result_notified=1 WHERE id=?",
@@ -628,7 +673,12 @@ class PatternSignalBot:
         }
         self._set_snapshot(last_signal=signal, recommendation=direction)
         telegram_enabled = await self._db_get("telegram_enabled", "1") == "1"
-        if telegram_enabled:
+        if telegram_enabled and not self.telegram.is_configured:
+            self._set_snapshot(
+                telegram_status="Chưa cấu hình Bot Token / Chat ID",
+                telegram_configured=False,
+            )
+        elif telegram_enabled:
             try:
                 await self.telegram.send(await self.signal_text(signal))
                 self._set_snapshot(
@@ -693,6 +743,25 @@ class PatternSignalBot:
             f"Mẫu: {snap['pattern']} • Khung: {snap['frame']}\n"
             f"Hôm nay: {_money(snap['daily_pnl'])} USDT"
         )
+
+    async def update_telegram_credentials(self, token: str, chat_id: str) -> None:
+        token = str(token or "").strip()
+        chat_id = str(chat_id or "").strip()
+        if not token or not chat_id:
+            raise ValueError("Bot Token và Chat ID không được để trống")
+        if ":" not in token:
+            raise ValueError("Bot Token không đúng định dạng Telegram")
+        async with self._settings_lock:
+            assert self.db is not None
+            await self._db_set("telegram_token", token)
+            await self._db_set("telegram_chat_id", chat_id)
+            await self.db.commit()
+            self.telegram.configure(token, chat_id)
+            self._set_snapshot(
+                telegram_configured=True,
+                telegram_status="Đã lưu Token / Chat ID • chưa test",
+                error="",
+            )
 
     async def test_telegram(self) -> int:
         message_id = await self.telegram.send(
@@ -790,6 +859,7 @@ class PatternSignalBot:
             bet2=bet2,
             payout_percent=payout,
             telegram_enabled=telegram_enabled,
+            telegram_configured=self.telegram.is_configured,
             day=today,
             start_balance=float(day_row["start_balance"]),
             daily_pnl=float(day_row["pnl"]),
