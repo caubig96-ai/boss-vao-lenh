@@ -1,0 +1,1 @@
+const C="boss-iphone-static-v1";self.addEventListener("install",e=>e.waitUntil(caches.open(C).then(c=>c.addAll(["./","./index.html","./manifest.webmanifest"]))));self.addEventListener("fetch",e=>{if(e.request.url.includes("api.predict.fun"))return;e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)))})
