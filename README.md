@@ -1,6 +1,6 @@
 # Boss Vào Lệnh V4.2.1
 
-V4.2.1 is the five-result Prediction build with an always-on cloud mode and a password-protected iPhone control panel. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
+V4.2.1 is the five-result Prediction build with an always-on cloud mode and a password-protected mobile web control panel. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus. By default, the five colors come from resolved BTC Up/Down 5m Prediction markets instead of BTCUSDT Futures candle colors.
 
 ## Active signal rule
 
@@ -74,15 +74,15 @@ P/L uses the configured payout rate. A win adds `bet × payout_rate`; a loss sub
 
 The desktop panel now has a **TEST TELEGRAM** button. Press it after rebuilding. A successful test sends one manual diagnostic message to the configured Telegram chat and the panel shows an OK timestamp. If the bot token/chat ID is wrong or Telegram is unreachable, the exact error is shown in the panel and log.
 
-## iPhone dashboard
+## Mobile web dashboard
 
-V4.2.1 starts a read-only phone dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
+V4.2.1 starts a mobile-first web dashboard on port `8765` by default. The desktop panel shows the exact LAN address, for example:
 
 ```text
 http://192.168.1.20:8765
 ```
 
-Connect the iPhone and PC to the same Wi-Fi, open that address in Safari, then use **Share → Add to Home Screen**. The phone view contains the five latest Prediction colors, next signal, stake step, daily P/L and the 100-result V/X grid.
+When the dashboard is hosted on Cloud, open its public URL from Safari/Chrome using any Wi-Fi or 4G/5G connection. On iPhone, **Share → Add to Home Screen** gives it an app-like icon. The phone view contains the five latest Prediction colors, next signal, stake step, daily P/L and the 100-result V/X grid.
 
 If Windows Firewall blocks the page, allow `BossVaoLenh.exe` on Private networks. The phone dashboard is read-only.
 
@@ -162,7 +162,7 @@ python -m unittest discover -s tests -v
 The pattern table is a fixed rule supplied by the operator. The software records and applies that rule; it does not guarantee profitability or future market outcomes. Test with non-production funds before relying on it operationally.
 
 
-## Always-on iPhone cloud mode
+## Always-on web cloud mode
 
 This is the recommended daily setup when the PC should stay off.
 
@@ -170,7 +170,7 @@ The architecture is:
 
 ```text
 BTC Up/Down 5m Prediction -> Oracle Cloud Boss (24/7) -> Telegram
-                                            -> iPhone web app
+                                            -> mobile web app
 ```
 
 The cloud process is installed as a `systemd` service with `Restart=always` and is enabled at boot. The iPhone is only a remote screen/controller: turning the iPhone off, closing Safari, or turning the PC off does not stop the Boss.
@@ -210,7 +210,7 @@ bash deploy/oracle/mobile_public.sh
 
 The helper prints the server's public IPv4 URL. Oracle Cloud must allow inbound TCP to the configured mobile port (default `8765`). Once that ingress rule exists, the iPhone can open the URL using any Wi-Fi or 4G/5G connection; it does not need to be on the same network as the server or PC.
 
-The iPhone panel is password protected. It can:
+The web panel is password protected. It can:
 
 - display the latest five resolved Prediction colors;
 - display the next BUY color and stake step;
@@ -237,9 +237,9 @@ In the desktop panel:
 If Prediction data is temporarily unavailable, the desktop panel and Telegram setup remain alive and the market engine keeps retrying in the background.
 
 
-## Native iOS app
+## Optional native iOS code (not the primary client)
 
-The primary iPhone client is now a native **SwiftUI** app under:
+The repository still contains an optional native SwiftUI experiment under:
 
 ```text
 ios/BossVaoLenhIOS
@@ -259,6 +259,6 @@ Native iOS features:
 - TEST TELEGRAM;
 - pull-to-refresh and foreground auto-refresh.
 
-The Oracle Cloud process remains the always-on engine. Closing the native iOS app or turning the iPhone off does not stop Boss.
+The primary phone client is the mobile web dashboard. The Oracle Cloud process remains the always-on engine, so closing the browser or turning the phone off does not stop Boss.
 
 Build/install instructions are in `ios/BossVaoLenhIOS/README.md`. Native iOS installation requires Apple code signing. A Mac with Xcode plus an Apple ID can install to a personal iPhone; TestFlight/App Store distribution normally uses an Apple Developer membership.
