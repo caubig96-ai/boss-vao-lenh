@@ -1,10 +1,10 @@
-# Boss Vào Lệnh V4.0.0
+# Boss Vào Lệnh V4.0.1
 
 V4 is a clean five-candle pattern build. The active Windows and cloud launchers no longer use the old analysis modes, inverse mode, confidence scoring, consensus thresholds, or Telegram control menus.
 
 ## Active signal rule
 
-The tool reads official Binance Futures M5 candles for `SYMBOL`. After each 5-minute candle closes, it looks at the five most recent closed candle colors. A signal is sent only when those five colors match one of the 24 fixed rows below. `G` = green, `R` = red.
+The tool reads official Binance Futures M5 candles for `SYMBOL`. The fifth candle is the M5 candle that was live and has just finished closing; the other four are the four candles immediately before it. As soon as that live candle closes, the tool evaluates those five closed colors and targets the M5 candle that starts immediately afterward. A signal is sent only when the five colors match one of the 24 fixed rows below. `G` = green, `R` = red.
 
 | 5 closed candles | Buy |
 |---|---|
@@ -35,17 +35,28 @@ The tool reads official Binance Futures M5 candles for `SYMBOL`. After each 5-mi
 
 A doji candle or any sequence outside this table produces no Telegram signal.
 
-## Telegram message
+## Telegram messages
 
-V4 sends only the entry signal. There are no startup cards, result cards, old mode menus, confidence cards, or follow-up alerts.
+At an M5 close, the previous signal is settled first. Telegram sends the WIN/LOSS result card first, then the new BUY card for the immediately following M5 candle when the latest five-candle sequence matches the table. Both cards show the current win/loss totals. The entry card always includes the just-closed live M5 as candle number five.
 
-Example:
+Example result:
 
 ```text
-🔴 MUA ĐỎ
+✅ THẮNG • MUA ĐỎ
+⏰ Khung giờ: 10:00–10:05
+🕯 Nến kết quả: 🔴 ĐỎ
+💵 Lệnh 1: 1.00 USDT • P/L: +0.80 USDT
+📊 Thắng: 7 • Thua: 3
+```
+
+Immediately after it, when the new five-candle group matches:
+
+```text
+🟢 MUA XANH
 ⏰ Khung giờ: 10:05–10:10
-🕯 5 nến vừa kết thúc: 🔴 🟢 🟢 🔴 🔴
-💵 Lệnh 1: 1.00 USDT
+🕯 5 nến gần nhất đã đóng: 🔴 🟢 🟢 🔴 🔴
+💵 Lệnh 2: 2.00 USDT
+📊 Thắng: 7 • Thua: 3
 ```
 
 ## Money sequence
@@ -115,7 +126,7 @@ nano .env.cloud
 bash deploy/oracle/install.sh
 ```
 
-The cloud process sends the same concise signal card and does not send the old mode/status/result cards.
+The cloud process uses the same result-first flow: settle and announce WIN/LOSS first, then send the next BUY card when the latest five-candle group matches.
 
 ## Tests
 
