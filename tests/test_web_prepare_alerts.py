@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class WebPrepareAlertsTests(unittest.TestCase):
+    def setUp(self):
+        self.source = (ROOT / "web-iphone" / "index.html").read_text(encoding="utf-8")
+
+    def test_exact_16_patterns_remain_in_web(self):
+        self.assertIn("4 nhóm × 4 mẫu", self.source)
+        self.assertIn('["RGGRR","G"]', self.source)
+        self.assertIn('["RGGRG","R"]', self.source)
+        self.assertIn('["RGRRR","G"]', self.source)
+        self.assertIn('["RGRRG","R"]', self.source)
+        self.assertIn('["GGRGG","G"]', self.source)
+
+    def test_prepare_alert_happens_at_last_minute(self):
+        self.assertIn("remain<=60&&remain>0", self.source)
+        self.assertIn("CHUẨN BỊ VÀO LỆNH", self.source)
+        self.assertIn("beepSequence([880,880]", self.source)
+
+    def test_final_signal_uses_closed_live_round(self):
+        self.assertIn("async function finalizeLiveRound", self.source)
+        self.assertIn("closed=await fetchRound(liveStart)", self.source)
+        self.assertIn("const code=info.prefix+closed.c", self.source)
+        self.assertIn("MUA XANH", self.source)
+        self.assertIn("MUA ĐỎ", self.source)
+
+    def test_browser_vibration_is_best_effort(self):
+        self.assertIn("navigator.vibrate", self.source)
+
+    def test_ios_requires_manual_audio_activation(self):
+        self.assertIn("CHẠM ĐỂ KÍCH HOẠT", self.source)
+        self.assertIn("AudioContext", self.source)
+
+
+if __name__ == "__main__":
+    unittest.main()
