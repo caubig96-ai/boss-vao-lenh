@@ -127,7 +127,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Chỉ báo lệnh khi tỷ lệ thắng của đúng mẫu đạt từ 60% trở lên. Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu.</div>
+  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Nếu mẫu gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu. Hướng được chọn phải có chỉ số tương ứng từ 60% trở lên. Nếu mẫu chưa có trong 100 lệnh, tool mới xét mẫu thắng/thua mạnh nhất trong 16 mẫu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -267,6 +267,8 @@ function hideTradeAlert(){
   $("tradeAlert").className="alertbox";
 }
 function firePrepareAlert(liveStart,remain,stage){
+  if(stage===60&&prepare60Start===liveStart)return;
+  if(stage===30&&prepare30Start===liveStart)return;
   const livePattern=currentLivePattern();
   if(!livePattern||!livePattern.pred)return;
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
@@ -274,11 +276,9 @@ function firePrepareAlert(liveStart,remain,stage){
   const decision=currentAdaptiveDecision(livePattern.code);
   if(!decision.allow)return;
   if(stage===60){
-    if(prepare60Start===liveStart)return;
     prepare60Start=liveStart;
     sessionStorage.setItem("prepare_60_start",String(liveStart));
   }else{
-    if(prepare30Start===liveStart)return;
     prepare30Start=liveStart;
     sessionStorage.setItem("prepare_30_start",String(liveStart));
   }
@@ -665,12 +665,19 @@ function renderPatternStats(){
   });
 }
 function buildSignals(){
-  const out=[];for(let i=4;i<rounds.length;i++){
-    const w=rounds.slice(i-4,i+1);if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
-    const p=w.map(x=>x.c).join("");const pred=PATTERNS[p];if(!pred)continue;
-    const targetT=w[4].t+INTERVAL;const actual=rounds.find(x=>x.t===targetT);
+  const out=[];
+  const byTime=new Map(rounds.map(x=>[x.t,x]));
+  for(let i=4;i<rounds.length;i++){
+    const w=rounds.slice(i-4,i+1);
+    if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
+    const p=w.map(x=>x.c).join("");
+    const pred=PATTERNS[p];
+    if(!pred)continue;
+    const targetT=w[4].t+INTERVAL;
+    const actual=byTime.get(targetT);
     out.push({sourceT:w[4].t,targetT,pattern:p,pred,actual:actual?.c||null});
-  }return out
+  }
+  return out
 }
 function decisionFromLast100(code,settled){
   const recent=settled.slice(-100);
@@ -753,8 +760,9 @@ function rawRowsFromStats(rawStats){
     return {code,pred:PATTERNS[code],wins:rs.wins,losses:rs.losses,settled:rs.settled};
   });
 }
-function currentAdaptiveDecision(code){
-  return adaptiveDecisionFromRows(code,compute().settled,buildPatternStats());
+function currentAdaptiveDecision(code,settledOverride=null){
+  const settled=settledOverride||compute().settled;
+  return adaptiveDecisionFromRows(code,settled,buildPatternStats());
 }
 function compute(){
   const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
@@ -861,7 +869,7 @@ function render(){
   }
   const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
-  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code):null;
+  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code,calc.settled):null;
   const tentativeAllowed=!!(livePattern?.pred&&adaptive?.allow);
   const pred=finalSignal?.pred||(tentativeAllowed?adaptive.direction:null);
   const targetT=finalSignal?currentStart:(liveMarket.end||null);
