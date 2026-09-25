@@ -115,7 +115,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua</div></div><span id="count" class="label">0 lệnh</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • chỉ tính lệnh thực sự được phép đánh</div></div><span id="count" class="label">0 lệnh</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -265,8 +265,12 @@ function hideTradeAlert(){
   $("tradeAlert").className="alertbox";
 }
 function firePrepareAlert(liveStart,remain,stage){
-  const info=prefixInfo(liveStart);
-  if(!info)return;
+  const livePattern=currentLivePattern();
+  if(!livePattern||!livePattern.pred)return;
+  const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
+  if(currentLiveStart!==liveStart)return;
+  const gate=currentHistoryDecision(livePattern.code);
+  if(!gate.allow)return;
   if(stage===60){
     if(prepare60Start===liveStart)return;
     prepare60Start=liveStart;
@@ -276,12 +280,14 @@ function firePrepareAlert(liveStart,remain,stage){
     prepare30Start=liveStart;
     sessionStorage.setItem("prepare_30_start",String(liveStart));
   }
-  const redText=info.redBuy==="G"?"XANH":"ĐỎ";
-  const greenText=info.greenBuy==="G"?"XANH":"ĐỎ";
+  const buyText=livePattern.pred==="G"?"XANH":"ĐỎ";
+  const historyText=gate.status==="WIN"
+    ?"mẫu này lần gần nhất trong 100 lệnh là THẮNG"
+    :"mẫu này chưa có trong 100 lệnh • theo công thức 16 mẫu";
   showTradeAlert(
     "prepare",
     stage===60?"⚠️ CHUẨN BỊ VÀO LỆNH":"⚠️ CÒN 30 GIÂY",
-    "4 nến khớp "+info.prefix+" • còn "+remain+" giây. Nếu nến live đóng ĐỎ → MUA "+redText+"; đóng XANH → MUA "+greenText+"."
+    livePattern.group+" • "+livePattern.code+" • "+historyText+" • nếu giữ màu đến lúc đóng → MUA "+buyText+"."
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -311,7 +317,16 @@ async function finalizeLiveRound(liveStart){
     if(!pred){
       lastFinalSignal=null;
       localStorage.removeItem("last_final_signal");
-      showTradeAlert("prepare","KHÔNG VÀO LỆNH","Mẫu đóng "+code+" không thuộc 16 mẫu.");
+      hideTradeAlert();
+      return;
+    }
+    const gate=currentHistoryDecision(code);
+    if(!gate.allow){
+      lastFinalSignal=null;
+      localStorage.removeItem("last_final_signal");
+      hideTradeAlert();
+      setStatus("BỎ LỆNH "+code+" • lần gần nhất của mẫu này trong 100 lệnh là THUA.","");
+      render();
       return;
     }
     lastFinalSignal={
@@ -320,14 +335,15 @@ async function finalizeLiveRound(liveStart){
       code,
       pred,
       group:patternGroupName(code),
-      closedColor:closed.c
+      closedColor:closed.c,
+      historyGate:gate.status
     };
     localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
     const buyText=pred==="G"?"MUA XANH":"MUA ĐỎ";
     showTradeAlert(
       pred==="G"?"green":"red",
       (pred==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
-      (lastFinalSignal.group||"")+" • mẫu "+code+" đã chốt • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+      (lastFinalSignal.group||"")+" • mẫu "+code+" đã chốt • "+(gate.status==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo 16 mẫu")+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
     );
     threeSecondAlert(pred==="G"?"green":"red");
     flash(pred==="G"?"green":"red");
@@ -536,14 +552,44 @@ function buildSignals(){
     out.push({sourceT:w[4].t,targetT,pattern:p,pred,actual:actual?.c||null});
   }return out
 }
+function decisionFromLast100(code,settled){
+  const recent=settled.slice(-100);
+  for(let i=recent.length-1;i>=0;i--){
+    const item=recent[i];
+    if(item.pattern!==code)continue;
+    return {
+      allow:item.win===true,
+      status:item.win===true?"WIN":"LOSS",
+      found:true,
+      item
+    };
+  }
+  return {allow:true,status:"NEW",found:false,item:null};
+}
+function currentHistoryDecision(code){
+  return decisionFromLast100(code,compute().settled);
+}
 function compute(){
   const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
-  let step=1,pnl=0,wins=0,losses=0;const settled=[];
-  for(const s of buildSignals()){
-    const amount=step===2?bet2:bet1;s.step=step;s.amount=amount;
-    if(s.actual){s.win=s.pred===s.actual;if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}settled.push(s);step=(step===1&&s.win)?2:1}
+  let step=1,pnl=0,wins=0,losses=0;const settled=[],skipped=[];
+  for(const raw of buildSignals()){
+    if(!raw.actual)continue;
+    const s={...raw};
+    const gate=decisionFromLast100(s.pattern,settled);
+    if(!gate.allow){
+      s.skipped=true;
+      s.skipReason="Mẫu gần nhất trong 100 lệnh là THUA";
+      skipped.push(s);
+      continue;
+    }
+    const amount=step===2?bet2:bet1;
+    s.step=step;s.amount=amount;s.historyGate=gate.status;
+    s.win=s.pred===s.actual;
+    if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}
+    settled.push(s);
+    step=(step===1&&s.win)?2:1;
   }
-  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled}
+  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,skipped}
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
 function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
@@ -612,19 +658,27 @@ function render(){
   }
   const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
-  const pred=finalSignal?.pred||livePattern?.pred||null;
+  const tentativeGate=livePattern?.pred?currentHistoryDecision(livePattern.code):null;
+  const tentativeAllowed=!!(livePattern?.pred&&tentativeGate?.allow);
+  const pred=finalSignal?.pred||(tentativeAllowed?livePattern?.pred:null);
   const targetT=finalSignal?currentStart:(liveMarket.end||null);
   $("buy").textContent=finalSignal
     ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
-    :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
+    :livePattern?.pred&&!tentativeAllowed
+      ?"BỎ MẪU • GẦN NHẤT THUA"
+      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
   if(finalSignal){
-    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • vào lệnh ngay trong vòng hiện tại.";
-  }else if(livePattern&&pred){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" đang hình thành. Chỉ là dự kiến; chờ nến live đóng mới chốt lệnh.";
+    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.historyGate==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo công thức 16 mẫu")+" • vào lệnh ngay.";
+  }else if(livePattern?.pred&&tentativeGate&&!tentativeGate.allow){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • lần gần nhất trong 100 lệnh là THUA → bỏ lệnh, không cảnh báo.";
+  }else if(livePattern?.pred&&tentativeGate?.status==="WIN"){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • lần gần nhất trong 100 lệnh là THẮNG → được phép chờ chốt.";
+  }else if(livePattern?.pred){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" chưa có trong 100 lệnh → vẫn theo công thức 16 mẫu.";
   }else if(livePattern){
     $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 16 mẫu; vẫn chờ màu đóng cuối cùng.";
   }else{
