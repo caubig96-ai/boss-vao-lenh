@@ -40,7 +40,12 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn('status:item.win===true?"WIN":"LOSS"', self.source)
         self.assertIn('return {allow:true,status:"NEW"', self.source)
         self.assertIn("BỎ MẪU • GẦN NHẤT THUA", self.source)
-        self.assertIn("chưa có trong 100 lệnh • theo công thức 16 mẫu", self.source)
+
+    def test_pattern_rate_must_be_at_least_60_percent(self):
+        self.assertIn("function currentPatternRateDecision", self.source)
+        self.assertIn("allow:rate>=60", self.source)
+        self.assertIn("TỶ LỆ < 60%", self.source)
+        self.assertIn("yêu cầu từ 60% trở lên", self.source)
 
     def test_browser_vibration_is_best_effort(self):
         self.assertIn("navigator.vibrate", self.source)
