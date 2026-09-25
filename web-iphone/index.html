@@ -41,7 +41,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="label">5 kết quả BTC Up/Down 5m gần nhất đã phân xử</div>
+  <div class="label">4 nến đã đóng + nến live hiện tại • đúng 16 mẫu trong ảnh mới</div>
   <div class="candles" id="candles"></div>
   <div class="row">
     <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
@@ -105,16 +105,17 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Thống kê tất cả mô hình 5 nến</b>
-      <div class="label">32 tổ hợp • 24 mẫu có lệnh theo bảng của anh</div>
+      <b>Thống kê 16 mô hình 5 nến</b>
+      <div class="label">4 nhóm × 4 mẫu • chỉ dùng bảng ảnh mới</div>
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu. Mẫu “KHÔNG VÀO” vẫn ghi số lần xuất hiện nhưng không tính thắng/thua.</div>
+  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
         <tr>
+          <th>Nhóm</th>
           <th>Mẫu 5 nến</th>
           <th>Lệnh</th>
           <th>Xuất hiện</th>
@@ -136,7 +137,13 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <div class="note">Quan trọng: bản này không có máy chủ chạy nền. Khi Safari/PWA bị đóng, bị iOS treo nền hoặc điện thoại tắt, tool không thể tiếp tục theo dõi 5 phút hay tự gửi Telegram. Khi mở lại, nó sẽ tải lịch sử mới nhất rồi cập nhật.</div>
 </main>
 <script>
-const PATTERNS={RGGRR:"R",GRRGR:"R",GGRRR:"G",RRGGR:"G",RGGRG:"G",GRRGG:"G",GGRRG:"R",RRGGG:"R",RGGGR:"G",RRRGR:"R",GGGRR:"G",GRRRR:"R",RGRRR:"G",GRGGR:"R",RRGRR:"R",GGRGR:"G",RGGGG:"G",RRRGG:"R",GGGRG:"G",GRRRG:"R",RGRRG:"G",GRGGG:"R",RRGRG:"R",GGRGG:"G"};
+const PATTERN_GROUPS=[
+  {name:"Nhóm 1",items:[["RGGRR","G"],["GRRGR","G"],["GGRRR","G"],["RRGGR","G"]]},
+  {name:"Nhóm 2",items:[["RGGRG","R"],["GRRGG","R"],["GGRRG","R"],["RRGGG","R"]]},
+  {name:"Nhóm 3",items:[["RGRRR","G"],["GRGGR","G"],["RRGRR","R"],["GGRGR","G"]]},
+  {name:"Nhóm 4",items:[["RGRRG","R"],["GRGGG","R"],["RRGRG","R"],["GGRGG","G"]]}
+];
+const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
 const API="https://api.predict.fun";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -221,9 +228,11 @@ async function fetchLiveMarket(){
     const j=await r.json();
     liveMarket=extractLive(j,start);
     renderLive();
+    render();
   }catch(e){
     liveMarket={start,end:start+INTERVAL,startPrice:null,currentPrice:null,color:null,source:"Không lấy được dữ liệu live"};
     renderLive();
+    render();
   }
 }
 async function fetchRound(ts){
@@ -277,14 +286,11 @@ function startPolling(){
 }
 function consecutive(a,b){return b.t-a.t===INTERVAL}
 function allPatternCodes(){
-  const fixed=Object.keys(PATTERNS);
-  const all=[];
-  for(let mask=0;mask<32;mask++){
-    let code="";
-    for(let bit=4;bit>=0;bit--)code+=((mask>>bit)&1)?"R":"G";
-    all.push(code);
-  }
-  return fixed.concat(all.filter(code=>!PATTERNS[code]));
+  return PATTERN_GROUPS.flatMap(group=>group.items.map(item=>item[0]));
+}
+function patternGroupName(code){
+  const group=PATTERN_GROUPS.find(group=>group.items.some(item=>item[0]===code));
+  return group?group.name:"";
 }
 function patternIcons(code){return [...code].map(c=>c==="G"?"🟢":"🔴").join("")}
 function buildPatternStats(){
@@ -313,15 +319,16 @@ function renderPatternStats(){
   rows.forEach(row=>{
     const tr=document.createElement("tr");
     const rate=row.settled?row.wins/row.settled*100:null;
-    const action=row.pred==="G"?"MUA XANH":row.pred==="R"?"MUA ĐỎ":"KHÔNG VÀO";
-    const actionClass=row.pred==="G"?"buyg":row.pred==="R"?"buyr":"noentry";
+    const action=row.pred==="G"?"MUA XANH":"MUA ĐỎ";
+    const actionClass=row.pred==="G"?"buyg":"buyr";
     const rateClass=rate===null?"":rate>=50?"rateGood":"rateBad";
     tr.innerHTML=
+      '<td>'+patternGroupName(row.code)+'</td>'+
       '<td><span class="picons">'+patternIcons(row.code)+'</span><span class="mini">'+row.code+'</span></td>'+
       '<td class="'+actionClass+'">'+action+'</td>'+
       '<td>'+row.occurrences+'</td>'+
-      '<td class="'+(row.pred?"green":"noentry")+'">'+(row.pred?row.wins:"—")+'</td>'+
-      '<td class="'+(row.pred?"red":"noentry")+'">'+(row.pred?row.losses:"—")+'</td>'+
+      '<td class="green">'+row.wins+'</td>'+
+      '<td class="red">'+row.losses+'</td>'+
       '<td class="'+rateClass+'">'+(rate===null?"—":rate.toFixed(1)+"%")+'</td>';
     $("patternStats").appendChild(tr);
   });
@@ -366,22 +373,56 @@ function renderLive(){
   $("liveColorText").className="big "+(c==="G"?"green":c==="R"?"red":"");
   $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
 }
-function latestWindow(){
-  if(rounds.length<5)return null;for(let end=rounds.length-1;end>=4;end--){const w=rounds.slice(end-4,end+1);if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w}return null
+function latestClosed4(){
+  if(rounds.length<4)return null;
+  for(let end=rounds.length-1;end>=3;end--){
+    const w=rounds.slice(end-3,end+1);
+    if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w;
+  }
+  return null;
+}
+function currentLivePattern(){
+  const closed4=latestClosed4();
+  const liveColor=liveMarket.color;
+  if(!closed4||!liveColor)return null;
+  const expectedLiveStart=closed4[3].t+INTERVAL;
+  const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
+  if(expectedLiveStart!==currentLiveStart)return null;
+  const code=closed4.map(x=>x.c).join("")+liveColor;
+  return {closed4,liveColor,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
 }
 function render(){
-  const w=latestWindow(),calc=compute();$("candles").innerHTML="";
-  const colors=w?w.map(x=>x.c):[];for(let i=0;i<5;i++){const d=document.createElement("div");const c=colors[i]||"";d.className="dot "+(c==="G"?"g":c==="R"?"r":"");d.textContent=c?"●":"·";$("candles").appendChild(d)}
-  let pred=null,targetT=null;
-  if(w){const p=w.map(x=>x.c).join("");pred=PATTERNS[p]||null;targetT=w[4].t+INTERVAL}
-  $("buy").textContent=pred==="G"?"MUA XANH":pred==="R"?"MUA ĐỎ":w?"KHÔNG KHỚP MẪU":"CHỜ DỮ LIỆU";
+  const livePattern=currentLivePattern(),calc=compute();$("candles").innerHTML="";
+  const closedColors=livePattern?livePattern.closed4.map(x=>x.c):(latestClosed4()?.map(x=>x.c)||[]);
+  const colors=[...closedColors,liveMarket.color||""];
+  for(let i=0;i<5;i++){
+    const d=document.createElement("div");
+    const c=colors[i]||"";
+    d.className="dot "+(c==="G"?"g":c==="R"?"r":"");
+    d.textContent=c?"●":"·";
+    if(i===4)d.style.outline="2px solid rgba(76,165,255,.7)";
+    $("candles").appendChild(d);
+  }
+  const pred=livePattern?.pred||null;
+  const targetT=liveMarket.end||null;
+  $("buy").textContent=pred==="G"?"MUA XANH":pred==="R"?"MUA ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE";
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
-  const nextAmount=calc.step===2?calc.bet2:calc.bet1;$("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
-  if(targetT){const age=Math.floor(Date.now()/1000)-targetT;$("freshness").textContent=age<0?"Vòng kế tiếp chưa bắt đầu.":age<120?"Tín hiệu đang trong vòng hiện tại.":"Dữ liệu phân xử tới muộn; không nên coi đây là tín hiệu vào lệnh tức thời."}else $("freshness").textContent="";
-  $("wins").textContent=calc.wins;$("losses").textContent=calc.losses;$("pnl").textContent=(calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT";$("pnl").className=calc.pnl>0?"green":calc.pnl<0?"red":"";
+  const nextAmount=calc.step===2?calc.bet2:calc.bet1;
+  $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
+  if(livePattern&&pred){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" đang hình thành. Lệnh được chốt khi nến live kết thúc 5 phút.";
+  }else if(livePattern){
+    $("freshness").textContent="Mẫu "+livePattern.code+" không nằm trong 16 mẫu của ảnh mới.";
+  }else{
+    $("freshness").textContent="Đang chờ đủ 4 nến đóng liên tiếp và màu nến live.";
+  }
+  $("wins").textContent=calc.wins;$("losses").textContent=calc.losses;
+  $("pnl").textContent=(calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT";
+  $("pnl").className=calc.pnl>0?"green":calc.pnl<0?"red":"";
   $("balance").textContent=(calc.start+calc.pnl).toFixed(2)+" USDT";
-  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+" lệnh";$("history").innerHTML="";const padded=Array(100-hist.length).fill(null).concat(hist);
+  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+" lệnh";$("history").innerHTML="";
+  const padded=Array(100-hist.length).fill(null).concat(hist);
   padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
   renderPatternStats();
 }
