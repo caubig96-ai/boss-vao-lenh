@@ -52,7 +52,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="note" style="margin:6px 0 12px">Predict.fun Mainnet yêu cầu API key. Bật “Ghi nhớ” để lần sau mở web, tool tự chạy live và tự dựng 100 lệnh lịch sử mà không cần bấm kết nối.</div>
   <div class="field"><div class="label">Predict API Key</div><input id="apiKey" type="password" autocomplete="off"></div>
   <label class="row" style="justify-content:flex-start;margin:10px 0"><input id="rememberKey" type="checkbox" style="width:auto"> <span>Ghi nhớ API key trên iPhone này</span></label>
-  <button style="width:100%" onclick="connect()">KẾT NỐI & TẢI LỊCH SỬ</button>
+  <button id="connectBtn" style="width:100%" onclick="connect()">KẾT NỐI & TẢI LỊCH SỬ</button>
+  <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="forceHistory100()">↻ CẬP NHẬT 100 LỆNH</button>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
 </section>
@@ -486,7 +487,7 @@ function roundFromCategory(category){
   return Number.isFinite(t)&&c?{t,c}:null;
 }
 async function fetchResolvedCategoryPage(after=""){
-  const qs=new URLSearchParams({first:"100",status:"RESOLVED"});
+  const qs=new URLSearchParams({first:"100",status:"RESOLVED",marketVariant:"CRYPTO_UP_DOWN"});
   if(after)qs.set("after",after);
   const r=await fetch(API+"/v1/categories?"+qs.toString(),{
     headers:{"Accept":"application/json","x-api-key":runtimeKey},
@@ -524,6 +525,27 @@ async function fetchOlderRoundsFallback(maxRounds=900){
     await new Promise(r=>setTimeout(r,5000));
   }
   return fetched;
+}
+async function forceHistory100(){
+  if(!runtimeKey){
+    const key=$("apiKey").value.trim();
+    if(!key){setStatus("Nhập Predict API Key trước rồi bấm CẬP NHẬT 100 LỆNH.","err");return}
+    runtimeKey=key;
+    sessionStorage.setItem("predict_api_key",key);
+    if($("rememberKey").checked)localStorage.setItem("predict_api_key",key);
+  }
+  if(historyLoading){
+    setStatus("Lịch sử đang được tải. Vui lòng chờ số đếm 0/100 tăng lên.","ok");
+    return;
+  }
+  const btn=$("historyBtn");
+  if(btn){btn.disabled=true;btn.textContent="ĐANG CẬP NHẬT..."}
+  try{
+    await refreshNow();
+    await ensureHistory100();
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="↻ CẬP NHẬT 100 LỆNH"}
+  }
 }
 async function ensureHistory100(){
   if(historyLoading||!runtimeKey)return;
@@ -566,7 +588,8 @@ async function ensureHistory100(){
       setStatus("Đã đồng bộ thời gian thực • lịch sử hiện dựng được "+count+"/100 lệnh. Tool sẽ giữ dữ liệu và bổ sung tiếp khi có thêm lịch sử.","ok");
     }
   }catch(e){
-    setStatus("Nến live vẫn chạy. Lỗi tải lịch sử tự động: "+String(e.message||e),"err");
+    const msg=String(e.message||e);
+    setStatus("Nến live vẫn chạy. Lỗi tải lịch sử: "+msg+(msg.includes("429")?" • API đang giới hạn tốc độ, chờ khoảng 1 phút rồi bấm CẬP NHẬT 100 LỆNH.":""),"err");
   }finally{
     historyLoading=false;
   }
@@ -603,7 +626,7 @@ async function connect(){
     await Promise.allSettled([fetchLiveMarket(),refreshNow()]);
     render();
     setStatus("Đã kết nối thời gian thực. Đang tự dựng lịch sử 100 lệnh...","ok");
-    ensureHistory100();
+    await ensureHistory100();
   }catch(e){
     setStatus(String(e.message||e)+"\nNếu trình duyệt báo CORS/network dù API key đúng, Predict.fun đang chặn gọi trực tiếp từ web.","err");
   }finally{
