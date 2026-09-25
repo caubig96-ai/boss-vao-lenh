@@ -35,17 +35,20 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("MUA XANH", self.source)
         self.assertIn("MUA ĐỎ", self.source)
 
-    def test_last_100_same_pattern_gate(self):
+    def test_last_100_same_pattern_drives_adaptive_mode(self):
         self.assertIn("function decisionFromLast100", self.source)
         self.assertIn('status:item.win===true?"WIN":"LOSS"', self.source)
-        self.assertIn('return {allow:true,status:"NEW"', self.source)
-        self.assertIn("BỎ MẪU • GẦN NHẤT THUA", self.source)
+        self.assertIn('return {status:"NEW"', self.source)
+        self.assertIn("A gần nhất THẮNG → giữ màu gốc", self.source)
+        self.assertIn("A gần nhất THUA → đảo màu", self.source)
 
-    def test_pattern_rate_must_be_at_least_60_percent(self):
-        self.assertIn("function currentPatternRateDecision", self.source)
-        self.assertIn("allow:rate>=60", self.source)
-        self.assertIn("TỶ LỆ < 60%", self.source)
-        self.assertIn("yêu cầu từ 60% trở lên", self.source)
+    def test_adaptive_mode_uses_60_percent_threshold(self):
+        self.assertIn("function adaptiveDecisionFromRows", self.source)
+        self.assertIn("rates.winRate>=60", self.source)
+        self.assertIn("rates.lossRate>=60", self.source)
+        self.assertIn("GLOBAL_WIN", self.source)
+        self.assertIn("GLOBAL_LOSS", self.source)
+        self.assertIn("oppositeColor", self.source)
 
 
     def test_auto_start_and_history_bootstrap(self):
