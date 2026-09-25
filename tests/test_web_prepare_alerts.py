@@ -19,10 +19,14 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn('["RGRRG","R"]', self.source)
         self.assertIn('["GGRGG","G"]', self.source)
 
-    def test_prepare_alert_happens_at_last_minute(self):
-        self.assertIn("remain<=60&&remain>0", self.source)
+    def test_prepare_alert_happens_twice_for_three_seconds(self):
+        self.assertIn("remain<=60&&remain>30", self.source)
+        self.assertIn("remain<=30&&remain>0", self.source)
         self.assertIn("CHUẨN BỊ VÀO LỆNH", self.source)
-        self.assertIn("beepSequence([880,880]", self.source)
+        self.assertIn("CÒN 30 GIÂY", self.source)
+        self.assertIn("threeSecondAlert", self.source)
+        self.assertIn("prepare_60_start", self.source)
+        self.assertIn("prepare_30_start", self.source)
 
     def test_final_signal_uses_closed_live_round(self):
         self.assertIn("async function finalizeLiveRound", self.source)
