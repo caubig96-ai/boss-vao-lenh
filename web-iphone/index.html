@@ -28,7 +28,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss 5 Nến</h1><div class="sub">Web chạy trực tiếp trên iPhone • không có Boss Cloud</div></div>
+  <div><h1>Boss 5 Nến</h1><div class="sub">Boss Cloud • dữ liệu lịch sử tự đồng bộ kể cả khi iPhone khóa màn hình</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -48,11 +48,10 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card" id="setupCard">
-  <b>Kết nối dữ liệu Prediction</b>
-  <div class="note" style="margin:6px 0 12px">Predict.fun Mainnet yêu cầu API key. Bật “Ghi nhớ” để lần sau mở web, tool tự chạy live và tự dựng 100 lệnh lịch sử mà không cần bấm kết nối.</div>
-  <div class="field"><div class="label">Predict API Key</div><input id="apiKey" type="password" autocomplete="off"></div>
-  <label class="row" style="justify-content:flex-start;margin:10px 0"><input id="rememberKey" type="checkbox" style="width:auto"> <span>Ghi nhớ API key trên iPhone này</span></label>
-  <button id="connectBtn" style="width:100%" onclick="connect()">KẾT NỐI & TẢI LỊCH SỬ</button>
+  <b>Boss Cloud</b>
+  <div class="note" style="margin:6px 0 12px">API key được giữ trong Cloudflare Secret. iPhone không cần lưu API key; lịch sử được lấy từ Boss Cloud.</div>
+  <div style="display:none"><input id="apiKey" type="password"><input id="rememberKey" type="checkbox"></div>
+  <button id="connectBtn" style="width:100%" onclick="forceHistory100()">ĐỒNG BỘ BOSS CLOUD</button>
   <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="forceHistory100()">↻ CẬP NHẬT 100 LỆNH</button>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
@@ -165,7 +164,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div id="status" class="status"></div>
 </section>
 
-<div class="note">Quan trọng: bản này không có máy chủ chạy nền. Khi Safari/PWA bị đóng, bị iOS treo nền hoặc điện thoại tắt, tool không thể tiếp tục theo dõi 5 phút hay tự gửi Telegram. Khi mở lại, nó sẽ tải lịch sử mới nhất rồi cập nhật.</div>
+<div class="note">Boss Cloud đồng bộ lịch sử theo lịch chạy trên Cloudflare. Khi mở lại trang trên iPhone, dữ liệu lịch sử mới nhất sẽ được nạp từ cloud; cảnh báo âm thanh trên iPhone vẫn chỉ hoạt động khi trang đang chạy.</div>
 </main>
 <script>
 const PATTERN_GROUPS=[
@@ -175,10 +174,10 @@ const PATTERN_GROUPS=[
   {name:"Nhóm 4",items:[["RGRRG","R"],["GRGGG","R"],["RRGRG","R"],["GGRGG","G"]]}
 ];
 const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
-const API="https://api.predict.fun";
+const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
-let runtimeKey=sessionStorage.getItem("predict_api_key")||"";
+let runtimeKey="cloud";
 let rounds=JSON.parse(localStorage.getItem("boss_rounds")||"[]");
 let pollTimer=null;
 let liveTimer=null;
@@ -309,7 +308,7 @@ function firePrepareAlert(liveStart,remain,stage){
   flash("prepare");
 }
 async function finalizeLiveRound(liveStart){
-  if(!runtimeKey||finalizingStart===liveStart||finalizedLiveStart===liveStart)return;
+  if(finalizingStart===liveStart||finalizedLiveStart===liveStart)return;
   const info=prefixInfo(liveStart);
   if(!info){
     finalizedLiveStart=liveStart;
@@ -393,8 +392,9 @@ function updateAlertPermissionUI(){
   }
 }
 function loadPrefs(){
-  const saved=localStorage.getItem("predict_api_key");
-  if(saved){runtimeKey=saved;$("apiKey").value=saved;$("rememberKey").checked=true}
+  localStorage.removeItem("predict_api_key");
+  sessionStorage.removeItem("predict_api_key");
+  runtimeKey="cloud";
   $("bet1").value=localStorage.getItem("bet1")||"1";
   $("bet2").value=localStorage.getItem("bet2")||"2";
   $("startBalance").value=localStorage.getItem("startBalance")||"0";
@@ -455,29 +455,27 @@ function extractLive(payload,startTs){
   }
 }
 async function fetchLiveMarket(){
-  if(!runtimeKey)return;
   const now=Math.floor(Date.now()/1000);
   const start=Math.floor(now/INTERVAL)*INTERVAL;
   try{
-    const r=await fetch(API+"/v1/categories/"+slug(start),{headers:{"Accept":"application/json","x-api-key":runtimeKey},cache:"no-store"});
-    if(r.status===401||r.status===403)throw new Error("API key không hợp lệ.");
+    const r=await fetch(CLOUD+"/category?ts="+start,{cache:"no-store"});
     if(!r.ok)return;
     const j=await r.json();
     liveMarket=extractLive(j,start);
     renderLive();
     render();
   }catch(e){
-    liveMarket={start,end:start+INTERVAL,startPrice:null,currentPrice:null,color:null,source:"Không lấy được dữ liệu live"};
+    liveMarket={start,end:start+INTERVAL,startPrice:null,currentPrice:null,color:null,source:"Không lấy được dữ liệu live từ Boss Cloud"};
     renderLive();
     render();
   }
 }
 async function fetchRound(ts){
-  const r=await fetch(API+"/v1/categories/"+slug(ts),{headers:{"Accept":"application/json","x-api-key":runtimeKey},cache:"no-store"});
-  if(r.status===401||r.status===403)throw new Error("API key không hợp lệ hoặc chưa được cấp quyền.");
-  if(r.status===404)return null;
-  if(!r.ok)throw new Error("Predict API HTTP "+r.status);
-  const j=await r.json();const c=parseColor(j);return c?{t:ts,c}:null
+  const r=await fetch(CLOUD+"/category?ts="+ts,{cache:"no-store"});
+  if(!r.ok)return null;
+  const j=await r.json();
+  const c=parseColor(j);
+  return c?{t:ts,c}:null
 }
 function roundFromCategory(category){
   const m=String(category?.slug||"").match(/^btc-updown-5m-(\d+)$/);
@@ -485,6 +483,20 @@ function roundFromCategory(category){
   const t=Number(m[1]);
   const c=parseColor(category);
   return Number.isFinite(t)&&c?{t,c}:null;
+}
+async function fetchCloudHistory(forceSync=false){
+  const r=await fetch(CLOUD+(forceSync?"/sync":"/history"),{cache:"no-store"});
+  if(!r.ok)throw new Error("Boss Cloud HTTP "+r.status);
+  const j=await r.json();
+  if(j?.ok===false)throw new Error(j.error||"Boss Cloud sync lỗi");
+  const cloudRounds=Array.isArray(j?.rounds)?j.rounds:[];
+  const mapped=cloudRounds.map(x=>{
+    const t=Number(x?.ts);
+    const c=x?.color==="V"?"G":x?.color==="X"?"R":null;
+    return Number.isFinite(t)&&c?{t,c}:null;
+  }).filter(Boolean);
+  if(mapped.length)mergeRounds(mapped);
+  return {cloudCount:mapped.length,tradeCount:historyTradeCount(),updatedAt:j?.updatedAt||null};
 }
 async function fetchResolvedCategoryPage(after=""){
   const qs=new URLSearchParams({first:"100",status:"RESOLVED",marketVariant:"CRYPTO_UP_DOWN"});
@@ -527,13 +539,6 @@ async function fetchOlderRoundsFallback(maxRounds=900){
   return fetched;
 }
 async function forceHistory100(){
-  if(!runtimeKey){
-    const key=$("apiKey").value.trim();
-    if(!key){setStatus("Nhập Predict API Key trước rồi bấm CẬP NHẬT 100 LỆNH.","err");return}
-    runtimeKey=key;
-    sessionStorage.setItem("predict_api_key",key);
-    if($("rememberKey").checked)localStorage.setItem("predict_api_key",key);
-  }
   if(historyLoading){
     setStatus("Lịch sử đang được tải. Vui lòng chờ số đếm 0/100 tăng lên.","ok");
     return;
@@ -576,62 +581,47 @@ async function forceHistory100(){
     }
   }
 }
-async function ensureHistory100(){
-  if(historyLoading||!runtimeKey)return historyTradeCount();
-  if(historyTradeCount()>=100){render();return historyTradeCount()}
+async function ensureHistory100(forceSync=false){
+  if(historyLoading)return historyTradeCount();
+  if(historyTradeCount()>=100&&!forceSync){render();return historyTradeCount()}
   historyLoading=true;
-  let pages=0,cursor="",added=0,lastCursor="";
   try{
-    setStatus("Đang tự truy xuất lịch sử để dựng 100 lệnh V/X...","");
-    progress(0,100,"Đang tải lịch sử • hiện có "+historyTradeCount()+"/100 lệnh");
-    while(historyTradeCount()<100&&pages<50){
-      const page=await fetchResolvedCategoryPage(cursor);
-      pages++;
-      const btc=page.items.map(roundFromCategory).filter(Boolean);
-      if(btc.length){
-        const before=rounds.length;
-        mergeRounds(btc);
-        added+=Math.max(0,rounds.length-before);
-        render();
-      }
-      const count=historyTradeCount();
-      progress(Math.min(count,100),100,"Đang dựng lịch sử "+Math.min(count,100)+"/100 lệnh • "+rounds.length+" vòng");
-      if(count>=100)break;
-      if(!page.cursor||page.cursor===lastCursor||page.items.length===0)break;
-      lastCursor=cursor;
-      cursor=page.cursor;
-      // Nhường tài nguyên để nến live vẫn cập nhật mượt.
-      await new Promise(r=>setTimeout(r,120));
-    }
-    let count=historyTradeCount();
-    if(count<100){
-      await fetchOlderRoundsFallback(900);
-      count=historyTradeCount();
-    }
+    setStatus("Đang tải lịch sử từ Boss Cloud...","");
+    progress(0,100,"Đang tải lịch sử cloud • hiện có "+historyTradeCount()+"/100 lệnh");
+
+    let cloud=await fetchCloudHistory(false);
     render();
+    let count=historyTradeCount();
+    progress(Math.min(count,100),100,"Boss Cloud: "+cloud.cloudCount+" vòng • đã dựng "+Math.min(count,100)+"/100 lệnh");
+
+    if(forceSync||count<100){
+      setStatus("Đang yêu cầu Boss Cloud đồng bộ Prediction...","");
+      cloud=await fetchCloudHistory(true);
+      render();
+      count=historyTradeCount();
+      progress(Math.min(count,100),100,"Đã đồng bộ "+cloud.cloudCount+" vòng • "+Math.min(count,100)+"/100 lệnh");
+    }
+
     if(count>=100){
-      progress(1,1,"Đã có đủ 100 lệnh lịch sử.");
-      setStatus("Đã đồng bộ thời gian thực • đã dựng đủ 100 lệnh V/X từ lịch sử Prediction.","ok");
+      progress(1,1,"Đã có đủ 100 lệnh lịch sử từ Boss Cloud.");
+      setStatus("Boss Cloud hoạt động • đã dựng đủ 100 lệnh V/X.","ok");
     }else{
-      progress(count,100,"Đã tìm được "+count+"/100 lệnh từ lịch sử hiện có.");
-      setStatus("Chưa đủ dữ liệu lịch sử: "+count+"/100 lệnh. Bấm lại sau hoặc kiểm tra API key/kết nối.","err");
+      progress(count,100,"Hiện có "+count+"/100 lệnh mẫu.");
+      setStatus("Boss Cloud đã trả dữ liệu nhưng mới dựng được "+count+"/100 lệnh mẫu.","err");
     }
     return count;
   }catch(e){
     const msg=String(e.message||e);
-    setStatus("Nến live vẫn chạy. Lỗi tải lịch sử: "+msg+(msg.includes("429")?" • API đang giới hạn tốc độ, chờ khoảng 1 phút rồi bấm CẬP NHẬT 100 LỆNH.":""),"err");
+    setStatus("Lỗi Boss Cloud: "+msg,"err");
     throw e;
   }finally{
     historyLoading=false;
   }
 }
 async function autoStart(){
-  if(!runtimeKey)return;
   startPolling();
-  // Ưu tiên dữ liệu hiện tại trước, lịch sử chạy tiếp ngay sau đó.
-  await Promise.allSettled([fetchLiveMarket(),refreshNow()]);
+  await Promise.allSettled([fetchLiveMarket(),refreshNow(),ensureHistory100(false)]);
   render();
-  ensureHistory100();
 }
 function mergeRounds(items){
   const map=new Map(rounds.map(x=>[x.t,x]));items.filter(Boolean).forEach(x=>map.set(x.t,x));
@@ -644,35 +634,16 @@ async function mapLimit(values,limit,fn,onProgress){
   await Promise.all(Array.from({length:limit},worker));return out
 }
 async function connect(){
-  if(busy)return;
-  let key=$("apiKey").value.trim()||runtimeKey;
-  if(!key){setStatus("Nhập Predict API Key trước.","err");return}
-  runtimeKey=key;
-  sessionStorage.setItem("predict_api_key",key);
-  if($("rememberKey").checked)localStorage.setItem("predict_api_key",key);else localStorage.removeItem("predict_api_key");
-  busy=true;
-  setStatus("Đang kết nối Prediction và khởi động dữ liệu thời gian thực...");
-  try{
-    startPolling();
-    await Promise.allSettled([fetchLiveMarket(),refreshNow()]);
-    render();
-    setStatus("Đã kết nối thời gian thực. Đang tự dựng lịch sử 100 lệnh...","ok");
-    await ensureHistory100();
-  }catch(e){
-    setStatus(String(e.message||e)+"\nNếu trình duyệt báo CORS/network dù API key đúng, Predict.fun đang chặn gọi trực tiếp từ web.","err");
-  }finally{
-    busy=false;
-  }
+  return forceHistory100();
 }
 async function refreshNow(){
-  if(!runtimeKey){setStatus("Chưa có API key. Mở phần kết nối ở trên.","err");return}
   try{
     const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
     const starts=Array.from({length:10},(_,k)=>latest-(9-k)*INTERVAL);
     const res=await mapLimit(starts,4,fetchRound);
     mergeRounds(res.filter(x=>x&&x.c));
     render();
-    setStatus("Đã cập nhật thời gian thực "+new Date().toLocaleTimeString(),"ok");
+    setStatus("Đã cập nhật qua Boss Cloud "+new Date().toLocaleTimeString(),"ok");
     if(historyTradeCount()<100&&!historyLoading)ensureHistory100()
   }catch(e){setStatus(String(e.message||e),"err")}
 }
@@ -918,7 +889,7 @@ function renderLive(){
     finalizeLiveRound(closedStart);
     const currentStart=Math.floor(now/INTERVAL)*INTERVAL;
     start=currentStart;end=currentStart+INTERVAL;
-    if(liveMarket.start!==currentStart&&runtimeKey)fetchLiveMarket();
+    if(liveMarket.start!==currentStart)fetchLiveMarket();
   }
   const remain=Math.max(0,Math.ceil(end-now));
   const mm=String(Math.floor(remain/60)).padStart(2,"0");
@@ -1020,10 +991,10 @@ function render(){
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"){
     if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    if(runtimeKey){refreshNow();fetchLiveMarket()}
+    refreshNow();fetchLiveMarket()
   }
 });
-loadPrefs();updateAlertPermissionUI();render();renderLive();if(runtimeKey){setTimeout(autoStart,100)}
+loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
 if("serviceWorker"in navigator){
   navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
   caches?.keys?.().then(keys=>Promise.all(keys.filter(k=>k.startsWith("boss-iphone-static")).map(k=>caches.delete(k)))).catch(()=>{});
