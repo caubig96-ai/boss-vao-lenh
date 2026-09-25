@@ -29,27 +29,23 @@ COLOR_ICON = {RED: "🔴", GREEN: "🟢"}
 # Exact 5-candle recognition table from the operator's reference image.
 # Key = five most recent closed candles; value = buy color for the next M5 candle.
 FIVE_CANDLE_PATTERNS: dict[str, str] = {
-    "RGGRR": RED,
-    "GRRGR": RED,
+    # Nhóm 1
+    "RGGRR": GREEN,
+    "GRRGR": GREEN,
     "GGRRR": GREEN,
     "RRGGR": GREEN,
-    "RGGRG": GREEN,
-    "GRRGG": GREEN,
+    # Nhóm 2
+    "RGGRG": RED,
+    "GRRGG": RED,
     "GGRRG": RED,
     "RRGGG": RED,
-    "RGGGR": GREEN,
-    "RRRGR": RED,
-    "GGGRR": GREEN,
-    "GRRRR": RED,
+    # Nhóm 3
     "RGRRR": GREEN,
-    "GRGGR": RED,
+    "GRGGR": GREEN,
     "RRGRR": RED,
     "GGRGR": GREEN,
-    "RGGGG": GREEN,
-    "RRRGG": RED,
-    "GGGRG": GREEN,
-    "GRRRG": RED,
-    "RGRRG": GREEN,
+    # Nhóm 4
+    "RGRRG": RED,
     "GRGGG": RED,
     "RRGRG": RED,
     "GGRGG": GREEN,
