@@ -51,6 +51,12 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("oppositeColor", self.source)
 
 
+    def test_pattern_stats_use_rolling_last_100_raw_signals(self):
+        self.assertIn("const recent=rawPatternSettled().slice(-100)", self.source)
+        self.assertIn('recentCount+"/100 lệnh"', self.source)
+        self.assertIn("Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100", self.source)
+        self.assertIn("Cửa sổ trượt 100 lệnh", self.source)
+
     def test_raw_pattern_history_is_separate_from_daily_tool_orders(self):
         self.assertIn("function rawPatternSettled", self.source)
         self.assertIn("100 kết quả gần nhất của 16 mẫu màu", self.source)
