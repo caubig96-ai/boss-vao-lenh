@@ -498,45 +498,8 @@ async function fetchCloudHistory(forceSync=false){
   if(mapped.length)mergeRounds(mapped);
   return {cloudCount:mapped.length,tradeCount:historyTradeCount(),updatedAt:j?.updatedAt||null};
 }
-async function fetchResolvedCategoryPage(after=""){
-  const qs=new URLSearchParams({first:"100",status:"RESOLVED",marketVariant:"CRYPTO_UP_DOWN"});
-  if(after)qs.set("after",after);
-  const r=await fetch(API+"/v1/categories?"+qs.toString(),{
-    headers:{"Accept":"application/json","x-api-key":runtimeKey},
-    cache:"no-store"
-  });
-  if(r.status===401||r.status===403)throw new Error("API key không hợp lệ hoặc chưa được cấp quyền.");
-  if(!r.ok)throw new Error("Predict history HTTP "+r.status);
-  const j=await r.json();
-  return {
-    cursor:String(j?.cursor||""),
-    items:Array.isArray(j?.data)?j.data:[]
-  };
-}
 function historyTradeCount(){
   try{return rawPatternSettled().length}catch(_){return 0}
-}
-async function fetchOlderRoundsFallback(maxRounds=900){
-  let fetched=0;
-  const now=Math.floor(Date.now()/1000);
-  let cursorStart=rounds.length
-    ?Math.min(...rounds.map(x=>x.t))-INTERVAL
-    :Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
-  while(historyTradeCount()<100&&fetched<maxRounds){
-    const batchSize=Math.min(20,maxRounds-fetched);
-    const starts=Array.from({length:batchSize},(_,k)=>cursorStart-k*INTERVAL);
-    const res=await mapLimit(starts,4,fetchRound);
-    mergeRounds(res.filter(x=>x&&x.c));
-    fetched+=batchSize;
-    cursorStart-=batchSize*INTERVAL;
-    render();
-    const count=historyTradeCount();
-    progress(Math.min(count,100),100,"Đang lấy thêm lịch sử cũ "+count+"/100 lệnh • "+rounds.length+" vòng");
-    if(count>=100)break;
-    // Giữ tốc độ gọi API vừa phải trong lúc nến live vẫn được ưu tiên.
-    await new Promise(r=>setTimeout(r,5000));
-  }
-  return fetched;
 }
 async function forceHistory100(){
   if(historyLoading){
@@ -552,8 +515,8 @@ async function forceHistory100(){
   }
   try{
     await refreshNow();
-    const count=await ensureHistory100();
-    if(count<=0)throw new Error("Không lấy được dữ liệu lịch sử từ Predict API");
+    const count=await ensureHistory100(true);
+    if(count<=0)throw new Error("Không lấy được dữ liệu lịch sử từ Boss Cloud");
     if(btn){
       btn.classList.remove("working");
       if(count>=100){
