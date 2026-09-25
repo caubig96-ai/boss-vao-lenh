@@ -1,22 +1,23 @@
-# Boss 5 Nến Cloud — bản miễn phí
+# Boss 5 Nến Cloud — Cloudflare Worker
 
-Mục tiêu: dữ liệu tiếp tục được đồng bộ khi iPhone khóa màn hình.
+Mục tiêu: đồng bộ dữ liệu khi iPhone khóa màn hình và gửi tín hiệu qua Telegram.
 
-## Cài nhanh trên Cloudflare Workers Free
+## Cấu hình
 
-1. Tạo tài khoản Cloudflare.
-2. Workers & Pages -> Create -> Import a repository -> chọn repo boss-vao-lenh.
-3. Root directory: cloudflare-worker
-4. Deploy.
-5. Tạo KV namespace tên BOSS_KV và binding cũng là BOSS_KV.
-6. Settings -> Variables and Secrets -> thêm secret PREDICT_API_KEY.
-7. Deploy lại.
+1. KV namespace binding: `BOSS_KV`.
+2. Runtime secret: `PREDICT_API_KEY`.
+3. Runtime secret: `CLOUD_TELEGRAM_BOT_TOKEN`.
+4. Runtime secret: `CLOUD_TELEGRAM_CHAT_ID`.
+5. Cron chạy mỗi phút.
 
-Worker có Cron mỗi 5 phút. API key nằm ở secret trên server, không đưa vào trang web.
+Khi Telegram đã cấu hình, Worker gửi một tin xác nhận một lần. Sau đó:
+- Có thể gửi cảnh báo chuẩn bị gần cuối vòng nếu Predict API có giá live.
+- Gửi tín hiệu cuối cùng khi nến vừa đóng, mẫu thuộc 16 mẫu và điều kiện thống kê đạt ngưỡng.
+
+Telegram notification trên iPhone phụ thuộc quyền thông báo, chế độ im lặng/Focus và kết nối mạng.
 
 Endpoints:
 - /health
+- /category?ts=...
 - /history
 - /sync
-
-Sau khi có URL workers.dev, gắn URL đó vào web-iphone để iPhone chỉ đọc dữ liệu từ cloud.
