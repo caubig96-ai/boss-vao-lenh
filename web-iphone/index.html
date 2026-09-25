@@ -16,7 +16,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
 .candles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}
+.history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}.pending{background:#3b3219;color:#ffd36b}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800}.secondary{background:#303944}.danger{background:#642b2b}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -92,13 +92,17 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="stats">
-    <div class="stat"><span class="label">Thắng</span><b class="green" id="wins">0</b></div>
-    <div class="stat"><span class="label">Thua</span><b class="red" id="losses">0</b></div>
-    <div class="stat"><span class="label">Lãi/lỗ đã tính</span><b id="pnl">0.00 USDT</b></div>
-    <div class="stat"><span class="label">Số dư</span><b id="balance">0.00 USDT</b></div>
+  <div class="row" style="margin-bottom:10px">
+    <div><b>Kết quả lệnh tool hôm nay</b><div class="label">Chỉ tính những lệnh tool đã thực sự báo MUA</div></div>
+    <span id="todayToolCountTop" class="label">0 lệnh</span>
   </div>
-  <div class="note" style="margin-top:8px">Các thống kê trên dựa trên lịch sử đã lưu trong iPhone. Khi mở web lại, tool tự tải các vòng mới và tính tiếp.</div>
+  <div class="stats">
+    <div class="stat"><span class="label">Thắng hôm nay</span><b class="green" id="wins">0</b></div>
+    <div class="stat"><span class="label">Thua hôm nay</span><b class="red" id="losses">0</b></div>
+    <div class="stat"><span class="label">Lãi/lỗ lệnh tool</span><b id="pnl">--</b></div>
+    <div class="stat"><span class="label">Số dư theo lệnh tool</span><b id="balance">--</b></div>
+  </div>
+  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 16 mẫu phía dưới không cộng vào lãi/lỗ.</div>
 </section>
 
 <section class="card">
@@ -115,7 +119,15 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • tự chọn GIỮ MÀU hoặc ĐẢO MÀU • ngưỡng ≥60%</div></div><span id="count" class="label">0 lệnh</span></div>
+  <div class="row">
+    <div><b>Lệnh tool hôm nay</b><div class="label">Tool báo mua bao nhiêu lệnh trong ngày thì có đúng bấy nhiêu ô • … = đang chờ kết quả</div></div>
+    <span id="todayToolCount" class="label">0 lệnh</span>
+  </div>
+  <div class="history" id="todayToolHistory" style="margin-top:12px"></div>
+</section>
+
+<section class="card">
+  <div class="row"><div><b>100 kết quả gần nhất của 16 mẫu màu</b><div class="label">V/X ở đây là kết quả gốc của 16 mẫu • dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -127,7 +139,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Nếu mẫu gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu. Hướng được chọn phải có chỉ số tương ứng từ 60% trở lên. Nếu mẫu chưa có trong 100 lệnh, tool mới xét mẫu thắng/thua mạnh nhất trong 16 mẫu.</div>
+  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Bảng 100 V/X dùng kết quả gốc của 16 mẫu. Nếu đúng mẫu hiện tại có kết quả gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu. Hướng được chọn phải có chỉ số tương ứng từ 60% trở lên. Nếu mẫu chưa có trong 100 lệnh, tool mới xét mẫu thắng/thua mạnh nhất trong 16 mẫu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -182,6 +194,7 @@ let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0)
 let finalizingStart=0;
 let historyLoading=false;
 let lastFinalSignal=JSON.parse(localStorage.getItem("last_final_signal")||"null");
+let toolOrders=JSON.parse(localStorage.getItem("boss_tool_orders")||"[]");
 
 function validFourPrefixes(){
   return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,4)));
@@ -346,6 +359,10 @@ async function finalizeLiveRound(liveStart){
       adaptiveMode:decision.mode,
       adaptiveRate:decision.rate
     };
+    const toolOrder=recordToolOrder(lastFinalSignal);
+    lastFinalSignal.toolOrderId=toolOrder.id;
+    lastFinalSignal.orderStep=toolOrder.step;
+    lastFinalSignal.orderAmount=toolOrder.amount;
     localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
     const buyText=finalDirection==="G"?"MUA XANH":"MUA ĐỎ";
     showTradeAlert(
@@ -484,7 +501,7 @@ async function fetchResolvedCategoryPage(after=""){
   };
 }
 function historyTradeCount(){
-  try{return compute().settled.length}catch(_){return 0}
+  try{return rawPatternSettled().length}catch(_){return 0}
 }
 async function fetchOlderRoundsFallback(maxRounds=900){
   let fetched=0;
@@ -760,47 +777,77 @@ function rawRowsFromStats(rawStats){
     return {code,pred:PATTERNS[code],wins:rs.wins,losses:rs.losses,settled:rs.settled};
   });
 }
-function currentAdaptiveDecision(code,settledOverride=null){
-  const settled=settledOverride||compute().settled;
-  return adaptiveDecisionFromRows(code,settled,buildPatternStats());
+function rawPatternSettled(){
+  return buildSignals()
+    .filter(item=>!!item.actual)
+    .map(item=>({...item,win:item.pred===item.actual}));
+}
+function currentAdaptiveDecision(code){
+  return adaptiveDecisionFromRows(code,rawPatternSettled(),buildPatternStats());
+}
+function localDayKey(ms=Date.now()){
+  const d=new Date(ms);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function persistToolOrders(){
+  const cutoff=Date.now()-45*24*60*60*1000;
+  toolOrders=toolOrders
+    .filter(o=>o&&Number(o.placedAt||0)>=cutoff)
+    .sort((a,b)=>Number(a.placedAt||0)-Number(b.placedAt||0));
+  localStorage.setItem("boss_tool_orders",JSON.stringify(toolOrders));
 }
 function compute(){
   const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
-  let step=1,pnl=0,wins=0,losses=0;
-  const settled=[],skipped=[];
-  const rawStats={};
-  allPatternCodes().forEach(code=>rawStats[code]={wins:0,losses:0,settled:0});
-  for(const raw of buildSignals()){
-    if(!raw.actual)continue;
-    const s={...raw};
-    const rowsBefore=rawRowsFromStats(rawStats);
-    const decision=adaptiveDecisionFromRows(s.pattern,settled,rowsBefore);
-    if(!decision.allow){
-      s.skipped=true;
-      s.adaptiveMode=decision.mode;
-      s.adaptiveRate=decision.rate;
-      s.skipReason=decision.reason;
-      skipped.push(s);
-    }else{
-      const amount=step===2?bet2:bet1;
-      s.step=step;
-      s.amount=amount;
-      s.direction=decision.direction;
-      s.originalPred=s.pred;
-      s.adaptiveMode=decision.mode;
-      s.adaptiveRate=decision.rate;
-      s.win=s.direction===s.actual;
-      if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}
-      settled.push(s);
-      step=(step===1&&s.win)?2:1;
-    }
-    const rs=rawStats[s.pattern]||{wins:0,losses:0,settled:0};
-    const rawWin=s.pred===s.actual;
-    rs.settled++;
-    if(rawWin)rs.wins++;else rs.losses++;
-    rawStats[s.pattern]=rs;
+  const today=localDayKey();
+  const byTime=new Map(rounds.map(x=>[x.t,x.c]));
+  const orders=toolOrders
+    .filter(o=>o.dayKey===today)
+    .sort((a,b)=>Number(a.placedAt||0)-Number(b.placedAt||0))
+    .map(o=>{
+      const actual=byTime.get(Number(o.targetStart))||null;
+      const win=actual?o.direction===actual:null;
+      return {...o,actual,win};
+    });
+  let wins=0,losses=0,pnl=0,step=1;
+  const settled=[];
+  for(const o of orders){
+    if(o.win===null)continue;
+    const amount=Number.isFinite(Number(o.amount))?Number(o.amount):(Number(o.step)===2?bet2:bet1);
+    const orderPayout=Number.isFinite(Number(o.payoutRate))?Number(o.payoutRate):payout;
+    if(o.win){wins++;pnl+=amount*orderPayout}else{losses++;pnl-=amount}
+    settled.push(o);
+    const usedStep=Number(o.step)||1;
+    step=(usedStep===1&&o.win)?2:1;
   }
-  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,skipped}
+  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,orders,hasOrders:orders.length>0}
+}
+function recordToolOrder(signal){
+  const id=String(signal.targetStart)+"-"+String(signal.code);
+  const existing=toolOrders.find(o=>o.id===id);
+  if(existing)return existing;
+  const calc=compute();
+  const step=calc.step;
+  const amount=step===2?calc.bet2:calc.bet1;
+  const placedAt=Date.now();
+  const order={
+    id,
+    placedAt,
+    dayKey:localDayKey(placedAt),
+    sourceStart:signal.sourceStart,
+    targetStart:signal.targetStart,
+    code:signal.code,
+    direction:signal.pred,
+    originalPred:signal.originalPred,
+    group:signal.group,
+    adaptiveMode:signal.adaptiveMode,
+    adaptiveRate:signal.adaptiveRate,
+    step,
+    amount,
+    payoutRate:calc.payout
+  };
+  toolOrders.push(order);
+  persistToolOrders();
+  return order;
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
 function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
@@ -869,7 +916,7 @@ function render(){
   }
   const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
-  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code,calc.settled):null;
+  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code):null;
   const tentativeAllowed=!!(livePattern?.pred&&adaptive?.allow);
   const pred=finalSignal?.pred||(tentativeAllowed?adaptive.direction:null);
   const targetT=finalSignal?currentStart:(liveMarket.end||null);
@@ -895,13 +942,30 @@ function render(){
   }else{
     $("freshness").textContent="Đang chờ đủ 4 nến đóng liên tiếp và màu nến live.";
   }
-  $("wins").textContent=calc.wins;$("losses").textContent=calc.losses;
-  $("pnl").textContent=(calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT";
-  $("pnl").className=calc.pnl>0?"green":calc.pnl<0?"red":"";
-  $("balance").textContent=(calc.start+calc.pnl).toFixed(2)+" USDT";
-  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+"/100 lệnh"+(historyLoading?" • đang tải":"");$("history").innerHTML="";
+  $("wins").textContent=calc.wins;
+  $("losses").textContent=calc.losses;
+  $("todayToolCount").textContent=calc.orders.length+" lệnh";
+  $("todayToolCountTop").textContent=calc.orders.length+" lệnh";
+  $("pnl").textContent=calc.hasOrders?((calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT"):"--";
+  $("pnl").className=calc.hasOrders?(calc.pnl>0?"green":calc.pnl<0?"red":""):"";
+  $("balance").textContent=calc.hasOrders?(calc.start+calc.pnl).toFixed(2)+" USDT":"--";
+  $("todayToolHistory").innerHTML="";
+  calc.orders.forEach(o=>{
+    const d=document.createElement("div");
+    if(o.win===null){d.className="cell pending";d.textContent="…"}
+    else{d.className="cell "+(o.win?"v":"x");d.textContent=o.win?"V":"X"}
+    $("todayToolHistory").appendChild(d);
+  });
+  const hist=rawPatternSettled().slice(-100);
+  $("count").textContent=hist.length+"/100"+(historyLoading?" • đang tải":"");
+  $("history").innerHTML="";
   const padded=Array(100-hist.length).fill(null).concat(hist);
-  padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
+  padded.forEach(item=>{
+    const d=document.createElement("div");
+    if(!item){d.className="cell";d.textContent="·"}
+    else{d.className="cell "+(item.win?"v":"x");d.textContent=item.win?"V":"X"}
+    $("history").appendChild(d);
+  });
   renderPatternStats();
 }
 document.addEventListener("visibilitychange",async()=>{
