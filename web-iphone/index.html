@@ -115,7 +115,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • chỉ tính lệnh thực sự được phép đánh</div></div><span id="count" class="label">0 lệnh</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • đã qua lọc mẫu gần nhất + tỷ lệ ≥60%</div></div><span id="count" class="label">0 lệnh</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -127,7 +127,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu.</div>
+  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Chỉ báo lệnh khi tỷ lệ thắng của đúng mẫu đạt từ 60% trở lên. Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -270,7 +270,8 @@ function firePrepareAlert(liveStart,remain,stage){
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(currentLiveStart!==liveStart)return;
   const gate=currentHistoryDecision(livePattern.code);
-  if(!gate.allow)return;
+  const rateGate=currentPatternRateDecision(livePattern.code);
+  if(!gate.allow||!rateGate.allow)return;
   if(stage===60){
     if(prepare60Start===liveStart)return;
     prepare60Start=liveStart;
@@ -287,7 +288,7 @@ function firePrepareAlert(liveStart,remain,stage){
   showTradeAlert(
     "prepare",
     stage===60?"⚠️ CHUẨN BỊ VÀO LỆNH":"⚠️ CÒN 30 GIÂY",
-    livePattern.group+" • "+livePattern.code+" • "+historyText+" • nếu giữ màu đến lúc đóng → MUA "+buyText+"."
+    livePattern.group+" • "+livePattern.code+" • tỷ lệ thắng "+rateGate.rate.toFixed(1)+"% • "+historyText+" • nếu giữ màu đến lúc đóng → MUA "+buyText+"."
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -329,6 +330,18 @@ async function finalizeLiveRound(liveStart){
       render();
       return;
     }
+    const rateGate=currentPatternRateDecision(code);
+    if(!rateGate.allow){
+      lastFinalSignal=null;
+      localStorage.removeItem("last_final_signal");
+      hideTradeAlert();
+      setStatus(
+        "BỎ LỆNH "+code+" • tỷ lệ thắng "+(rateGate.rate===null?"chưa có dữ liệu":rateGate.rate.toFixed(1)+"%")+" • yêu cầu từ 60% trở lên.",
+        ""
+      );
+      render();
+      return;
+    }
     lastFinalSignal={
       sourceStart:liveStart,
       targetStart:liveStart+INTERVAL,
@@ -336,14 +349,15 @@ async function finalizeLiveRound(liveStart){
       pred,
       group:patternGroupName(code),
       closedColor:closed.c,
-      historyGate:gate.status
+      historyGate:gate.status,
+      patternRate:rateGate.rate
     };
     localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
     const buyText=pred==="G"?"MUA XANH":"MUA ĐỎ";
     showTradeAlert(
       pred==="G"?"green":"red",
       (pred==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
-      (lastFinalSignal.group||"")+" • mẫu "+code+" đã chốt • "+(gate.status==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo 16 mẫu")+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+      (lastFinalSignal.group||"")+" • mẫu "+code+" • tỷ lệ thắng "+rateGate.rate.toFixed(1)+"% • "+(gate.status==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo 16 mẫu")+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
     );
     threeSecondAlert(pred==="G"?"green":"red");
     flash(pred==="G"?"green":"red");
@@ -532,7 +546,7 @@ function renderPatternStats(){
     const rate=row.settled?row.wins/row.settled*100:null;
     const action=row.pred==="G"?"MUA XANH":"MUA ĐỎ";
     const actionClass=row.pred==="G"?"buyg":"buyr";
-    const rateClass=rate===null?"":rate>=50?"rateGood":"rateBad";
+    const rateClass=rate===null?"":rate>=60?"rateGood":"rateBad";
     tr.innerHTML=
       '<td>'+patternGroupName(row.code)+'</td>'+
       '<td><span class="picons">'+patternIcons(row.code)+'</span><span class="mini">'+row.code+'</span></td>'+
@@ -569,25 +583,51 @@ function decisionFromLast100(code,settled){
 function currentHistoryDecision(code){
   return decisionFromLast100(code,compute().settled);
 }
+function currentPatternRateDecision(code){
+  const row=buildPatternStats().find(item=>item.code===code);
+  if(!row||!row.settled)return {allow:false,rate:null,wins:0,losses:0,settled:0};
+  const rate=row.wins/row.settled*100;
+  return {
+    allow:rate>=60,
+    rate,
+    wins:row.wins,
+    losses:row.losses,
+    settled:row.settled
+  };
+}
 function compute(){
   const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
-  let step=1,pnl=0,wins=0,losses=0;const settled=[],skipped=[];
+  let step=1,pnl=0,wins=0,losses=0;
+  const settled=[],skipped=[];
+  const rawStats={};
+  allPatternCodes().forEach(code=>rawStats[code]={wins:0,losses:0,settled:0});
   for(const raw of buildSignals()){
     if(!raw.actual)continue;
     const s={...raw};
-    const gate=decisionFromLast100(s.pattern,settled);
-    if(!gate.allow){
+    const rs=rawStats[s.pattern]||{wins:0,losses:0,settled:0};
+    const priorRate=rs.settled?rs.wins/rs.settled*100:null;
+    const rateAllowed=priorRate!==null&&priorRate>=60;
+    const historyGate=decisionFromLast100(s.pattern,settled);
+    if(!historyGate.allow||!rateAllowed){
       s.skipped=true;
-      s.skipReason="Mẫu gần nhất trong 100 lệnh là THUA";
+      s.historyGate=historyGate.status;
+      s.patternRate=priorRate;
+      s.skipReason=!historyGate.allow
+        ?"Mẫu gần nhất trong 100 lệnh là THUA"
+        :(priorRate===null?"Mẫu chưa có tỷ lệ thắng":"Tỷ lệ thắng dưới 60%");
       skipped.push(s);
-      continue;
+    }else{
+      const amount=step===2?bet2:bet1;
+      s.step=step;s.amount=amount;s.historyGate=historyGate.status;s.patternRate=priorRate;
+      s.win=s.pred===s.actual;
+      if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}
+      settled.push(s);
+      step=(step===1&&s.win)?2:1;
     }
-    const amount=step===2?bet2:bet1;
-    s.step=step;s.amount=amount;s.historyGate=gate.status;
-    s.win=s.pred===s.actual;
-    if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}
-    settled.push(s);
-    step=(step===1&&s.win)?2:1;
+    const rawWin=s.pred===s.actual;
+    rs.settled++;
+    if(rawWin)rs.wins++;else rs.losses++;
+    rawStats[s.pattern]=rs;
   }
   return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,skipped}
 }
@@ -659,26 +699,29 @@ function render(){
   const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
   const tentativeGate=livePattern?.pred?currentHistoryDecision(livePattern.code):null;
-  const tentativeAllowed=!!(livePattern?.pred&&tentativeGate?.allow);
+  const tentativeRate=livePattern?.pred?currentPatternRateDecision(livePattern.code):null;
+  const tentativeAllowed=!!(livePattern?.pred&&tentativeGate?.allow&&tentativeRate?.allow);
   const pred=finalSignal?.pred||(tentativeAllowed?livePattern?.pred:null);
   const targetT=finalSignal?currentStart:(liveMarket.end||null);
   $("buy").textContent=finalSignal
     ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
     :livePattern?.pred&&!tentativeAllowed
-      ?"BỎ MẪU • GẦN NHẤT THUA"
+      ?(!tentativeGate?.allow?"BỎ MẪU • GẦN NHẤT THUA":"BỎ MẪU • TỶ LỆ < 60%")
       :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
   if(finalSignal){
-    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.historyGate==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo công thức 16 mẫu")+" • vào lệnh ngay.";
+    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • tỷ lệ thắng "+Number(finalSignal.patternRate).toFixed(1)+"% • "+(finalSignal.historyGate==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh")+" • vào lệnh ngay.";
   }else if(livePattern?.pred&&tentativeGate&&!tentativeGate.allow){
     $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • lần gần nhất trong 100 lệnh là THUA → bỏ lệnh, không cảnh báo.";
+  }else if(livePattern?.pred&&tentativeRate&&!tentativeRate.allow){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • tỷ lệ thắng "+(tentativeRate.rate===null?"chưa có dữ liệu":tentativeRate.rate.toFixed(1)+"%")+" → chưa đạt ngưỡng 60%, bỏ lệnh.";
   }else if(livePattern?.pred&&tentativeGate?.status==="WIN"){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • lần gần nhất trong 100 lệnh là THẮNG → được phép chờ chốt.";
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • tỷ lệ thắng "+tentativeRate.rate.toFixed(1)+"% • lần gần nhất trong 100 lệnh là THẮNG → được phép chờ chốt.";
   }else if(livePattern?.pred){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" chưa có trong 100 lệnh → vẫn theo công thức 16 mẫu.";
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" chưa có trong 100 lệnh • tỷ lệ thắng "+tentativeRate.rate.toFixed(1)+"% → vẫn được phép theo công thức 16 mẫu.";
   }else if(livePattern){
     $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 16 mẫu; vẫn chờ màu đóng cuối cùng.";
   }else{
