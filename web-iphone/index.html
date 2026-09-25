@@ -21,6 +21,7 @@ input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
 .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.ptable{width:100%;min-width:610px;border-collapse:collapse;font-size:12px}.ptable th,.ptable td{padding:9px 7px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}.ptable th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:700}.ptable td:first-child,.ptable th:first-child{text-align:left}.picons{font-size:15px;letter-spacing:1px}.buyg{color:var(--g);font-weight:800}.buyr{color:var(--r);font-weight:800}.noentry{color:var(--muted)}.rateGood{color:var(--g);font-weight:800}.rateBad{color:var(--r);font-weight:800}.mini{font-size:10px;color:var(--muted);display:block;margin-top:2px}
+.livebox{display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:center}.liveorb{width:72px;height:72px;border-radius:22px;background:#10161c;display:grid;place-items:center;font-size:48px}.countdown{font:900 32px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px}.liveMeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.liveMeta>div{background:#10161c;border-radius:11px;padding:9px}.liveMeta b{display:block;margin-top:3px;font-size:14px}
 </style>
 </head>
 <body><main>
@@ -47,6 +48,30 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div style="text-align:right"><b id="frame">--:--–--:--</b><div class="label" id="bet">--</div></div>
   </div>
   <div id="freshness" class="note" style="margin-top:8px"></div>
+</section>
+
+<section class="card">
+  <div class="row">
+    <div>
+      <b>Nến live hiện tại</b>
+      <div class="label">BTC Up/Down 5m đang chạy</div>
+    </div>
+    <div id="liveFrame" class="label">--:--–--:--</div>
+  </div>
+  <div class="livebox" style="margin-top:12px">
+    <div id="liveOrb" class="liveorb">⚪</div>
+    <div>
+      <div class="label">Màu hiện tại</div>
+      <div id="liveColorText" class="big">CHỜ DỮ LIỆU</div>
+      <div class="label" style="margin-top:7px">Còn lại</div>
+      <div id="countdown" class="countdown">--:--</div>
+    </div>
+  </div>
+  <div class="liveMeta">
+    <div><span class="label">Giá mở vòng</span><b id="liveStartPrice">--</b></div>
+    <div><span class="label">Giá live</span><b id="liveCurrentPrice">--</b></div>
+  </div>
+  <div id="liveSource" class="note" style="margin-top:8px">Màu live chỉ hiện khi Predict API cung cấp giá hiện tại của vòng đang mở.</div>
 </section>
 
 <section class="card">
@@ -118,7 +143,10 @@ const $=id=>document.getElementById(id);
 let runtimeKey=sessionStorage.getItem("predict_api_key")||"";
 let rounds=JSON.parse(localStorage.getItem("boss_rounds")||"[]");
 let pollTimer=null;
+let liveTimer=null;
+let countdownTimer=null;
 let busy=false;
+let liveMarket={start:0,end:0,startPrice:null,currentPrice:null,color:null,source:""};
 
 function loadPrefs(){
   const saved=localStorage.getItem("predict_api_key");
@@ -147,10 +175,56 @@ function parseColor(payload){
   const d=payload?.data||payload||{};const markets=d.markets||[];const m=markets[0]||{};
   let c=side(m?.resolution?.name||m?.resolution?.winner||m?.resolution?.winningOutcome);if(c)return c;
   for(const o of (m.outcomes||[])){if(String(o?.status||"").toUpperCase()==="WON"){c=side(o?.name);if(c)return c}}
-  const crypto=d?.variantDetails?.crypto||m?.variantData||{};
+  const crypto=d?.variantDetails?.crypto||d?.variantData||m?.variantData||{};
   const a=Number(crypto.startPrice),b=Number(crypto.endPrice);
   if(Number.isFinite(a)&&Number.isFinite(b)&&a>0&&b>0&&a!==b)return b>a?"G":"R";
   return null
+}
+function finitePrice(...values){
+  for(const value of values){const n=Number(value);if(Number.isFinite(n)&&n>0)return n}
+  return null
+}
+function extractLive(payload,startTs){
+  const d=payload?.data||payload||{};
+  const m=(d.markets||[])[0]||{};
+  const categoryCrypto=d?.variantDetails?.crypto||d?.variantData||{};
+  const marketCrypto=m?.variantData||{};
+  const startPrice=finitePrice(
+    categoryCrypto.startPrice,marketCrypto.startPrice,d.startPrice,m.startPrice
+  );
+  const currentPrice=finitePrice(
+    categoryCrypto.currentPrice,categoryCrypto.lastPrice,categoryCrypto.indexPrice,
+    categoryCrypto.markPrice,categoryCrypto.endPrice,
+    marketCrypto.currentPrice,marketCrypto.lastPrice,marketCrypto.indexPrice,
+    marketCrypto.markPrice,marketCrypto.endPrice,
+    d.currentPrice,d.lastPrice,d.indexPrice,d.markPrice
+  );
+  let color=null;
+  if(startPrice&&currentPrice&&currentPrice!==startPrice)color=currentPrice>startPrice?"G":"R";
+  return{
+    start:startTs,
+    end:startTs+INTERVAL,
+    startPrice,
+    currentPrice,
+    color,
+    source:color?"Predict API live price":"Predict API chưa trả giá live"
+  }
+}
+async function fetchLiveMarket(){
+  if(!runtimeKey)return;
+  const now=Math.floor(Date.now()/1000);
+  const start=Math.floor(now/INTERVAL)*INTERVAL;
+  try{
+    const r=await fetch(API+"/v1/categories/"+slug(start),{headers:{"Accept":"application/json","x-api-key":runtimeKey},cache:"no-store"});
+    if(r.status===401||r.status===403)throw new Error("API key không hợp lệ.");
+    if(!r.ok)return;
+    const j=await r.json();
+    liveMarket=extractLive(j,start);
+    renderLive();
+  }catch(e){
+    liveMarket={start,end:start+INTERVAL,startPrice:null,currentPrice:null,color:null,source:"Không lấy được dữ liệu live"};
+    renderLive();
+  }
 }
 async function fetchRound(ts){
   const r=await fetch(API+"/v1/categories/"+slug(ts),{headers:{"Accept":"application/json","x-api-key":runtimeKey},cache:"no-store"});
@@ -192,7 +266,15 @@ async function refreshNow(){
     const res=await mapLimit(starts,4,fetchRound);mergeRounds(res.filter(x=>x&&x.c));render();setStatus("Đã cập nhật "+new Date().toLocaleTimeString(),"ok")
   }catch(e){setStatus(String(e.message||e),"err")}
 }
-function startPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000)}
+function startPolling(){
+  if(pollTimer)clearInterval(pollTimer);
+  if(liveTimer)clearInterval(liveTimer);
+  if(countdownTimer)clearInterval(countdownTimer);
+  pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000);
+  liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
+  countdownTimer=setInterval(renderLive,250);
+  fetchLiveMarket();
+}
 function consecutive(a,b){return b.t-a.t===INTERVAL}
 function allPatternCodes(){
   const fixed=Object.keys(PATTERNS);
@@ -262,6 +344,28 @@ function compute(){
   return{bet1,bet2,payout,start,step,pnl,wins,losses,settled}
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
+function renderLive(){
+  const now=Date.now()/1000;
+  let start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
+  let end=liveMarket.end||start+INTERVAL;
+  if(now>=end){
+    start=Math.floor(now/INTERVAL)*INTERVAL;end=start+INTERVAL;
+    if(liveMarket.start!==start&&runtimeKey)fetchLiveMarket();
+  }
+  const remain=Math.max(0,Math.ceil(end-now));
+  const mm=String(Math.floor(remain/60)).padStart(2,"0");
+  const ss=String(remain%60).padStart(2,"0");
+  $("countdown").textContent=mm+":"+ss;
+  $("liveFrame").textContent=fmtFrame(start);
+  $("liveStartPrice").textContent=priceText(liveMarket.startPrice);
+  $("liveCurrentPrice").textContent=priceText(liveMarket.currentPrice);
+  const c=liveMarket.color;
+  $("liveOrb").textContent=c==="G"?"🟢":c==="R"?"🔴":"⚪";
+  $("liveColorText").textContent=c==="G"?"XANH":c==="R"?"ĐỎ":"CHƯA CÓ GIÁ LIVE";
+  $("liveColorText").className="big "+(c==="G"?"green":c==="R"?"red":"");
+  $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
+}
 function latestWindow(){
   if(rounds.length<5)return null;for(let end=rounds.length-1;end>=4;end--){const w=rounds.slice(end-4,end+1);if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w}return null
 }
@@ -281,8 +385,8 @@ function render(){
   padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
   renderPatternStats();
 }
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&runtimeKey)refreshNow()});
-loadPrefs();render();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&runtimeKey){refreshNow();fetchLiveMarket()}});
+loadPrefs();render();renderLive();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body></html>
