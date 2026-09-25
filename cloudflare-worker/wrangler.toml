@@ -5,5 +5,8 @@ compatibility_date = "2026-09-25"
 [triggers]
 crons = ["*/5 * * * *"]
 
-# Sau khi deploy:
-# wrangler secret put PREDICT_API_KEY
+[[kv_namespaces]]
+binding = "BOSS_KV"
+id = "843ba5a3a1cf434da559ea21e59d87c7"
+
+# PREDICT_API_KEY is configured as a Cloudflare runtime secret.
