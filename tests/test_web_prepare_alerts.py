@@ -51,6 +51,15 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("oppositeColor", self.source)
 
 
+    def test_raw_pattern_history_is_separate_from_daily_tool_orders(self):
+        self.assertIn("function rawPatternSettled", self.source)
+        self.assertIn("100 kết quả gần nhất của 16 mẫu màu", self.source)
+        self.assertIn("function recordToolOrder", self.source)
+        self.assertIn("boss_tool_orders", self.source)
+        self.assertIn("Lệnh tool hôm nay", self.source)
+        self.assertIn("todayToolHistory", self.source)
+        self.assertIn('calc.hasOrders?((calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT"):"--"', self.source)
+
     def test_auto_start_and_history_bootstrap(self):
         self.assertIn("async function autoStart", self.source)
         self.assertIn("async function ensureHistory100", self.source)
