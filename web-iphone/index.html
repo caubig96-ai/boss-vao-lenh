@@ -115,7 +115,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • đã qua lọc mẫu gần nhất + tỷ lệ ≥60%</div></div><span id="count" class="label">0 lệnh</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua • tự chọn GIỮ MÀU hoặc ĐẢO MÀU • ngưỡng ≥60%</div></div><span id="count" class="label">0 lệnh</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -139,6 +139,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
           <th>Thắng</th>
           <th>Thua</th>
           <th>Tỷ lệ thắng</th>
+          <th>Tỷ lệ thua</th>
         </tr>
       </thead>
       <tbody id="patternStats"></tbody>
@@ -270,9 +271,8 @@ function firePrepareAlert(liveStart,remain,stage){
   if(!livePattern||!livePattern.pred)return;
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(currentLiveStart!==liveStart)return;
-  const gate=currentHistoryDecision(livePattern.code);
-  const rateGate=currentPatternRateDecision(livePattern.code);
-  if(!gate.allow||!rateGate.allow)return;
+  const decision=currentAdaptiveDecision(livePattern.code);
+  if(!decision.allow)return;
   if(stage===60){
     if(prepare60Start===liveStart)return;
     prepare60Start=liveStart;
@@ -282,14 +282,14 @@ function firePrepareAlert(liveStart,remain,stage){
     prepare30Start=liveStart;
     sessionStorage.setItem("prepare_30_start",String(liveStart));
   }
-  const buyText=livePattern.pred==="G"?"XANH":"ĐỎ";
-  const historyText=gate.status==="WIN"
-    ?"mẫu này lần gần nhất trong 100 lệnh là THẮNG"
-    :"mẫu này chưa có trong 100 lệnh • theo công thức 16 mẫu";
+  const buyText=decision.direction==="G"?"XANH":"ĐỎ";
+  const modeText=decision.mode==="REVERSE_LOSS"||decision.mode==="GLOBAL_LOSS"
+    ?"CHẾ ĐỘ ĐẢO MÀU"
+    :"CHẾ ĐỘ GIỮ MÀU";
   showTradeAlert(
     "prepare",
     stage===60?"⚠️ CHUẨN BỊ VÀO LỆNH":"⚠️ CÒN 30 GIÂY",
-    livePattern.group+" • "+livePattern.code+" • tỷ lệ thắng "+rateGate.rate.toFixed(1)+"% • "+historyText+" • nếu giữ màu đến lúc đóng → MUA "+buyText+"."
+    livePattern.group+" • "+livePattern.code+" • "+modeText+" • chỉ số "+decision.rate.toFixed(1)+"% • nếu giữ mẫu đến lúc đóng → MUA "+buyText+"."
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -322,46 +322,39 @@ async function finalizeLiveRound(liveStart){
       hideTradeAlert();
       return;
     }
-    const gate=currentHistoryDecision(code);
-    if(!gate.allow){
-      lastFinalSignal=null;
-      localStorage.removeItem("last_final_signal");
-      hideTradeAlert();
-      setStatus("BỎ LỆNH "+code+" • lần gần nhất của mẫu này trong 100 lệnh là THUA.","");
-      render();
-      return;
-    }
-    const rateGate=currentPatternRateDecision(code);
-    if(!rateGate.allow){
+    const decision=currentAdaptiveDecision(code);
+    if(!decision.allow){
       lastFinalSignal=null;
       localStorage.removeItem("last_final_signal");
       hideTradeAlert();
       setStatus(
-        "BỎ LỆNH "+code+" • tỷ lệ thắng "+(rateGate.rate===null?"chưa có dữ liệu":rateGate.rate.toFixed(1)+"%")+" • yêu cầu từ 60% trở lên.",
+        "BỎ LỆNH "+code+" • "+decision.reason+(decision.rate===null?"":" • chỉ số "+decision.rate.toFixed(1)+"%"),
         ""
       );
       render();
       return;
     }
+    const finalDirection=decision.direction;
     lastFinalSignal={
       sourceStart:liveStart,
       targetStart:liveStart+INTERVAL,
       code,
-      pred,
+      pred:finalDirection,
+      originalPred:pred,
       group:patternGroupName(code),
       closedColor:closed.c,
-      historyGate:gate.status,
-      patternRate:rateGate.rate
+      adaptiveMode:decision.mode,
+      adaptiveRate:decision.rate
     };
     localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
-    const buyText=pred==="G"?"MUA XANH":"MUA ĐỎ";
+    const buyText=finalDirection==="G"?"MUA XANH":"MUA ĐỎ";
     showTradeAlert(
-      pred==="G"?"green":"red",
-      (pred==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
-      (lastFinalSignal.group||"")+" • mẫu "+code+" • tỷ lệ thắng "+rateGate.rate.toFixed(1)+"% • "+(gate.status==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh • theo 16 mẫu")+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+      finalDirection==="G"?"green":"red",
+      (finalDirection==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
+      (lastFinalSignal.group||"")+" • mẫu "+code+" • "+(decision.mode==="REVERSE_LOSS"||decision.mode==="GLOBAL_LOSS"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+decision.rate.toFixed(1)+"% • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
     );
-    threeSecondAlert(pred==="G"?"green":"red");
-    flash(pred==="G"?"green":"red");
+    threeSecondAlert(finalDirection==="G"?"green":"red");
+    flash(finalDirection==="G"?"green":"red");
     render();
   }catch(e){
     setStatus("Lỗi chốt nến live: "+(e.message||e),"err");
@@ -666,7 +659,8 @@ function renderPatternStats(){
       '<td>'+row.occurrences+'</td>'+
       '<td class="green">'+row.wins+'</td>'+
       '<td class="red">'+row.losses+'</td>'+
-      '<td class="'+rateClass+'">'+(rate===null?"—":rate.toFixed(1)+"%")+'</td>';
+      '<td class="'+rateClass+'">'+(rate===null?"—":rate.toFixed(1)+"%")+'</td>'+
+      '<td class="'+(rate===null?"":(100-rate)>=60?"rateBad":"")+'">'+(rate===null?"—":(100-rate).toFixed(1)+"%")+'</td>';
     $("patternStats").appendChild(tr);
   });
 }
@@ -684,28 +678,83 @@ function decisionFromLast100(code,settled){
     const item=recent[i];
     if(item.pattern!==code)continue;
     return {
-      allow:item.win===true,
       status:item.win===true?"WIN":"LOSS",
       found:true,
       item
     };
   }
-  return {allow:true,status:"NEW",found:false,item:null};
+  return {status:"NEW",found:false,item:null};
 }
-function currentHistoryDecision(code){
-  return decisionFromLast100(code,compute().settled);
+function oppositeColor(color){return color==="G"?"R":"G"}
+function statRates(row){
+  if(!row||!row.settled)return {winRate:null,lossRate:null};
+  const winRate=row.wins/row.settled*100;
+  return {winRate,lossRate:100-winRate};
 }
-function currentPatternRateDecision(code){
-  const row=buildPatternStats().find(item=>item.code===code);
-  if(!row||!row.settled)return {allow:false,rate:null,wins:0,losses:0,settled:0};
-  const rate=row.wins/row.settled*100;
+function strongestRawSideFromRows(rows){
+  let bestWin=null,bestLoss=null;
+  for(const row of rows){
+    const rates=statRates(row);
+    if(rates.winRate!==null&&(!bestWin||rates.winRate>bestWin.rate))bestWin={code:row.code,rate:rates.winRate,side:"WIN"};
+    if(rates.lossRate!==null&&(!bestLoss||rates.lossRate>bestLoss.rate))bestLoss={code:row.code,rate:rates.lossRate,side:"LOSS"};
+  }
+  if(!bestWin&&!bestLoss)return null;
+  if(!bestLoss)return bestWin;
+  if(!bestWin)return bestLoss;
+  return bestWin.rate>=bestLoss.rate?bestWin:bestLoss;
+}
+function adaptiveDecisionFromRows(code,settled,rows){
+  const pred=PATTERNS[code]||null;
+  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 16 mẫu"};
+  const row=rows.find(item=>item.code===code);
+  const rates=statRates(row);
+  const recent=decisionFromLast100(code,settled);
+  if(recent.found){
+    if(recent.status==="WIN"){
+      return {
+        allow:rates.winRate!==null&&rates.winRate>=60,
+        mode:"FOLLOW_WIN",
+        direction:pred,
+        rate:rates.winRate,
+        recent,
+        reason:rates.winRate===null?"Chưa có tỷ lệ thắng":"A gần nhất THẮNG → giữ màu gốc"
+      };
+    }
+    return {
+      allow:rates.lossRate!==null&&rates.lossRate>=60,
+      mode:"REVERSE_LOSS",
+      direction:oppositeColor(pred),
+      rate:rates.lossRate,
+      recent,
+      reason:rates.lossRate===null?"Chưa có tỷ lệ thua":"A gần nhất THUA → đảo màu"
+    };
+  }
+  const strongest=strongestRawSideFromRows(rows);
+  if(!strongest)return {allow:false,mode:"NEW",direction:null,rate:null,recent,reason:"Chưa đủ dữ liệu tỷ lệ"};
+  if(strongest.code!==code){
+    return {
+      allow:false,mode:"WAIT_STRONGEST",direction:null,rate:strongest.rate,recent,strongest,
+      reason:"A chưa có trong 100 lệnh • đang chờ mẫu mạnh nhất "+strongest.code
+    };
+  }
+  const reverse=strongest.side==="LOSS";
   return {
-    allow:rate>=60,
-    rate,
-    wins:row.wins,
-    losses:row.losses,
-    settled:row.settled
+    allow:strongest.rate>=60,
+    mode:reverse?"GLOBAL_LOSS":"GLOBAL_WIN",
+    direction:reverse?oppositeColor(pred):pred,
+    rate:strongest.rate,
+    recent,strongest,
+    reason:reverse?"A chưa có • đây là mẫu thua mạnh nhất → đảo màu":"A chưa có • đây là mẫu thắng mạnh nhất → giữ màu gốc"
   };
+}
+function rawRowsFromStats(rawStats){
+  return allPatternCodes().map(code=>{
+    const rs=rawStats[code]||{wins:0,losses:0,settled:0};
+    return {code,pred:PATTERNS[code],wins:rs.wins,losses:rs.losses,settled:rs.settled};
+  });
+}
+function currentAdaptiveDecision(code){
+  return adaptiveDecisionFromRows(code,compute().settled,buildPatternStats());
 }
 function compute(){
   const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
@@ -716,26 +765,28 @@ function compute(){
   for(const raw of buildSignals()){
     if(!raw.actual)continue;
     const s={...raw};
-    const rs=rawStats[s.pattern]||{wins:0,losses:0,settled:0};
-    const priorRate=rs.settled?rs.wins/rs.settled*100:null;
-    const rateAllowed=priorRate!==null&&priorRate>=60;
-    const historyGate=decisionFromLast100(s.pattern,settled);
-    if(!historyGate.allow||!rateAllowed){
+    const rowsBefore=rawRowsFromStats(rawStats);
+    const decision=adaptiveDecisionFromRows(s.pattern,settled,rowsBefore);
+    if(!decision.allow){
       s.skipped=true;
-      s.historyGate=historyGate.status;
-      s.patternRate=priorRate;
-      s.skipReason=!historyGate.allow
-        ?"Mẫu gần nhất trong 100 lệnh là THUA"
-        :(priorRate===null?"Mẫu chưa có tỷ lệ thắng":"Tỷ lệ thắng dưới 60%");
+      s.adaptiveMode=decision.mode;
+      s.adaptiveRate=decision.rate;
+      s.skipReason=decision.reason;
       skipped.push(s);
     }else{
       const amount=step===2?bet2:bet1;
-      s.step=step;s.amount=amount;s.historyGate=historyGate.status;s.patternRate=priorRate;
-      s.win=s.pred===s.actual;
+      s.step=step;
+      s.amount=amount;
+      s.direction=decision.direction;
+      s.originalPred=s.pred;
+      s.adaptiveMode=decision.mode;
+      s.adaptiveRate=decision.rate;
+      s.win=s.direction===s.actual;
       if(s.win){wins++;pnl+=amount*payout}else{losses++;pnl-=amount}
       settled.push(s);
       step=(step===1&&s.win)?2:1;
     }
+    const rs=rawStats[s.pattern]||{wins:0,losses:0,settled:0};
     const rawWin=s.pred===s.actual;
     rs.settled++;
     if(rawWin)rs.wins++;else rs.losses++;
@@ -810,30 +861,27 @@ function render(){
   }
   const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
-  const tentativeGate=livePattern?.pred?currentHistoryDecision(livePattern.code):null;
-  const tentativeRate=livePattern?.pred?currentPatternRateDecision(livePattern.code):null;
-  const tentativeAllowed=!!(livePattern?.pred&&tentativeGate?.allow&&tentativeRate?.allow);
-  const pred=finalSignal?.pred||(tentativeAllowed?livePattern?.pred:null);
+  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code):null;
+  const tentativeAllowed=!!(livePattern?.pred&&adaptive?.allow);
+  const pred=finalSignal?.pred||(tentativeAllowed?adaptive.direction:null);
   const targetT=finalSignal?currentStart:(liveMarket.end||null);
   $("buy").textContent=finalSignal
     ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
     :livePattern?.pred&&!tentativeAllowed
-      ?(!tentativeGate?.allow?"BỎ MẪU • GẦN NHẤT THUA":"BỎ MẪU • TỶ LỆ < 60%")
+      ?"CHỜ / KHÔNG ĐẠT ĐIỀU KIỆN"
       :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
   if(finalSignal){
-    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • tỷ lệ thắng "+Number(finalSignal.patternRate).toFixed(1)+"% • "+(finalSignal.historyGate==="WIN"?"lần gần nhất THẮNG trong 100 lệnh":"chưa có trong 100 lệnh")+" • vào lệnh ngay.";
-  }else if(livePattern?.pred&&tentativeGate&&!tentativeGate.allow){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • lần gần nhất trong 100 lệnh là THUA → bỏ lệnh, không cảnh báo.";
-  }else if(livePattern?.pred&&tentativeRate&&!tentativeRate.allow){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • tỷ lệ thắng "+(tentativeRate.rate===null?"chưa có dữ liệu":tentativeRate.rate.toFixed(1)+"%")+" → chưa đạt ngưỡng 60%, bỏ lệnh.";
-  }else if(livePattern?.pred&&tentativeGate?.status==="WIN"){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • tỷ lệ thắng "+tentativeRate.rate.toFixed(1)+"% • lần gần nhất trong 100 lệnh là THẮNG → được phép chờ chốt.";
-  }else if(livePattern?.pred){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" chưa có trong 100 lệnh • tỷ lệ thắng "+tentativeRate.rate.toFixed(1)+"% → vẫn được phép theo công thức 16 mẫu.";
+    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.adaptiveMode==="REVERSE_LOSS"||finalSignal.adaptiveMode==="GLOBAL_LOSS"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+Number(finalSignal.adaptiveRate).toFixed(1)+"% • vào lệnh ngay.";
+  }else if(livePattern?.pred&&adaptive){
+    if(adaptive.allow){
+      $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+" • chỉ số "+adaptive.rate.toFixed(1)+"% • chờ nến live đóng để chốt.";
+    }else{
+      $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+(adaptive.rate===null?"":" • chỉ số "+adaptive.rate.toFixed(1)+"%")+" → chưa báo lệnh.";
+    }
   }else if(livePattern){
     $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 16 mẫu; vẫn chờ màu đóng cuối cùng.";
   }else{
