@@ -1,0 +1,9 @@
+name = "boss-5-nen-cloud"
+main = "src/index.js"
+compatibility_date = "2026-09-25"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Sau khi deploy:
+# wrangler secret put PREDICT_API_KEY
