@@ -22,6 +22,8 @@ input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
 .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.ptable{width:100%;min-width:610px;border-collapse:collapse;font-size:12px}.ptable th,.ptable td{padding:9px 7px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}.ptable th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:700}.ptable td:first-child,.ptable th:first-child{text-align:left}.picons{font-size:15px;letter-spacing:1px}.buyg{color:var(--g);font-weight:800}.buyr{color:var(--r);font-weight:800}.noentry{color:var(--muted)}.rateGood{color:var(--g);font-weight:800}.rateBad{color:var(--r);font-weight:800}.mini{font-size:10px;color:var(--muted);display:block;margin-top:2px}
 .livebox{display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:center}.liveorb{width:72px;height:72px;border-radius:22px;background:#10161c;display:grid;place-items:center;font-size:48px}.countdown{font:900 32px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px}.liveMeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.liveMeta>div{background:#10161c;border-radius:11px;padding:9px}.liveMeta b{display:block;margin-top:3px;font-size:14px}
+.alertbox{display:none;border:2px solid var(--b);background:#112235;border-radius:16px;padding:14px;margin:11px 0}.alertbox.show{display:block}.alertbox.prepare{border-color:#ffc14d;background:#2a220f}.alertbox.green{border-color:var(--g);background:#0d2c20}.alertbox.red{border-color:var(--r);background:#321515}.alertTitle{font-size:22px;font-weight:900}.alertDetail{margin-top:5px;font-size:13px;color:#d4dbe2}.alertActions{display:flex;gap:8px;margin-top:10px}.alertActions button{flex:1}
+@keyframes flashPrepare{0%,100%{box-shadow:inset 0 0 0 0 rgba(255,193,77,0)}50%{box-shadow:inset 0 0 0 8px rgba(255,193,77,.38)}}@keyframes flashGreen{0%,100%{box-shadow:inset 0 0 0 0 rgba(9,200,120,0)}50%{box-shadow:inset 0 0 0 10px rgba(9,200,120,.36)}}@keyframes flashRed{0%,100%{box-shadow:inset 0 0 0 0 rgba(255,75,75,0)}50%{box-shadow:inset 0 0 0 10px rgba(255,75,75,.36)}}body.flash-prepare{animation:flashPrepare .35s 6}body.flash-green{animation:flashGreen .3s 8}body.flash-red{animation:flashRed .3s 8}
 </style>
 </head>
 <body><main>
@@ -29,6 +31,21 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div><h1>Boss 5 Nến</h1><div class="sub">Web chạy trực tiếp trên iPhone • không có Boss Cloud</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
+
+<section class="card">
+  <div class="row">
+    <div>
+      <b>Cảnh báo 1 phút</b>
+      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp</div>
+    </div>
+    <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
+  </div>
+</section>
+
+<section id="tradeAlert" class="alertbox">
+  <div id="tradeAlertTitle" class="alertTitle">CHỜ</div>
+  <div id="tradeAlertDetail" class="alertDetail"></div>
+</section>
 
 <section class="card" id="setupCard">
   <b>Kết nối dữ liệu Prediction</b>
@@ -154,7 +171,163 @@ let liveTimer=null;
 let countdownTimer=null;
 let busy=false;
 let liveMarket={start:0,end:0,startPrice:null,currentPrice:null,color:null,source:""};
+let audioContext=null;
+let alertsEnabled=localStorage.getItem("boss_alerts_enabled")==="1";
+let wakeLock=null;
+let prepareAlertedStart=Number(sessionStorage.getItem("prepare_alerted_start")||0);
+let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
+let finalizingStart=0;
+let lastFinalSignal=JSON.parse(sessionStorage.getItem("last_final_signal")||"null");
 
+function validFourPrefixes(){
+  return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,4)));
+}
+function getClosed4Before(liveStart){
+  const byTime=new Map(rounds.map(x=>[x.t,x]));
+  const wanted=[liveStart-4*INTERVAL,liveStart-3*INTERVAL,liveStart-2*INTERVAL,liveStart-INTERVAL];
+  const items=wanted.map(t=>byTime.get(t)).filter(Boolean);
+  return items.length===4?items:null;
+}
+function prefixInfo(liveStart){
+  const closed4=getClosed4Before(liveStart);
+  if(!closed4)return null;
+  const prefix=closed4.map(x=>x.c).join("");
+  if(!validFourPrefixes().has(prefix))return null;
+  const redCode=prefix+"R",greenCode=prefix+"G";
+  return {
+    closed4,prefix,
+    redBuy:PATTERNS[redCode]||null,
+    greenBuy:PATTERNS[greenCode]||null
+  };
+}
+async function enableAlerts(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC){
+      if(!audioContext)audioContext=new AC();
+      if(audioContext.state==="suspended")await audioContext.resume();
+      beepSequence([880],0.09,0.03);
+    }
+    alertsEnabled=true;
+    localStorage.setItem("boss_alerts_enabled","1");
+    $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
+    $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
+    try{
+      if("wakeLock" in navigator)wakeLock=await navigator.wakeLock.request("screen");
+    }catch(_){}
+  }catch(e){
+    $("alertPermissionText").textContent="Không bật được âm thanh: "+(e.message||e);
+  }
+}
+function beepSequence(freqs,duration=0.12,gap=0.08){
+  if(!alertsEnabled||!audioContext)return;
+  let t=audioContext.currentTime+0.02;
+  freqs.forEach(freq=>{
+    const osc=audioContext.createOscillator();
+    const gain=audioContext.createGain();
+    osc.type="sine";osc.frequency.value=freq;
+    gain.gain.setValueAtTime(0.0001,t);
+    gain.gain.exponentialRampToValueAtTime(0.28,t+0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001,t+duration);
+    osc.connect(gain);gain.connect(audioContext.destination);
+    osc.start(t);osc.stop(t+duration+0.02);
+    t+=duration+gap;
+  });
+}
+function tryVibrate(pattern){
+  try{if(alertsEnabled&&navigator.vibrate)navigator.vibrate(pattern)}catch(_){}
+}
+function flash(kind){
+  document.body.classList.remove("flash-prepare","flash-green","flash-red");
+  void document.body.offsetWidth;
+  document.body.classList.add("flash-"+kind);
+  setTimeout(()=>document.body.classList.remove("flash-"+kind),3000);
+}
+function showTradeAlert(kind,title,detail){
+  const box=$("tradeAlert");
+  box.className="alertbox show "+kind;
+  $("tradeAlertTitle").textContent=title;
+  $("tradeAlertDetail").textContent=detail;
+}
+function hideTradeAlert(){
+  $("tradeAlert").className="alertbox";
+}
+function firePrepareAlert(liveStart,remain){
+  if(prepareAlertedStart===liveStart)return;
+  const info=prefixInfo(liveStart);
+  if(!info)return;
+  prepareAlertedStart=liveStart;
+  sessionStorage.setItem("prepare_alerted_start",String(liveStart));
+  const redText=info.redBuy==="G"?"XANH":"ĐỎ";
+  const greenText=info.greenBuy==="G"?"XANH":"ĐỎ";
+  showTradeAlert(
+    "prepare",
+    "⚠️ CHUẨN BỊ VÀO LỆNH",
+    "4 nến khớp "+info.prefix+" • còn "+remain+" giây. Nếu nến live đóng ĐỎ → MUA "+redText+"; đóng XANH → MUA "+greenText+"."
+  );
+  beepSequence([880,880],0.13,0.12);
+  tryVibrate([180,100,180]);
+  flash("prepare");
+}
+async function finalizeLiveRound(liveStart){
+  if(!runtimeKey||finalizingStart===liveStart||finalizedLiveStart===liveStart)return;
+  const info=prefixInfo(liveStart);
+  if(!info){
+    finalizedLiveStart=liveStart;
+    sessionStorage.setItem("finalized_live_start",String(liveStart));
+    return;
+  }
+  finalizingStart=liveStart;
+  try{
+    let closed=null;
+    for(let attempt=0;attempt<12;attempt++){
+      closed=await fetchRound(liveStart);
+      if(closed?.c)break;
+      await new Promise(r=>setTimeout(r,1000));
+    }
+    if(!closed?.c)return;
+    mergeRounds([closed]);
+    const code=info.prefix+closed.c;
+    const pred=PATTERNS[code]||null;
+    finalizedLiveStart=liveStart;
+    sessionStorage.setItem("finalized_live_start",String(liveStart));
+    if(!pred){
+      lastFinalSignal=null;
+      sessionStorage.removeItem("last_final_signal");
+      showTradeAlert("prepare","KHÔNG VÀO LỆNH","Mẫu đóng "+code+" không thuộc 16 mẫu.");
+      return;
+    }
+    lastFinalSignal={
+      sourceStart:liveStart,
+      targetStart:liveStart+INTERVAL,
+      code,
+      pred,
+      group:patternGroupName(code),
+      closedColor:closed.c
+    };
+    sessionStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
+    const buyText=pred==="G"?"MUA XANH":"MUA ĐỎ";
+    showTradeAlert(
+      pred==="G"?"green":"red",
+      (pred==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
+      (lastFinalSignal.group||"")+" • mẫu "+code+" đã chốt • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+    );
+    beepSequence(pred==="G"?[1050,1250,1450]:[650,520,420],0.15,0.08);
+    tryVibrate([250,90,250,90,400]);
+    flash(pred==="G"?"green":"red");
+    render();
+  }catch(e){
+    setStatus("Lỗi chốt nến live: "+(e.message||e),"err");
+  }finally{
+    finalizingStart=0;
+  }
+}
+function updateAlertPermissionUI(){
+  if(alertsEnabled){
+    $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
+    $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
+  }
+}
 function loadPrefs(){
   const saved=localStorage.getItem("predict_api_key");
   if(saved){runtimeKey=saved;$("apiKey").value=saved;$("rememberKey").checked=true}
@@ -281,7 +454,7 @@ function startPolling(){
   if(countdownTimer)clearInterval(countdownTimer);
   pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000);
   liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
-  countdownTimer=setInterval(renderLive,250);
+  countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
   fetchLiveMarket();
 }
 function consecutive(a,b){return b.t-a.t===INTERVAL}
@@ -352,13 +525,24 @@ function compute(){
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
 function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
+function alertTick(){
+  const now=Date.now()/1000;
+  const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
+  const end=liveMarket.end||start+INTERVAL;
+  const remain=Math.max(0,Math.ceil(end-now));
+  if(remain<=60&&remain>0)firePrepareAlert(start,remain);
+  if(now>=end&&start>0)finalizeLiveRound(start);
+}
 function renderLive(){
   const now=Date.now()/1000;
   let start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
   let end=liveMarket.end||start+INTERVAL;
   if(now>=end){
-    start=Math.floor(now/INTERVAL)*INTERVAL;end=start+INTERVAL;
-    if(liveMarket.start!==start&&runtimeKey)fetchLiveMarket();
+    const closedStart=start;
+    finalizeLiveRound(closedStart);
+    const currentStart=Math.floor(now/INTERVAL)*INTERVAL;
+    start=currentStart;end=currentStart+INTERVAL;
+    if(liveMarket.start!==currentStart&&runtimeKey)fetchLiveMarket();
   }
   const remain=Math.max(0,Math.ceil(end-now));
   const mm=String(Math.floor(remain/60)).padStart(2,"0");
@@ -403,17 +587,23 @@ function render(){
     if(i===4)d.style.outline="2px solid rgba(76,165,255,.7)";
     $("candles").appendChild(d);
   }
-  const pred=livePattern?.pred||null;
-  const targetT=liveMarket.end||null;
-  $("buy").textContent=pred==="G"?"MUA XANH":pred==="R"?"MUA ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE";
+  const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
+  const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
+  const pred=finalSignal?.pred||livePattern?.pred||null;
+  const targetT=finalSignal?currentStart:(liveMarket.end||null);
+  $("buy").textContent=finalSignal
+    ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
+    :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
-  if(livePattern&&pred){
-    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" đang hình thành. Lệnh được chốt khi nến live kết thúc 5 phút.";
+  if(finalSignal){
+    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • vào lệnh ngay trong vòng hiện tại.";
+  }else if(livePattern&&pred){
+    $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" đang hình thành. Chỉ là dự kiến; chờ nến live đóng mới chốt lệnh.";
   }else if(livePattern){
-    $("freshness").textContent="Mẫu "+livePattern.code+" không nằm trong 16 mẫu của ảnh mới.";
+    $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 16 mẫu; vẫn chờ màu đóng cuối cùng.";
   }else{
     $("freshness").textContent="Đang chờ đủ 4 nến đóng liên tiếp và màu nến live.";
   }
@@ -426,8 +616,13 @@ function render(){
   padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
   renderPatternStats();
 }
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&runtimeKey){refreshNow();fetchLiveMarket()}});
-loadPrefs();render();renderLive();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState==="visible"){
+    if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
+    if(runtimeKey){refreshNow();fetchLiveMarket()}
+  }
+});
+loadPrefs();updateAlertPermissionUI();render();renderLive();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body></html>
