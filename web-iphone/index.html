@@ -172,12 +172,13 @@ let countdownTimer=null;
 let busy=false;
 let liveMarket={start:0,end:0,startPrice:null,currentPrice:null,color:null,source:""};
 let audioContext=null;
-let alertsEnabled=localStorage.getItem("boss_alerts_enabled")==="1";
+let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
+let alertsEnabled=false;
 let wakeLock=null;
 let prepareAlertedStart=Number(sessionStorage.getItem("prepare_alerted_start")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
-let lastFinalSignal=JSON.parse(sessionStorage.getItem("last_final_signal")||"null");
+let lastFinalSignal=JSON.parse(localStorage.getItem("last_final_signal")||"null");
 
 function validFourPrefixes(){
   return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,4)));
@@ -209,6 +210,7 @@ async function enableAlerts(){
       beepSequence([880],0.09,0.03);
     }
     alertsEnabled=true;
+    alertsWanted=true;
     localStorage.setItem("boss_alerts_enabled","1");
     $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
     $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
@@ -293,7 +295,7 @@ async function finalizeLiveRound(liveStart){
     sessionStorage.setItem("finalized_live_start",String(liveStart));
     if(!pred){
       lastFinalSignal=null;
-      sessionStorage.removeItem("last_final_signal");
+      localStorage.removeItem("last_final_signal");
       showTradeAlert("prepare","KHÔNG VÀO LỆNH","Mẫu đóng "+code+" không thuộc 16 mẫu.");
       return;
     }
@@ -305,7 +307,7 @@ async function finalizeLiveRound(liveStart){
       group:patternGroupName(code),
       closedColor:closed.c
     };
-    sessionStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
+    localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
     const buyText=pred==="G"?"MUA XANH":"MUA ĐỎ";
     showTradeAlert(
       pred==="G"?"green":"red",
@@ -326,6 +328,12 @@ function updateAlertPermissionUI(){
   if(alertsEnabled){
     $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
     $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
+  }else if(alertsWanted){
+    $("enableAlertBtn").textContent="🔔 CHẠM ĐỂ KÍCH HOẠT";
+    $("alertPermissionText").textContent="iOS yêu cầu chạm lại sau khi mở trang để phát bíp.";
+  }else{
+    $("enableAlertBtn").textContent="🔔 BẬT CẢNH BÁO";
+    $("alertPermissionText").textContent="Bấm một lần để Safari cho phép phát bíp.";
   }
 }
 function loadPrefs(){
