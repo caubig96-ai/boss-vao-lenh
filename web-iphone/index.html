@@ -547,12 +547,17 @@ async function forceHistory100(){
   }
   try{
     await refreshNow();
-    await ensureHistory100();
-    const count=historyTradeCount();
+    const count=await ensureHistory100();
+    if(count<=0)throw new Error("Không lấy được dữ liệu lịch sử từ Predict API");
     if(btn){
       btn.classList.remove("working");
-      btn.classList.add("success");
-      btn.textContent=count>=100?"✓ ĐÃ CẬP NHẬT ĐỦ 100 LỆNH":"✓ ĐÃ CẬP NHẬT "+count+"/100";
+      if(count>=100){
+        btn.classList.add("success");
+        btn.textContent="✓ ĐÃ CẬP NHẬT ĐỦ 100 LỆNH";
+      }else{
+        btn.classList.add("fail");
+        btn.textContent="⚠ CHỈ CÓ "+count+"/100 LỆNH";
+      }
     }
   }catch(e){
     if(btn){
@@ -572,8 +577,8 @@ async function forceHistory100(){
   }
 }
 async function ensureHistory100(){
-  if(historyLoading||!runtimeKey)return;
-  if(historyTradeCount()>=100){render();return}
+  if(historyLoading||!runtimeKey)return historyTradeCount();
+  if(historyTradeCount()>=100){render();return historyTradeCount()}
   historyLoading=true;
   let pages=0,cursor="",added=0,lastCursor="";
   try{
@@ -609,11 +614,13 @@ async function ensureHistory100(){
       setStatus("Đã đồng bộ thời gian thực • đã dựng đủ 100 lệnh V/X từ lịch sử Prediction.","ok");
     }else{
       progress(count,100,"Đã tìm được "+count+"/100 lệnh từ lịch sử hiện có.");
-      setStatus("Đã đồng bộ thời gian thực • lịch sử hiện dựng được "+count+"/100 lệnh. Tool sẽ giữ dữ liệu và bổ sung tiếp khi có thêm lịch sử.","ok");
+      setStatus("Chưa đủ dữ liệu lịch sử: "+count+"/100 lệnh. Bấm lại sau hoặc kiểm tra API key/kết nối.","err");
     }
+    return count;
   }catch(e){
     const msg=String(e.message||e);
     setStatus("Nến live vẫn chạy. Lỗi tải lịch sử: "+msg+(msg.includes("429")?" • API đang giới hạn tốc độ, chờ khoảng 1 phút rồi bấm CẬP NHẬT 100 LỆNH.":""),"err");
+    throw e;
   }finally{
     historyLoading=false;
   }
@@ -1017,6 +1024,9 @@ document.addEventListener("visibilitychange",async()=>{
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();if(runtimeKey){setTimeout(autoStart,100)}
-if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+if("serviceWorker"in navigator){
+  navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
+  caches?.keys?.().then(keys=>Promise.all(keys.filter(k=>k.startsWith("boss-iphone-static")).map(k=>caches.delete(k)))).catch(()=>{});
+}
 </script>
 </body></html>
