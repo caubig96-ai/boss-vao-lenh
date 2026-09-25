@@ -127,7 +127,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 kết quả gần nhất của 16 mẫu màu</b><div class="label">V/X ở đây là kết quả gốc của 16 mẫu • dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất của 16 mẫu màu</b><div class="label">Cửa sổ trượt 100 lệnh • lệnh mới vào thì lệnh cũ nhất ra • V/X dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -135,11 +135,11 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="row">
     <div>
       <b>Thống kê 16 mô hình 5 nến</b>
-      <div class="label">4 nhóm × 4 mẫu • chỉ dùng bảng ảnh mới</div>
+      <div class="label">4 nhóm × 4 mẫu • thống kê đúng cửa sổ 100 lệnh gần nhất</div>
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">4 nến đầu là nến đã đóng, nến thứ 5 là nến live khi kết thúc. Bảng 100 V/X dùng kết quả gốc của 16 mẫu. Nếu đúng mẫu hiện tại có kết quả gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu. Hướng được chọn phải có chỉ số tương ứng từ 60% trở lên. Nếu mẫu chưa có trong 100 lệnh, tool mới xét mẫu thắng/thua mạnh nhất trong 16 mẫu.</div>
+  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi khi có lệnh mẫu mới có kết quả, lệnh mới được thêm vào và lệnh cũ nhất bị đẩy ra; tỷ lệ thắng/thua tự cập nhật. Nếu đúng mẫu hiện tại gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -643,25 +643,20 @@ function patternIcons(code){return [...code].map(c=>c==="G"?"🟢":"🔴").join(
 function buildPatternStats(){
   const stats={};
   allPatternCodes().forEach(code=>stats[code]={code,pred:PATTERNS[code]||null,occurrences:0,wins:0,losses:0,settled:0});
-  const byTime=new Map(rounds.map(x=>[x.t,x]));
-  for(let i=4;i<rounds.length;i++){
-    const w=rounds.slice(i-4,i+1);
-    if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
-    const code=w.map(x=>x.c).join("");
-    const row=stats[code];
+  const recent=rawPatternSettled().slice(-100);
+  for(const item of recent){
+    const row=stats[item.pattern];
     if(!row)continue;
     row.occurrences++;
-    if(!row.pred)continue;
-    const actual=byTime.get(w[4].t+INTERVAL)?.c||null;
-    if(!actual)continue;
     row.settled++;
-    if(actual===row.pred)row.wins++;else row.losses++;
+    if(item.win)row.wins++;else row.losses++;
   }
   return allPatternCodes().map(code=>stats[code]);
 }
 function renderPatternStats(){
   const rows=buildPatternStats();
-  $("patternRoundCount").textContent=rounds.length+" vòng";
+  const recentCount=rawPatternSettled().slice(-100).length;
+  $("patternRoundCount").textContent=recentCount+"/100 lệnh";
   $("patternStats").innerHTML="";
   rows.forEach(row=>{
     const tr=document.createElement("tr");
