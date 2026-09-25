@@ -175,7 +175,8 @@ let audioContext=null;
 let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
 let alertsEnabled=false;
 let wakeLock=null;
-let prepareAlertedStart=Number(sessionStorage.getItem("prepare_alerted_start")||0);
+let prepare60Start=Number(sessionStorage.getItem("prepare_60_start")||0);
+let prepare30Start=Number(sessionStorage.getItem("prepare_30_start")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
 let lastFinalSignal=JSON.parse(localStorage.getItem("last_final_signal")||"null");
@@ -239,6 +240,15 @@ function beepSequence(freqs,duration=0.12,gap=0.08){
 function tryVibrate(pattern){
   try{if(alertsEnabled&&navigator.vibrate)navigator.vibrate(pattern)}catch(_){}
 }
+function threeSecondAlert(kind="prepare"){
+  if(!alertsEnabled)return;
+  const prepareFreq=kind==="prepare"?880:(kind==="green"?1250:520);
+  const freqs=[];
+  for(let i=0;i<7;i++)freqs.push(prepareFreq);
+  beepSequence(freqs,0.20,0.22);
+  // ~3 seconds total vibration pattern where supported.
+  tryVibrate([300,150,300,150,300,150,300,150,300,150,300,150,300]);
+}
 function flash(kind){
   document.body.classList.remove("flash-prepare","flash-green","flash-red");
   void document.body.offsetWidth;
@@ -254,21 +264,26 @@ function showTradeAlert(kind,title,detail){
 function hideTradeAlert(){
   $("tradeAlert").className="alertbox";
 }
-function firePrepareAlert(liveStart,remain){
-  if(prepareAlertedStart===liveStart)return;
+function firePrepareAlert(liveStart,remain,stage){
   const info=prefixInfo(liveStart);
   if(!info)return;
-  prepareAlertedStart=liveStart;
-  sessionStorage.setItem("prepare_alerted_start",String(liveStart));
+  if(stage===60){
+    if(prepare60Start===liveStart)return;
+    prepare60Start=liveStart;
+    sessionStorage.setItem("prepare_60_start",String(liveStart));
+  }else{
+    if(prepare30Start===liveStart)return;
+    prepare30Start=liveStart;
+    sessionStorage.setItem("prepare_30_start",String(liveStart));
+  }
   const redText=info.redBuy==="G"?"XANH":"ĐỎ";
   const greenText=info.greenBuy==="G"?"XANH":"ĐỎ";
   showTradeAlert(
     "prepare",
-    "⚠️ CHUẨN BỊ VÀO LỆNH",
+    stage===60?"⚠️ CHUẨN BỊ VÀO LỆNH":"⚠️ CÒN 30 GIÂY",
     "4 nến khớp "+info.prefix+" • còn "+remain+" giây. Nếu nến live đóng ĐỎ → MUA "+redText+"; đóng XANH → MUA "+greenText+"."
   );
-  beepSequence([880,880],0.13,0.12);
-  tryVibrate([180,100,180]);
+  threeSecondAlert("prepare");
   flash("prepare");
 }
 async function finalizeLiveRound(liveStart){
@@ -314,8 +329,7 @@ async function finalizeLiveRound(liveStart){
       (pred==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
       (lastFinalSignal.group||"")+" • mẫu "+code+" đã chốt • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
     );
-    beepSequence(pred==="G"?[1050,1250,1450]:[650,520,420],0.15,0.08);
-    tryVibrate([250,90,250,90,400]);
+    threeSecondAlert(pred==="G"?"green":"red");
     flash(pred==="G"?"green":"red");
     render();
   }catch(e){
@@ -538,7 +552,8 @@ function alertTick(){
   const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
   const end=liveMarket.end||start+INTERVAL;
   const remain=Math.max(0,Math.ceil(end-now));
-  if(remain<=60&&remain>0)firePrepareAlert(start,remain);
+  if(remain<=60&&remain>30)firePrepareAlert(start,remain,60);
+  if(remain<=30&&remain>0)firePrepareAlert(start,remain,30);
   if(now>=end&&start>0)finalizeLiveRound(start);
 }
 function renderLive(){
