@@ -3,10 +3,13 @@ main = "src/index.js"
 compatibility_date = "2026-09-25"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["* * * * *"]
 
 [[kv_namespaces]]
 binding = "BOSS_KV"
 id = "843ba5a3a1cf434da559ea21e59d87c7"
 
-# PREDICT_API_KEY is configured as a Cloudflare runtime secret.
+# Runtime secrets:
+# PREDICT_API_KEY
+# CLOUD_TELEGRAM_BOT_TOKEN
+# CLOUD_TELEGRAM_CHAT_ID
