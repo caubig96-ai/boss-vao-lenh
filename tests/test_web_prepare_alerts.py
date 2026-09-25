@@ -47,6 +47,16 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("TỶ LỆ < 60%", self.source)
         self.assertIn("yêu cầu từ 60% trở lên", self.source)
 
+
+    def test_auto_start_and_history_bootstrap(self):
+        self.assertIn("async function autoStart", self.source)
+        self.assertIn("async function ensureHistory100", self.source)
+        self.assertIn("fetchResolvedCategoryPage", self.source)
+        self.assertIn("fetchOlderRoundsFallback", self.source)
+        self.assertIn("setTimeout(autoStart,100)", self.source)
+        self.assertIn("slice(-6000)", self.source)
+        self.assertIn("/100 lệnh", self.source)
+
     def test_browser_vibration_is_best_effort(self):
         self.assertIn("navigator.vibrate", self.source)
 
