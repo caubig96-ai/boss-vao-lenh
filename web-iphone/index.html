@@ -20,6 +20,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800}.secondary{background:#303944}.danger{background:#642b2b}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.ptable{width:100%;min-width:610px;border-collapse:collapse;font-size:12px}.ptable th,.ptable td{padding:9px 7px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}.ptable th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:700}.ptable td:first-child,.ptable th:first-child{text-align:left}.picons{font-size:15px;letter-spacing:1px}.buyg{color:var(--g);font-weight:800}.buyr{color:var(--r);font-weight:800}.noentry{color:var(--muted)}.rateGood{color:var(--g);font-weight:800}.rateBad{color:var(--r);font-weight:800}.mini{font-size:10px;color:var(--muted);display:block;margin-top:2px}
 </style>
 </head>
 <body><main>
@@ -74,6 +75,32 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row"><div><b>100 lệnh gần nhất</b><div class="label">V = thắng • X = thua</div></div><span id="count" class="label">0 lệnh</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
+</section>
+
+<section class="card">
+  <div class="row">
+    <div>
+      <b>Thống kê tất cả mô hình 5 nến</b>
+      <div class="label">32 tổ hợp • 24 mẫu có lệnh theo bảng của anh</div>
+    </div>
+    <span id="patternRoundCount" class="label">0 vòng</span>
+  </div>
+  <div class="note" style="margin-top:7px">Thắng/Thua được tính bằng màu của vòng 5 phút ngay sau mẫu. Mẫu “KHÔNG VÀO” vẫn ghi số lần xuất hiện nhưng không tính thắng/thua.</div>
+  <div class="tablewrap">
+    <table class="ptable">
+      <thead>
+        <tr>
+          <th>Mẫu 5 nến</th>
+          <th>Lệnh</th>
+          <th>Xuất hiện</th>
+          <th>Thắng</th>
+          <th>Thua</th>
+          <th>Tỷ lệ thắng</th>
+        </tr>
+      </thead>
+      <tbody id="patternStats"></tbody>
+    </table>
+  </div>
 </section>
 
 <section class="card">
@@ -167,6 +194,56 @@ async function refreshNow(){
 }
 function startPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000)}
 function consecutive(a,b){return b.t-a.t===INTERVAL}
+function allPatternCodes(){
+  const fixed=Object.keys(PATTERNS);
+  const all=[];
+  for(let mask=0;mask<32;mask++){
+    let code="";
+    for(let bit=4;bit>=0;bit--)code+=((mask>>bit)&1)?"R":"G";
+    all.push(code);
+  }
+  return fixed.concat(all.filter(code=>!PATTERNS[code]));
+}
+function patternIcons(code){return [...code].map(c=>c==="G"?"🟢":"🔴").join("")}
+function buildPatternStats(){
+  const stats={};
+  allPatternCodes().forEach(code=>stats[code]={code,pred:PATTERNS[code]||null,occurrences:0,wins:0,losses:0,settled:0});
+  const byTime=new Map(rounds.map(x=>[x.t,x]));
+  for(let i=4;i<rounds.length;i++){
+    const w=rounds.slice(i-4,i+1);
+    if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
+    const code=w.map(x=>x.c).join("");
+    const row=stats[code];
+    if(!row)continue;
+    row.occurrences++;
+    if(!row.pred)continue;
+    const actual=byTime.get(w[4].t+INTERVAL)?.c||null;
+    if(!actual)continue;
+    row.settled++;
+    if(actual===row.pred)row.wins++;else row.losses++;
+  }
+  return allPatternCodes().map(code=>stats[code]);
+}
+function renderPatternStats(){
+  const rows=buildPatternStats();
+  $("patternRoundCount").textContent=rounds.length+" vòng";
+  $("patternStats").innerHTML="";
+  rows.forEach(row=>{
+    const tr=document.createElement("tr");
+    const rate=row.settled?row.wins/row.settled*100:null;
+    const action=row.pred==="G"?"MUA XANH":row.pred==="R"?"MUA ĐỎ":"KHÔNG VÀO";
+    const actionClass=row.pred==="G"?"buyg":row.pred==="R"?"buyr":"noentry";
+    const rateClass=rate===null?"":rate>=50?"rateGood":"rateBad";
+    tr.innerHTML=
+      '<td><span class="picons">'+patternIcons(row.code)+'</span><span class="mini">'+row.code+'</span></td>'+
+      '<td class="'+actionClass+'">'+action+'</td>'+
+      '<td>'+row.occurrences+'</td>'+
+      '<td class="'+(row.pred?"green":"noentry")+'">'+(row.pred?row.wins:"—")+'</td>'+
+      '<td class="'+(row.pred?"red":"noentry")+'">'+(row.pred?row.losses:"—")+'</td>'+
+      '<td class="'+rateClass+'">'+(rate===null?"—":rate.toFixed(1)+"%")+'</td>';
+    $("patternStats").appendChild(tr);
+  });
+}
 function buildSignals(){
   const out=[];for(let i=4;i<rounds.length;i++){
     const w=rounds.slice(i-4,i+1);if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
@@ -202,6 +279,7 @@ function render(){
   $("balance").textContent=(calc.start+calc.pnl).toFixed(2)+" USDT";
   const hist=calc.settled.slice(-100);$("count").textContent=hist.length+" lệnh";$("history").innerHTML="";const padded=Array(100-hist.length).fill(null).concat(hist);
   padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
+  renderPatternStats();
 }
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&runtimeKey)refreshNow()});
 loadPrefs();render();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
