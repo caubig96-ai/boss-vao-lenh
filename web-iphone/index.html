@@ -49,7 +49,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card" id="setupCard">
   <b>Kết nối dữ liệu Prediction</b>
-  <div class="note" style="margin:6px 0 12px">Predict.fun Mainnet yêu cầu API key. Key chỉ được lưu trên iPhone nếu anh bật “Ghi nhớ”.</div>
+  <div class="note" style="margin:6px 0 12px">Predict.fun Mainnet yêu cầu API key. Bật “Ghi nhớ” để lần sau mở web, tool tự chạy live và tự dựng 100 lệnh lịch sử mà không cần bấm kết nối.</div>
   <div class="field"><div class="label">Predict API Key</div><input id="apiKey" type="password" autocomplete="off"></div>
   <label class="row" style="justify-content:flex-start;margin:10px 0"><input id="rememberKey" type="checkbox" style="width:auto"> <span>Ghi nhớ API key trên iPhone này</span></label>
   <button style="width:100%" onclick="connect()">KẾT NỐI & TẢI LỊCH SỬ</button>
@@ -179,6 +179,7 @@ let prepare60Start=Number(sessionStorage.getItem("prepare_60_start")||0);
 let prepare30Start=Number(sessionStorage.getItem("prepare_30_start")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
+let historyLoading=false;
 let lastFinalSignal=JSON.parse(localStorage.getItem("last_final_signal")||"null");
 
 function validFourPrefixes(){
@@ -467,9 +468,84 @@ async function fetchRound(ts){
   if(!r.ok)throw new Error("Predict API HTTP "+r.status);
   const j=await r.json();const c=parseColor(j);return c?{t:ts,c}:null
 }
+function roundFromCategory(category){
+  const m=String(category?.slug||"").match(/^btc-updown-5m-(\d+)$/);
+  if(!m)return null;
+  const t=Number(m[1]);
+  const c=parseColor(category);
+  return Number.isFinite(t)&&c?{t,c}:null;
+}
+async function fetchResolvedCategoryPage(after=""){
+  const qs=new URLSearchParams({first:"100",status:"RESOLVED"});
+  if(after)qs.set("after",after);
+  const r=await fetch(API+"/v1/categories?"+qs.toString(),{
+    headers:{"Accept":"application/json","x-api-key":runtimeKey},
+    cache:"no-store"
+  });
+  if(r.status===401||r.status===403)throw new Error("API key không hợp lệ hoặc chưa được cấp quyền.");
+  if(!r.ok)throw new Error("Predict history HTTP "+r.status);
+  const j=await r.json();
+  return {
+    cursor:String(j?.cursor||""),
+    items:Array.isArray(j?.data)?j.data:[]
+  };
+}
+function historyTradeCount(){
+  try{return compute().settled.length}catch(_){return 0}
+}
+async function ensureHistory100(){
+  if(historyLoading||!runtimeKey)return;
+  if(historyTradeCount()>=100){render();return}
+  historyLoading=true;
+  let pages=0,cursor="",added=0,lastCursor="";
+  try{
+    setStatus("Đang tự truy xuất lịch sử để dựng 100 lệnh V/X...","");
+    progress(0,100,"Đang tải lịch sử • hiện có "+historyTradeCount()+"/100 lệnh");
+    while(historyTradeCount()<100&&pages<50){
+      const page=await fetchResolvedCategoryPage(cursor);
+      pages++;
+      const btc=page.items.map(roundFromCategory).filter(Boolean);
+      if(btc.length){
+        const before=rounds.length;
+        mergeRounds(btc);
+        added+=Math.max(0,rounds.length-before);
+        render();
+      }
+      const count=historyTradeCount();
+      progress(Math.min(count,100),100,"Đang dựng lịch sử "+Math.min(count,100)+"/100 lệnh • "+rounds.length+" vòng");
+      if(count>=100)break;
+      if(!page.cursor||page.cursor===lastCursor||page.items.length===0)break;
+      lastCursor=cursor;
+      cursor=page.cursor;
+      // Nhường tài nguyên để nến live vẫn cập nhật mượt.
+      await new Promise(r=>setTimeout(r,120));
+    }
+    const count=historyTradeCount();
+    render();
+    if(count>=100){
+      progress(1,1,"Đã có đủ 100 lệnh lịch sử.");
+      setStatus("Đã đồng bộ thời gian thực • đã dựng đủ 100 lệnh V/X từ lịch sử Prediction.","ok");
+    }else{
+      progress(count,100,"Đã tìm được "+count+"/100 lệnh từ lịch sử hiện có.");
+      setStatus("Đã đồng bộ thời gian thực • lịch sử hiện dựng được "+count+"/100 lệnh. Tool sẽ giữ dữ liệu và bổ sung tiếp khi có thêm lịch sử.","ok");
+    }
+  }catch(e){
+    setStatus("Nến live vẫn chạy. Lỗi tải lịch sử tự động: "+String(e.message||e),"err");
+  }finally{
+    historyLoading=false;
+  }
+}
+async function autoStart(){
+  if(!runtimeKey)return;
+  startPolling();
+  // Ưu tiên dữ liệu hiện tại trước, lịch sử chạy tiếp ngay sau đó.
+  await Promise.allSettled([fetchLiveMarket(),refreshNow()]);
+  render();
+  ensureHistory100();
+}
 function mergeRounds(items){
   const map=new Map(rounds.map(x=>[x.t,x]));items.filter(Boolean).forEach(x=>map.set(x.t,x));
-  rounds=[...map.values()].sort((a,b)=>a.t-b.t).slice(-600);
+  rounds=[...map.values()].sort((a,b)=>a.t-b.t).slice(-6000);
   localStorage.setItem("boss_rounds",JSON.stringify(rounds));
 }
 async function mapLimit(values,limit,fn,onProgress){
@@ -478,26 +554,36 @@ async function mapLimit(values,limit,fn,onProgress){
   await Promise.all(Array.from({length:limit},worker));return out
 }
 async function connect(){
-  if(busy)return;let key=$("apiKey").value.trim()||runtimeKey;if(!key){setStatus("Nhập Predict API Key trước.","err");return}
-  runtimeKey=key;sessionStorage.setItem("predict_api_key",key);
+  if(busy)return;
+  let key=$("apiKey").value.trim()||runtimeKey;
+  if(!key){setStatus("Nhập Predict API Key trước.","err");return}
+  runtimeKey=key;
+  sessionStorage.setItem("predict_api_key",key);
   if($("rememberKey").checked)localStorage.setItem("predict_api_key",key);else localStorage.removeItem("predict_api_key");
-  busy=true;setStatus("Đang tải lịch sử Prediction...");try{
-    const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
-    const count=150;const starts=Array.from({length:count},(_,k)=>latest-(count-1-k)*INTERVAL);
-    const res=await mapLimit(starts,6,fetchRound,(d,t)=>progress(d,t,"Đang tải "+d+"/"+t+" vòng..."));
-    const firstErr=res.find(x=>x&&x.error)?.error;if(firstErr && !res.some(x=>x&&x.c))throw firstErr;
-    mergeRounds(res.filter(x=>x&&x.c));progress(1,1,"Đã tải xong.");render();
-    setStatus("Đã kết nối. Tool sẽ kiểm tra vòng mới mỗi 20 giây khi trang đang mở.","ok");
+  busy=true;
+  setStatus("Đang kết nối Prediction và khởi động dữ liệu thời gian thực...");
+  try{
     startPolling();
-  }catch(e){setStatus(String(e.message||e)+"\nNếu trình duyệt báo CORS/network dù API key đúng, Predict.fun đang chặn gọi trực tiếp từ web; trường hợp đó web thuần không thể lấy dữ liệu mà không có proxy/server.","err")}
-  finally{busy=false}
+    await Promise.allSettled([fetchLiveMarket(),refreshNow()]);
+    render();
+    setStatus("Đã kết nối thời gian thực. Đang tự dựng lịch sử 100 lệnh...","ok");
+    ensureHistory100();
+  }catch(e){
+    setStatus(String(e.message||e)+"\nNếu trình duyệt báo CORS/network dù API key đúng, Predict.fun đang chặn gọi trực tiếp từ web.","err");
+  }finally{
+    busy=false;
+  }
 }
 async function refreshNow(){
   if(!runtimeKey){setStatus("Chưa có API key. Mở phần kết nối ở trên.","err");return}
   try{
     const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
     const starts=Array.from({length:10},(_,k)=>latest-(9-k)*INTERVAL);
-    const res=await mapLimit(starts,4,fetchRound);mergeRounds(res.filter(x=>x&&x.c));render();setStatus("Đã cập nhật "+new Date().toLocaleTimeString(),"ok")
+    const res=await mapLimit(starts,4,fetchRound);
+    mergeRounds(res.filter(x=>x&&x.c));
+    render();
+    setStatus("Đã cập nhật thời gian thực "+new Date().toLocaleTimeString(),"ok");
+    if(historyTradeCount()<100&&!historyLoading)ensureHistory100()
   }catch(e){setStatus(String(e.message||e),"err")}
 }
 function startPolling(){
@@ -731,7 +817,7 @@ function render(){
   $("pnl").textContent=(calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT";
   $("pnl").className=calc.pnl>0?"green":calc.pnl<0?"red":"";
   $("balance").textContent=(calc.start+calc.pnl).toFixed(2)+" USDT";
-  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+" lệnh";$("history").innerHTML="";
+  const hist=calc.settled.slice(-100);$("count").textContent=hist.length+"/100 lệnh"+(historyLoading?" • đang tải":"");$("history").innerHTML="";
   const padded=Array(100-hist.length).fill(null).concat(hist);
   padded.forEach(s=>{const d=document.createElement("div");if(!s){d.className="cell";d.textContent="·"}else{d.className="cell "+(s.win?"v":"x");d.textContent=s.win?"V":"X"}$("history").appendChild(d)});
   renderPatternStats();
@@ -742,7 +828,7 @@ document.addEventListener("visibilitychange",async()=>{
     if(runtimeKey){refreshNow();fetchLiveMarket()}
   }
 });
-loadPrefs();updateAlertPermissionUI();render();renderLive();if(runtimeKey){startPolling();setTimeout(refreshNow,300)}
+loadPrefs();updateAlertPermissionUI();render();renderLive();if(runtimeKey){setTimeout(autoStart,100)}
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body></html>
