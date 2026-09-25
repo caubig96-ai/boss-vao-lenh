@@ -35,6 +35,13 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("MUA XANH", self.source)
         self.assertIn("MUA ĐỎ", self.source)
 
+    def test_last_100_same_pattern_gate(self):
+        self.assertIn("function decisionFromLast100", self.source)
+        self.assertIn('status:item.win===true?"WIN":"LOSS"', self.source)
+        self.assertIn('return {allow:true,status:"NEW"', self.source)
+        self.assertIn("BỎ MẪU • GẦN NHẤT THUA", self.source)
+        self.assertIn("chưa có trong 100 lệnh • theo công thức 16 mẫu", self.source)
+
     def test_browser_vibration_is_best_effort(self):
         self.assertIn("navigator.vibrate", self.source)
 
