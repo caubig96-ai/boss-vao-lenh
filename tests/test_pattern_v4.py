@@ -22,29 +22,25 @@ class PatternV4Tests(unittest.TestCase):
     def test_version(self):
         self.assertEqual(APP_VERSION, "4.2.1")
 
-    def test_exact_24_patterns_from_reference_image(self):
+    def test_exact_16_patterns_from_reference_image(self):
         expected = {
-            "RGGRR": RED,
-            "GRRGR": RED,
+            # Nhóm 1
+            "RGGRR": GREEN,
+            "GRRGR": GREEN,
             "GGRRR": GREEN,
             "RRGGR": GREEN,
-            "RGGRG": GREEN,
-            "GRRGG": GREEN,
+            # Nhóm 2
+            "RGGRG": RED,
+            "GRRGG": RED,
             "GGRRG": RED,
             "RRGGG": RED,
-            "RGGGR": GREEN,
-            "RRRGR": RED,
-            "GGGRR": GREEN,
-            "GRRRR": RED,
+            # Nhóm 3
             "RGRRR": GREEN,
-            "GRGGR": RED,
+            "GRGGR": GREEN,
             "RRGRR": RED,
             "GGRGR": GREEN,
-            "RGGGG": GREEN,
-            "RRRGG": RED,
-            "GGGRG": GREEN,
-            "GRRRG": RED,
-            "RGRRG": GREEN,
+            # Nhóm 4
+            "RGRRG": RED,
             "GRGGG": RED,
             "RRGRG": RED,
             "GGRGG": GREEN,
@@ -71,8 +67,8 @@ class PatternV4Tests(unittest.TestCase):
         self.assertEqual(result_for_direction(RED, None), "VOID")
 
     def test_just_closed_live_m5_is_the_fifth_candle(self):
-        # Reference row: 4 previous candles RGGR + the live candle that has
-        # just closed RED => RGGRR => buy RED on the immediately following M5.
+        # Ảnh mới: 4 nến nhận dạng RGGR + nến live vừa kết thúc RED
+        # => RGGRR => MUA XANH cho vòng M5 ngay sau đó.
         def candle(index: int, color: str) -> ClosedCandle:
             open_time = index * 300_000
             if color == GREEN:
@@ -90,7 +86,7 @@ class PatternV4Tests(unittest.TestCase):
         bot = PatternSignalBot(Config(telegram_token="x", telegram_chat_id="1"))
         window = bot._window_ending_at(candles[-1], candles)
         self.assertEqual([item.color for item in window], list("RGGRR"))
-        self.assertEqual(recognize_five_candle_pattern(item.color for item in window), RED)
+        self.assertEqual(recognize_five_candle_pattern(item.color for item in window), GREEN)
         self.assertEqual(window[-1].open_time, candles[-1].open_time)
 
     def test_result_message_is_sent_before_new_entry_path(self):
