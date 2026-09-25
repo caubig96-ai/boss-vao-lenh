@@ -154,6 +154,19 @@ export default {
       });
     }
 
+    if(u.pathname==="/category"){
+      const ts=Number(u.searchParams.get("ts"));
+      if(!Number.isFinite(ts)||ts<=0){
+        return json({ok:false,error:"Thiếu hoặc sai ts"},400);
+      }
+      try{
+        const data=await api("/v1/categories/btc-updown-5m-"+Math.floor(ts),env.PREDICT_API_KEY);
+        return json(data);
+      }catch(e){
+        return json({ok:false,error:String(e.message||e)},502);
+      }
+    }
+
     if(u.pathname==="/history"){
       const raw=await env.BOSS_KV.get("history");
       return raw
@@ -169,7 +182,7 @@ export default {
       }
     }
 
-    return json({ok:true,endpoints:["/health","/history","/sync"]});
+    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/sync"]});
   },
 
   async scheduled(controller,env,ctx){
