@@ -20,7 +20,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .candles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
 .history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}.pending{background:#3b3219;color:#ffd36b}
-.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:720px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
+.calendarSummary{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:720px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -127,6 +127,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
     <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
+    <div><span class="label">Không lệnh</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
   <div class="note" style="margin-top:9px">V = thắng sau khi áp dụng quy tắc 2 kết quả gần nhất • X = thua • · = không có lệnh (không khớp / chưa đủ 2 kết quả / đang nghỉ 15 phút) • … = thời gian chưa tới.</div>
@@ -655,20 +656,22 @@ function buildPatternStats(){
   return allPatternCodes().map(code=>stats[code]);
 }
 function renderPatternStats(){
-  const rows=buildPatternStats();
+  const statsByKey=Object.fromEntries(buildPatternStats().map(row=>[row.code,row]));
   const recentCount=rawPatternSettled().slice(-100).length;
   $("patternRoundCount").textContent=recentCount+"/100 lệnh";
   $("patternStats").innerHTML="";
-  rows.forEach(row=>{
-    const tr=document.createElement("tr");
-    const decision=recentTwoDecision(row.code);
+
+  PATTERN_GROUPS.forEach(group=>{
+    const row=statsByKey[group.key]||{occurrences:0,wins:0,losses:0};
+    const decision=recentTwoDecision(group.key);
     const pair=decision.pair||"—";
     const mode=decision.allow?(String(decision.mode).startsWith("REVERSE")?"ĐẢO":"THEO GỐC"):"CHỜ";
     const action=decision.allow?(decision.direction==="G"?"MUA XANH":"MUA ĐỎ"):"—";
     const actionClass=decision.direction==="G"?"buyg":decision.direction==="R"?"buyr":"";
+    const tr=document.createElement("tr");
     tr.innerHTML=
-      '<td>'+patternGroupName(row.code)+'</td>'+
-      '<td><span class="picons">'+patternIcons(row.code)+'</span><span class="mini">'+row.code+'</span></td>'+
+      '<td>'+group.name+'</td>'+
+      '<td><span class="picons">'+patternIcons(group.variant)+'</span><span class="mini">'+group.variant+' • dùng '+group.key+'</span></td>'+
       '<td>'+pair+'</td>'+
       '<td>'+mode+'</td>'+
       '<td class="'+actionClass+'">'+action+'</td>'+
@@ -1029,6 +1032,7 @@ function renderCalendar24h(){
   $("calendar24Signals").textContent=String(cal.signals);
   $("calendar24Wins").textContent=String(cal.wins);
   $("calendar24Losses").textContent=String(cal.losses);
+  $("calendar24NoOrders").textContent=String(cal.noOrders);
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
   $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
