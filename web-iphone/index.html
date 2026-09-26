@@ -957,7 +957,6 @@ function alertTick(){
   const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
   const end=liveMarket.end||start+INTERVAL;
   const remain=Math.max(0,Math.ceil(end-now));
-  if(remain<=60&&remain>30)firePrepareAlert(start,remain,60);
   if(remain<=30&&remain>0)firePrepareAlert(start,remain,30);
   if(now>=end&&start>0)finalizeLiveRound(start);
 }
