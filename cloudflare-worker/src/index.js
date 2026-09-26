@@ -3,10 +3,9 @@ const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const PATTERNS={
-  RGGRR:"G",GRRGR:"G",GGRRR:"G",RRGGR:"G",
-  RGGRG:"R",GRRGG:"R",GGRRG:"R",RRGGG:"R",
-  RGRRR:"G",GRGGR:"G",RRGRR:"R",GGRGR:"G",
-  RGRRG:"R",GRGGG:"R",RRGRG:"R",GGRGG:"G"
+  RGGRR:"R",GGRRR:"G",GRRGG:"G",RRGGG:"R",
+  RGRRR:"R",GRGGR:"R",RRGRR:"R",GGRGR:"R",
+  RGRRG:"G",GRGGG:"G",RRGRG:"G",GGRGG:"G"
 };
 
 function numericEnv(value,fallback){
@@ -279,7 +278,7 @@ function opposite(c){return c==="G"?"R":"G"}
 
 function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",reason:"Không thuộc 16 mẫu"};
+  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",reason:"Không thuộc 12 mẫu"};
 
   const MIN_SAMPLES=3;
   const THRESHOLD=60;
