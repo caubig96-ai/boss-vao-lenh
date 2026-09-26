@@ -17,6 +17,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .candles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
 .history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}.pending{background:#3b3219;color:#ffd36b}
+.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:510px;display:grid;grid-template-columns:46px repeat(12,1fr);gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calCell{height:25px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -58,7 +59,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="label">4 nến đã đóng + nến live hiện tại • đúng 16 mẫu trong ảnh mới</div>
+  <div class="label">4 nến đã đóng + nến live hiện tại • đúng 12 mẫu trong ảnh mới</div>
   <div class="candles" id="candles"></div>
   <div class="row">
     <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
@@ -102,7 +103,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div class="stat"><span class="label">Lãi/lỗ lệnh tool</span><b id="pnl">--</b></div>
     <div class="stat"><span class="label">Số dư theo lệnh tool</span><b id="balance">--</b></div>
   </div>
-  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 16 mẫu phía dưới không cộng vào lãi/lỗ.</div>
+  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 12 mẫu phía dưới không cộng vào lãi/lỗ.</div>
 </section>
 
 <section class="card">
@@ -127,19 +128,39 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất của 16 mẫu màu</b><div class="label">Cửa sổ trượt 100 lệnh • lệnh mới vào thì lệnh cũ nhất ra • V/X dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất của 12 mẫu màu</b><div class="label">Cửa sổ trượt 100 lệnh • lệnh mới vào thì lệnh cũ nhất ra • V/X dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
 <section class="card">
   <div class="row">
     <div>
-      <b>Thống kê 16 mô hình 5 nến</b>
-      <div class="label">4 nhóm × 4 mẫu • thống kê đúng cửa sổ 100 lệnh gần nhất</div>
+      <b>Lịch 24 giờ theo nhóm màu nến</b>
+      <div class="label">288 ô • mỗi ô 5 phút • tự cập nhật từ Boss Cloud</div>
+    </div>
+    <span id="calendar24Updated" class="label">--:--</span>
+  </div>
+  <div class="calendarSummary">
+    <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
+    <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
+    <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
+    <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
+  </div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • · = khung 5 phút không khớp nhóm màu trong ảnh mới • … = đang chờ kết quả. Bảng tính theo lệnh gốc của nhóm màu.</div>
+  <div class="calendarWrap">
+    <div id="calendar24" class="calendar24"></div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="row">
+    <div>
+      <b>Thống kê 12 mô hình 5 nến</b>
+      <div class="label">3 nhóm × 4 mẫu • thống kê đúng cửa sổ 100 lệnh gần nhất</div>
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi mẫu cần ít nhất 3 lần xuất hiện. Nếu trong 3 lần có 2 thắng / 1 thua thì giữ màu gốc; nếu có 2 thua / 1 thắng thì đảo màu. Với nhiều hơn 3 lần, phía chiếm ưu thế phải đạt từ 60%; còn lại bỏ lệnh.</div>
+  <div class="note" style="margin-top:7px">Bảng này dùng đúng 12 mẫu màu trong ảnh mới và tính trên 100 lệnh mẫu gần nhất. Mỗi mẫu cần ít nhất 3 lần xuất hiện để bộ lọc tỷ lệ xét lệnh.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -168,10 +189,9 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </main>
 <script>
 const PATTERN_GROUPS=[
-  {name:"Nhóm 1",items:[["RGGRR","G"],["GRRGR","G"],["GGRRR","G"],["RRGGR","G"]]},
-  {name:"Nhóm 2",items:[["RGGRG","R"],["GRRGG","R"],["GGRRG","R"],["RRGGG","R"]]},
-  {name:"Nhóm 3",items:[["RGRRR","G"],["GRGGR","G"],["RRGRR","R"],["GGRGR","G"]]},
-  {name:"Nhóm 4",items:[["RGRRG","R"],["GRGGG","R"],["RRGRG","R"],["GGRGG","G"]]}
+  {name:"Nhóm 1",items:[["RGGRR","R"],["GGRRR","G"],["GRRGG","G"],["RRGGG","R"]]},
+  {name:"Nhóm 2",items:[["RGRRR","R"],["GRGGR","R"],["RRGRR","R"],["GGRGR","R"]]},
+  {name:"Nhóm 3",items:[["RGRRG","G"],["GRGGG","G"],["RRGRG","G"],["GGRGG","G"]]}
 ];
 const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
@@ -182,6 +202,7 @@ let rounds=JSON.parse(localStorage.getItem("boss_rounds")||"[]");
 let pollTimer=null;
 let liveTimer=null;
 let countdownTimer=null;
+let calendarSyncTimer=null;
 let busy=false;
 let liveMarket={start:0,end:0,startPrice:null,currentPrice:null,color:null,source:""};
 let audioContext=null;
@@ -607,7 +628,7 @@ async function ensureHistory100(forceSync=false){
 }
 async function autoStart(){
   startPolling();
-  await Promise.allSettled([fetchLiveMarket(),refreshNow(),ensureHistory100(false),fetchTradeState()]);
+  await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),ensureHistory100(false),fetchTradeState()]);
   render();
 }
 function mergeRounds(items){
@@ -639,8 +660,16 @@ function startPolling(){
   if(pollTimer)clearInterval(pollTimer);
   if(liveTimer)clearInterval(liveTimer);
   if(countdownTimer)clearInterval(countdownTimer);
+  if(calendarSyncTimer)clearInterval(calendarSyncTimer);
   pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState()}},20000);
   liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
+  calendarSyncTimer=setInterval(async()=>{
+    if(document.visibilityState!=="visible")return;
+    try{
+      await fetchCloudHistory(false);
+      render();
+    }catch(_){}
+  },INTERVAL*1000);
   countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
   fetchLiveMarket();
 }
@@ -737,7 +766,7 @@ function strongestRawSideFromRows(rows){
 }
 function adaptiveDecisionFromRows(code,settled,rows){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 16 mẫu"};
+  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 12 mẫu"};
 
   const MIN_SAMPLES=3;
   const THRESHOLD=60;
@@ -974,6 +1003,98 @@ function currentLivePattern(){
   const code=closed4.map(x=>x.c).join("")+liveColor;
   return {closed4,liveColor,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
 }
+function buildCalendar24h(){
+  const now=Math.floor(Date.now()/1000);
+  const latestClosed=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
+  const first=latestClosed-(288-1)*INTERVAL;
+  const signalMap=new Map(buildSignals().map(s=>[Number(s.targetT),s]));
+  const slots=[];
+  let wins=0,losses=0,signals=0,pending=0;
+
+  for(let i=0;i<288;i++){
+    const t=first+i*INTERVAL;
+    const s=signalMap.get(t)||null;
+    let status="EMPTY";
+    if(s){
+      signals++;
+      if(!s.actual){
+        status="WAIT";
+        pending++;
+      }else if(s.pred===s.actual){
+        status="WIN";
+        wins++;
+      }else{
+        status="LOSS";
+        losses++;
+      }
+    }
+    slots.push({t,signal:s,status});
+  }
+
+  const settled=wins+losses;
+  return{
+    first,
+    latestClosed,
+    slots,
+    wins,
+    losses,
+    signals,
+    pending,
+    rate:settled?wins/settled*100:null
+  };
+}
+
+function shortClock(ts){
+  return new Date(ts*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+}
+
+function renderCalendar24h(){
+  const root=$("calendar24");
+  if(!root)return;
+  const cal=buildCalendar24h();
+  root.innerHTML="";
+
+  for(let row=0;row<24;row++){
+    const rowSlots=cal.slots.slice(row*12,row*12+12);
+    const label=document.createElement("div");
+    label.className="calTime";
+    label.textContent=shortClock(rowSlots[0].t);
+    root.appendChild(label);
+
+    rowSlots.forEach(slot=>{
+      const d=document.createElement("div");
+      d.className="calCell";
+      if(slot.status==="WIN"){
+        d.classList.add("win","signal");
+        d.textContent="V";
+      }else if(slot.status==="LOSS"){
+        d.classList.add("loss","signal");
+        d.textContent="X";
+      }else if(slot.status==="WAIT"){
+        d.classList.add("wait","signal");
+        d.textContent="…";
+      }else{
+        d.textContent="·";
+      }
+
+      const s=slot.signal;
+      const detail=s
+        ?shortClock(slot.t)+" • "+patternIcons(s.pattern)+" • mua "+(s.pred==="G"?"XANH":"ĐỎ")+(s.actual?" • kết quả "+(s.actual==="G"?"XANH":"ĐỎ"):" • chờ kết quả")
+        :shortClock(slot.t)+" • không khớp nhóm";
+      d.title=detail;
+      d.setAttribute("aria-label",detail);
+      root.appendChild(d);
+    });
+  }
+
+  $("calendar24Signals").textContent=String(cal.signals);
+  $("calendar24Wins").textContent=String(cal.wins);
+  $("calendar24Losses").textContent=String(cal.losses);
+  $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
+  $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
+  $("calendar24Updated").textContent="đến "+shortClock(cal.latestClosed);
+}
+
 function render(){
   const livePattern=currentLivePattern(),calc=compute();$("candles").innerHTML="";
   const closedColors=livePattern?livePattern.closed4.map(x=>x.c):(latestClosed4()?.map(x=>x.c)||[]);
@@ -1010,7 +1131,7 @@ function render(){
       $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+(adaptive.rate===null?"":" • chỉ số "+adaptive.rate.toFixed(1)+"%")+" → chưa báo lệnh.";
     }
   }else if(livePattern){
-    $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 16 mẫu; vẫn chờ màu đóng cuối cùng.";
+    $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 12 mẫu; vẫn chờ màu đóng cuối cùng.";
   }else{
     $("freshness").textContent="Đang chờ đủ 4 nến đóng liên tiếp và màu nến live.";
   }
@@ -1039,11 +1160,12 @@ function render(){
     $("history").appendChild(d);
   });
   renderPatternStats();
+  renderCalendar24h();
 }
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"){
     if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    refreshNow();fetchLiveMarket();fetchTradeState()
+    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState()
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
