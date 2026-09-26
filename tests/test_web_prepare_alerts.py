@@ -14,25 +14,25 @@ class WebPrepareAlertsTests(unittest.TestCase):
 
     def test_exact_8_image_groups_are_active(self):
         self.assertIn("Boss 8 Nhóm", self.source)
-        expected = [
-            '["RGRR","R"]', '["GRGR","G"]', '["RRGR","R"]', '["GGRR","G"]',
-            '["RGRG","R"]', '["GRGG","G"]', '["RRGG","R"]', '["GGRG","G"]',
-        ]
+        expected = ["RGRR","GRGR","RRGR","GGRR","RGRG","GRGG","RRGG","GGRG"]
         for item in expected:
             self.assertIn(item, self.source)
-        self.assertIn('RGRR:"R"', self.worker)
-        self.assertIn('GRGR:"G"', self.worker)
-        self.assertIn('RRGG:"R"', self.worker)
-        self.assertIn('GGRG:"G"', self.worker)
+            self.assertIn(item, self.worker)
+        self.assertIn('RGR:"R"', self.worker)
+        self.assertIn('GRG:"G"', self.worker)
+        self.assertIn('RRG:"R"', self.worker)
+        self.assertIn('GGR:"G"', self.worker)
         self.assertNotIn("Boss 12 Mẫu", self.source)
         self.assertNotIn("image-12", self.source)
         self.assertNotIn("image-12", self.worker)
 
-    def test_recognition_is_three_closed_plus_live(self):
+    def test_recognition_uses_only_three_closed_candles(self):
         self.assertIn("function latestClosed3", self.source)
-        self.assertIn("const code=closed3.map(x=>x.c).join(\"\")+liveColor", self.source)
-        self.assertIn("for(let i=0;i<4;i++)", self.source)
-        self.assertIn("3 nến đã đóng + nến live hiện tại", self.source)
+        self.assertIn('const code=closed3.map(x=>x.c).join("");', self.source)
+        self.assertNotIn('join("")+liveColor', self.source)
+        self.assertIn("nến live hiện tại không tham gia chọn màu", self.source)
+        self.assertIn('RGR:"R"', self.worker)
+        self.assertIn('GRG:"G"', self.worker)
 
     def test_entry_alert_fires_once_at_one_minute_for_next_frame(self):
         self.assertIn("remain<=60&&remain>30", self.source)
@@ -70,20 +70,24 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("Số dư theo dõi", self.worker)
         self.assertIn("maybeSendSettlement", self.worker)
 
-    def test_pattern_history_uses_four_candles_then_next_result(self):
-        self.assertIn("for(let i=3;i<rounds.length;i++)", self.source)
-        self.assertIn("const w=rounds.slice(i-3,i+1)", self.source)
-        self.assertIn("const targetT=w[3].t+INTERVAL", self.source)
-        self.assertIn("for(let i=3;i<rounds.length;i++)", self.worker)
-        self.assertIn("const actual=byTime.get(w[3].t+INTERVAL)", self.worker)
+    def test_pattern_history_uses_three_candles_skips_live_then_scores_next(self):
+        self.assertIn("for(let i=2;i<rounds.length;i++)", self.source)
+        self.assertIn("const w=rounds.slice(i-2,i+1)", self.source)
+        self.assertIn("const targetT=w[2].t+2*INTERVAL", self.source)
+        self.assertIn("for(let i=2;i<rounds.length;i++)", self.worker)
+        self.assertIn("w[2].t+2*INTERVAL", self.worker)
 
-    def test_24h_calendar_uses_288_five_minute_slots(self):
+    def test_24h_calendar_is_24_hours_by_12_slots_and_uses_adaptive_results(self):
         self.assertIn("Lịch 24 giờ theo nhóm màu nến", self.source)
-        self.assertIn("288 ô", self.source)
-        self.assertIn("function buildCalendar24h", self.source)
+        self.assertIn("24 hàng giờ", self.source)
+        self.assertIn("12 ô × 5 phút", self.source)
         self.assertIn("for(let i=0;i<288;i++)", self.source)
-        self.assertIn("renderCalendar24h", self.source)
-        self.assertIn("INTERVAL*1000", self.source)
+        self.assertIn("for(let row=0;row<24;row++)", self.source)
+        self.assertIn("slice(row*12,row*12+12)", self.source)
+        self.assertIn("function buildAdaptiveHistory", self.source)
+        self.assertIn("adaptiveDecisionFromPrior", self.source)
+        self.assertIn('status:win?"WIN":"LOSS"', self.source)
+        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • · "+rowN', self.source)
 
     def test_cloud_reset_and_history_refresh(self):
         self.assertIn("function rawPatternSettled", self.source)
