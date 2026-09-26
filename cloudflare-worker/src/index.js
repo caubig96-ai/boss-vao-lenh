@@ -1,5 +1,6 @@
 const API="https://api.predict.fun";
-const INTERVAL=300;\nconst PATTERN_VERSION="image-8-v1";
+const INTERVAL=300;
+const PATTERN_VERSION="image-8-v1";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const PATTERNS={
