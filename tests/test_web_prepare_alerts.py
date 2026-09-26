@@ -67,11 +67,11 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('d.textContent="C✓"', self.source)
         self.assertIn('d.textContent="C×"', self.source)
 
-    def test_24h_calendar_shows_only_six_order_slots_per_hour(self):
+    def test_24h_calendar_shows_only_six_order_slots_per_hour_newest_first(self):
         self.assertIn("24 hàng giờ", self.source)
         self.assertIn("00/10/20/30/40/50", self.source)
         self.assertIn("for(const minute of [0,10,20,30,40,50])", self.source)
-        self.assertIn("for(let row=0;row<24;row++)", self.source)
+        self.assertIn("for(let row=23;row>=0;row--)", self.source)
         self.assertIn("slice(row*6,row*6+6)", self.source)
         self.assertNotIn('status="SOURCE"', self.source)
         self.assertIn('status="SKIP"', self.source)
@@ -79,6 +79,16 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('d.textContent="B"', self.source)
         self.assertNotIn('d.textContent="·"', self.source)
         self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB', self.source)
+
+    def test_24h_money_uses_double_step_after_step1_win(self):
+        self.assertIn("function historicalMoneySettings", self.source)
+        self.assertIn("function nextHistoricalStep", self.source)
+        self.assertIn("Number(step)===1&&win?2:1", self.source)
+        self.assertIn("const amount=step===2?moneySettings.bet2:moneySettings.bet1", self.source)
+        self.assertIn("const delta=win?amount*moneySettings.payout:-amount", self.source)
+        self.assertIn('id="calendar24GrossWin"', self.source)
+        self.assertIn('id="calendar24GrossLoss"', self.source)
+        self.assertIn('id="calendar24Net"', self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
