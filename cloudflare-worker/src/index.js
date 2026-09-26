@@ -1,11 +1,16 @@
 const API="https://api.predict.fun";
-const INTERVAL=300;\nconst PATTERN_VERSION="image-12-v1";
+const INTERVAL=300;\nconst PATTERN_VERSION="image-8-v1";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const PATTERNS={
-  RGGRR:"R",GGRRR:"G",GRRGG:"G",RRGGG:"R",
-  RGRRR:"R",GRGGR:"R",RRGRR:"R",GGRGR:"R",
-  RGRRG:"G",GRGGG:"G",RRGRG:"G",GGRGG:"G"
+  RGRR:"R",
+  GRGR:"G",
+  RRGR:"R",
+  GGRR:"G",
+  RGRG:"R",
+  GRGG:"G",
+  RRGG:"R",
+  GGRG:"G"
 };
 
 function numericEnv(value,fallback){
@@ -44,6 +49,8 @@ function freshTradeState(day){
     pnl:0,
     wins:0,
     losses:0,
+    lossStreak:0,
+    pauseUntil:0,
     pending:null,
     unsentResult:null,
     completed:[],
@@ -60,6 +67,8 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
+  if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
+  if(!Number.isFinite(Number(state.pauseUntil)))state.pauseUntil=0;
   if(!Array.isArray(state.completed))state.completed=[];
   if(state.unsentResult===undefined)state.unsentResult=null;
   if(!state.day)state.day=dayTextFromSeconds(nowSec);
@@ -264,14 +273,14 @@ function contiguous(arr){
 function settledSignals(rounds){
   const byTime=new Map(rounds.map(x=>[x.t,x]));
   const out=[];
-  for(let i=4;i<rounds.length;i++){
-    const w=rounds.slice(i-4,i+1);
+  for(let i=3;i<rounds.length;i++){
+    const w=rounds.slice(i-3,i+1);
     if(!contiguous(w))continue;
     const code=w.map(x=>x.c).join("");
     const pred=PATTERNS[code];
     if(!pred)continue;
-    const actual=byTime.get(w[4].t+INTERVAL)?.c||null;
-    if(actual)out.push({pattern:code,pred,actual,win:pred===actual,sourceT:w[4].t});
+    const actual=byTime.get(w[3].t+INTERVAL)?.c||null;
+    if(actual)out.push({pattern:code,pred,actual,win:pred===actual,sourceT:w[3].t});
   }
   return out;
 }
@@ -280,14 +289,10 @@ function opposite(c){return c==="G"?"R":"G"}
 
 function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",reason:"Không thuộc 12 mẫu"};
-
-  const MIN_SAMPLES=3;
-  const THRESHOLD=60;
+  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",wins:0,losses:0,settled:0,reason:"Không thuộc 8 nhóm"};
 
   const recent=settledSignals(rounds).slice(-100);
   let wins=0,losses=0,settled=0;
-
   for(const s of recent){
     if(s.pattern!==code)continue;
     settled++;
@@ -295,57 +300,15 @@ function decisionFor(code,rounds){
     else losses++;
   }
 
-  if(settled<MIN_SAMPLES){
-    return {
-      allow:false,
-      direction:null,
-      rate:null,
-      mode:"LOW_SAMPLE",
-      wins,
-      losses,
-      settled,
-      reason:"Chưa đủ "+MIN_SAMPLES+" lần xuất hiện"
-    };
-  }
-
-  const winRate=wins/settled*100;
-  const lossRate=losses/settled*100;
-
-  if(winRate>lossRate&&winRate>=THRESHOLD){
-    return {
-      allow:true,
-      direction:pred,
-      rate:winRate,
-      mode:"FOLLOW_RATE",
-      wins,
-      losses,
-      settled,
-      reason:"Tỷ lệ thắng cao hơn tỷ lệ thua"
-    };
-  }
-
-  if(lossRate>winRate&&lossRate>=THRESHOLD){
-    return {
-      allow:true,
-      direction:opposite(pred),
-      rate:lossRate,
-      mode:"REVERSE_RATE",
-      wins,
-      losses,
-      settled,
-      reason:"Tỷ lệ thua cao hơn tỷ lệ thắng"
-    };
-  }
-
   return {
-    allow:false,
-    direction:null,
-    rate:Math.max(winRate,lossRate),
-    mode:"NO_EDGE",
+    allow:true,
+    direction:pred,
+    rate:settled?wins/settled*100:null,
+    mode:"DIRECT_8",
     wins,
     losses,
     settled,
-    reason:"Không bên nào đạt ưu thế đủ mạnh"
+    reason:"Khớp 1 trong 8 nhóm màu mới"
   };
 }
 
@@ -425,6 +388,18 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(win)state.wins=Number(state.wins||0)+1;
   else state.losses=Number(state.losses||0)+1;
 
+  let pauseTriggered=false;
+  if(win){
+    state.lossStreak=0;
+  }else{
+    state.lossStreak=Number(state.lossStreak||0)+1;
+    if(state.lossStreak>=2){
+      state.pauseUntil=nowSec+15*60;
+      state.lossStreak=0;
+      pauseTriggered=true;
+    }
+  }
+
   const nextStep=nextStepAfter(pending.step,win);
   state.step=nextStep;
 
@@ -442,6 +417,9 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     winsAfter:Number(state.wins||0),
     lossesAfter:Number(state.losses||0),
     nextStep,
+    lossStreakAfter:Number(state.lossStreak||0),
+    pauseTriggered,
+    pauseUntilAfter:Number(state.pauseUntil||0),
     settledAt:new Date().toISOString(),
     sent:false
   };
@@ -462,41 +440,87 @@ async function maybePrepare(env,payload,nowSec){
 
   const rounds=internalRounds(payload);
   const byTime=new Map(rounds.map(x=>[x.t,x]));
-  const closed4=[
-    liveStart-4*INTERVAL,
+  const closed3=[
     liveStart-3*INTERVAL,
     liveStart-2*INTERVAL,
     liveStart-INTERVAL
   ].map(t=>byTime.get(t));
-  if(closed4.some(x=>!x))return;
+  if(closed3.some(x=>!x))return;
 
   let liveRaw=null;
   try{liveRaw=await apiCategory(liveStart,env.PREDICT_API_KEY)}catch(_){return}
   const liveColor=liveColorFromCategory(liveRaw);
   if(!liveColor)return;
 
-  const code=closed4.map(x=>x.c).join("")+liveColor;
-  if(!PATTERNS[code])return;
-
+  const code=closed3.map(x=>x.c).join("")+liveColor;
   const d=decisionFor(code,rounds);
   if(!d.allow||!d.direction)return;
 
-  const marker=await env.BOSS_KV.get("telegram:last_prepare");
-  if(String(marker||"")===String(liveStart))return;
+  const targetStart=liveStart+INTERVAL;
+  const currentDay=dayTextFromSeconds(targetStart);
+  let state=await readTradeState(env,nowSec);
 
-  const chance=d.direction==="G"?"🟢 <b>KHẢ NĂNG MUA XANH</b>":"🔴 <b>KHẢ NĂNG MUA ĐỎ</b>";
+  if(state.day!==currentDay&&!state.pending){
+    const carriedPause=Number(state.pauseUntil||0);
+    const carriedLossStreak=Number(state.lossStreak||0);
+    state=freshTradeState(currentDay);
+    state.pauseUntil=carriedPause;
+    state.lossStreak=carriedLossStreak;
+  }
+
+  if(Number(state.pauseUntil||0)>nowSec)return;
+  if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil||0)<=nowSec){
+    state.pauseUntil=0;
+    await writeTradeState(env,state);
+  }
+
+  if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
+
+  const settings=tradeSettings(env);
+  if(!state.pending){
+    const step=Number(state.step)===2?2:1;
+    const amount=amountForStep(settings,step);
+    state.pending={
+      id:String(targetStart)+"-"+code,
+      day:currentDay,
+      targetStart,
+      pattern:code,
+      direction:d.direction,
+      mode:"DIRECT_8",
+      rate:Number(d.rate||0),
+      wins:Number(d.wins||0),
+      losses:Number(d.losses||0),
+      settled:Number(d.settled||0),
+      step,
+      amount,
+      payoutRate:settings.payout,
+      entrySent:false,
+      createdAt:new Date().toISOString()
+    };
+    await writeTradeState(env,state);
+  }
+
+  const pending=state.pending;
+  if(pending.entrySent)return;
+
+  const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
+  const statsLine=Number(pending.settled||0)>0
+    ?"Lịch sử nhóm: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"
+    :"";
+
   await sendTelegram(env,
-    "⚠️ <b>CÒN ~30 GIÂY • CHUẨN BỊ PHIÊN SAU</b>\n"+
-    "5 màu tạm thời: <b>"+candleIcons(code)+"</b>\n"+
-    chance+"\n"+
-    "Mẫu: <b>"+code+"</b> • "+modeText(d.mode)+"\n"+
-    "Thống kê mẫu: <b>"+Number(d.wins||0)+" thắng / "+Number(d.losses||0)+" thua</b>\n"+
-    "Chỉ số: <b>"+Number(d.rate||0).toFixed(1)+"%</b>\n"+
-    "Phiên hiện tại: <b>"+frameText(liveStart)+"</b>\n"+
-    "Phiên dự kiến mua: <b>"+frameText(liveStart+INTERVAL)+"</b>\n"+
-    "<i>Chỉ chốt lệnh nếu màu live giữ đến lúc phiên hiện tại đóng.</i>"
+    "🚨 <b>CÒN ~30 GIÂY • VÀO LỆNH PHIÊN SAU</b>\n"+
+    "4 nến nhận dạng: <b>"+candleIcons(pending.pattern)+"</b>\n"+
+    buy+"\n"+
+    "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
+    statsLine+
+    "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>"
   );
-  await env.BOSS_KV.put("telegram:last_prepare",String(liveStart));
+
+  pending.entrySent=true;
+  pending.entrySentAt=new Date().toISOString();
+  await writeTradeState(env,state);
+  await env.BOSS_KV.put("telegram:last_prepare",String(targetStart));
 }
 
 function sleep(ms){
@@ -518,122 +542,39 @@ async function schedulePrepareAt30(env,payload){
 
 function resultMessagePart(result,settings){
   if(!result)return "";
-  const title=result.win?"✅ <b>THẮNG LỆNH PHIÊN TRƯỚC</b>":"❌ <b>THUA LỆNH PHIÊN TRƯỚC</b>";
+  const title=result.win?"✅ <b>THẮNG LỆNH</b>":"❌ <b>THUA LỆNH</b>";
   const actualText=result.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
   const entered=result.direction==="G"?"🟢 XANH":"🔴 ĐỎ";
   const balance=settings.startBalance+Number(result.pnlAfter||0);
+  const pauseLine=result.pauseTriggered
+    ?"\n⏸ <b>TẠM DỪNG BÁO LỆNH 15 PHÚT</b> • chạy lại sau "+timeText(result.pauseUntilAfter)
+    :"";
 
   return (
     title+"\n"+
     "Phiên: <b>"+frameText(result.targetStart)+"</b>\n"+
-    "<b>Lệnh "+Number(result.step)+" • "+amountText(result.amount)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
     "Lãi/lỗ lệnh: <b>"+money(result.delta)+"</b>\n"+
     "Lãi/lỗ hôm nay: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Thắng/Thua hôm nay: <b>"+Number(result.winsAfter)+"/"+Number(result.lossesAfter)+"</b>\n"+
-    "Số dư theo dõi: <b>"+money(balance)+"</b>"
+    "Số dư theo dõi: <b>"+money(balance)+"</b>"+
+    pauseLine
   );
 }
 
-function entryMessagePart(pending){
-  if(!pending)return "";
-  const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
-  return (
-    "🚨 <b>PHIÊN MỚI • VÀO LỆNH NGAY</b>\n"+
-    "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>\n"+
-    buy+"\n"+
-    "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
-    "5 nến trước: <b>"+candleIcons(pending.pattern)+"</b>\n"+
-    "Mẫu: <b>"+pending.pattern+"</b> • "+modeText(pending.mode)+"\n"+
-    "Thống kê mẫu: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"+
-    "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>"
-  );
-}
-
-async function maybeBoundaryCombined(env,payload,nowSec){
+async function maybeSendSettlement(env,payload,nowSec){
   if(!telegramConfigured(env))return;
-
-  const currentStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
-  const currentDay=dayTextFromSeconds(currentStart);
-  const settings=tradeSettings(env);
-  const rounds=internalRounds(payload);
   let state=await readTradeState(env,nowSec);
-
-  // 1) Settle the order from the frame that just closed, but do not send a separate Telegram message.
   const settled=await settlePreviousOrder(env,payload,nowSec,state);
   state=settled.state;
 
-  // Carry an unsent result over midnight, then start the new day's counters.
-  if(state.day!==currentDay&&!state.pending){
-    const carry=state.unsentResult||null;
-    state=freshTradeState(currentDay);
-    state.unsentResult=carry;
-    await writeTradeState(env,state);
-  }
-
-  // 2) During only the opening seconds of the new frame, derive the confirmed buy from the 5 closed candles.
-  const elapsed=nowSec-currentStart;
-  if(elapsed<=45&&!state.pending){
-    const byTime=new Map(rounds.map(x=>[x.t,x]));
-    const five=[
-      currentStart-5*INTERVAL,
-      currentStart-4*INTERVAL,
-      currentStart-3*INTERVAL,
-      currentStart-2*INTERVAL,
-      currentStart-INTERVAL
-    ].map(t=>byTime.get(t));
-
-    if(five.every(Boolean)&&contiguous(five)){
-      const code=five.map(x=>x.c).join("");
-      const d=PATTERNS[code]?decisionFor(code,rounds):null;
-
-      if(d?.allow&&d.direction){
-        const step=Number(state.step)===2?2:1;
-        const amount=amountForStep(settings,step);
-        state.pending={
-          id:String(currentStart)+"-"+code,
-          day:currentDay,
-          targetStart:currentStart,
-          pattern:code,
-          direction:d.direction,
-          mode:d.mode,
-          rate:Number(d.rate||0),
-          wins:Number(d.wins||0),
-          losses:Number(d.losses||0),
-          settled:Number(d.settled||0),
-          step,
-          amount,
-          payoutRate:settings.payout,
-          entrySent:false,
-          createdAt:new Date().toISOString()
-        };
-        await writeTradeState(env,state);
-      }
-    }
-  }
-
   const result=state.unsentResult&&!state.unsentResult.sent?state.unsentResult:null;
-  const entry=state.pending&&Number(state.pending.targetStart)===currentStart&&!state.pending.entrySent
-    ?state.pending
-    :null;
+  if(!result)return;
 
-  // No prior result and no confirmed buy for the new frame: no boundary message.
-  if(!result&&!entry)return;
-
-  // If there is no new buy, the message contains only the previous win/loss, exactly as requested.
-  const parts=[];
-  if(result)parts.push(resultMessagePart(result,settings));
-  if(entry)parts.push(entryMessagePart(entry));
-
-  await sendTelegram(env,parts.join("\n\n━━━━━━━━━━━━\n\n"));
-
-  if(result)state.unsentResult=null;
-  if(entry){
-    entry.entrySent=true;
-    entry.entrySentAt=new Date().toISOString();
-  }
+  const settings=tradeSettings(env);
+  await sendTelegram(env,resultMessagePart(result,settings));
+  state.unsentResult=null;
   await writeTradeState(env,state);
-  await env.BOSS_KV.put("telegram:last_boundary",String(currentStart));
 }
 
 async function scheduledTick(env){
@@ -651,13 +592,7 @@ async function scheduledTick(env){
   }
 
   await sendReadyOnce(env).catch(()=>{});
-
-  // At the new 5-minute frame: one Telegram message contains prior result + current buy.
-  // If there is no current buy, only the prior result is sent.
-  await maybeBoundaryCombined(env,payload,nowSec).catch(()=>{});
-
-  // In the final minute of the active frame, wait until roughly 30 seconds remain,
-  // then send one preview for the NEXT frame.
+  await maybeSendSettlement(env,payload,nowSec).catch(()=>{});
   await schedulePrepareAt30(env,payload).catch(()=>{});
 }
 
@@ -675,7 +610,7 @@ export default {
     if(u.pathname==="/health"){
       return json({
         ok:true,
-        service:"Boss 12 Mau Cloud",
+        service:"Boss 8 Nhom Cloud",
         patternVersion:PATTERN_VERSION,
         patternCount:Object.keys(PATTERNS).length,
         kvConfigured:!!env.BOSS_KV,
