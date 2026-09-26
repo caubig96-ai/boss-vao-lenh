@@ -45,6 +45,10 @@ function freshTradeState(day){
     wins:0,
     losses:0,
     lossStreak:0,
+    waitForWin:false,
+    waitAfterTarget:0,
+    waitLastCheckedTarget:0,
+    waitWinTarget:0,
     skipSignals:0,
     lastSkippedTarget:0,
     balanceBase:null,
@@ -75,6 +79,10 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
+  if(typeof state.waitForWin!=="boolean")state.waitForWin=false;
+  if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
+  if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
+  if(!Number.isFinite(Number(state.waitWinTarget)))state.waitWinTarget=0;
   if(!Number.isFinite(Number(state.skipSignals)))state.skipSignals=0;
   if(!Number.isFinite(Number(state.lastSkippedTarget)))state.lastSkippedTarget=0;
   if(state.balanceBase!==null&&!Number.isFinite(Number(state.balanceBase)))state.balanceBase=null;
@@ -300,6 +308,46 @@ async function resolvedColorAt(env,payload,ts){
   }
 }
 
+async function shadowSignalAt(env,payload,targetStart){
+  const sourceStart=sourceStartForTarget(targetStart);
+  if(sourceStart===null)return null;
+  const [direction,actual]=await Promise.all([
+    resolvedColorAt(env,payload,sourceStart),
+    resolvedColorAt(env,payload,targetStart)
+  ]);
+  if(!direction||!actual)return null;
+  return {
+    sourceStart,
+    targetStart:Number(targetStart),
+    direction,
+    actual,
+    win:direction===actual
+  };
+}
+
+async function advanceWaitForWin(env,payload,state,currentTarget){
+  if(!state.waitForWin)return {state,unlocked:false,winTarget:0};
+
+  let cursor=Number(state.waitLastCheckedTarget||state.waitAfterTarget||0);
+  if(!cursor)return {state,unlocked:false,winTarget:0};
+
+  for(let target=cursor+SOURCE_STEP;target<Number(currentTarget);target+=SOURCE_STEP){
+    const shadow=await shadowSignalAt(env,payload,target);
+    if(!shadow)break;
+
+    state.waitLastCheckedTarget=target;
+    if(shadow.win){
+      state.waitForWin=false;
+      state.waitWinTarget=target;
+      await writeTradeState(env,state);
+      return {state,unlocked:true,winTarget:target};
+    }
+  }
+
+  await writeTradeState(env,state);
+  return {state,unlocked:false,winTarget:0};
+}
+
 function tgToken(env){return String(env.CLOUD_TELEGRAM_BOT_TOKEN||env.TELEGRAM_BOT_TOKEN||"").trim()}
 function tgChat(env){return String(env.CLOUD_TELEGRAM_CHAT_ID||env.TELEGRAM_CHAT_ID||"").trim()}
 function telegramConfigured(env){return !!(tgToken(env)&&tgChat(env))}
@@ -404,14 +452,34 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   else state.losses=Number(state.losses||0)+1;
 
   let skipTriggered=false;
+  let waitTriggered=false;
   if(win){
     state.lossStreak=0;
+    state.waitForWin=false;
+    state.waitAfterTarget=0;
+    state.waitLastCheckedTarget=0;
+    state.waitWinTarget=0;
   }else{
     state.lossStreak=Number(state.lossStreak||0)+1;
+
     if(state.lossStreak>=2){
+      // Two consecutive REAL entered losses: skip exactly two order beats,
+      // then resume with the next eligible real order.
       state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES;
       state.lossStreak=0;
+      state.waitForWin=false;
+      state.waitAfterTarget=0;
+      state.waitLastCheckedTarget=0;
+      state.waitWinTarget=0;
       skipTriggered=true;
+    }else{
+      // After the first real loss, do not enter another real order yet.
+      // Watch hypothetical signals until one wins, then enter the following signal.
+      state.waitForWin=true;
+      state.waitAfterTarget=Number(pending.targetStart);
+      state.waitLastCheckedTarget=Number(pending.targetStart);
+      state.waitWinTarget=0;
+      waitTriggered=true;
     }
   }
 
@@ -437,6 +505,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     nextStep,
     lossStreakAfter:Number(state.lossStreak||0),
     skipTriggered,
+    waitTriggered,
+    waitForWinAfter:!!state.waitForWin,
     skipSignalsAfter:Number(state.skipSignals||0),
     settledAt:new Date().toISOString(),
     sent:false
@@ -470,10 +540,18 @@ async function maybePrepare(env,payload,nowSec){
 
   if(state.day!==currentDay&&!state.pending){
     const carriedLossStreak=Number(state.lossStreak||0);
+    const carriedWaitForWin=!!state.waitForWin;
+    const carriedWaitAfterTarget=Number(state.waitAfterTarget||0);
+    const carriedWaitLastCheckedTarget=Number(state.waitLastCheckedTarget||0);
+    const carriedWaitWinTarget=Number(state.waitWinTarget||0);
     const carriedSkip=Number(state.skipSignals||0);
     const carriedSkippedTarget=Number(state.lastSkippedTarget||0);
     state=freshTradeState(currentDay);
     state.lossStreak=carriedLossStreak;
+    state.waitForWin=carriedWaitForWin;
+    state.waitAfterTarget=carriedWaitAfterTarget;
+    state.waitLastCheckedTarget=carriedWaitLastCheckedTarget;
+    state.waitWinTarget=carriedWaitWinTarget;
     state.skipSignals=carriedSkip;
     state.lastSkippedTarget=carriedSkippedTarget;
   }
@@ -486,6 +564,18 @@ async function maybePrepare(env,payload,nowSec){
       await writeTradeState(env,state);
     }
     return;
+  }
+
+  // After one real loss, watch skipped/hypothetical signals.
+  // The first hypothetical win unlocks the NEXT order opportunity.
+  let resumedFromWaitTarget=0;
+  if(state.waitForWin){
+    const advanced=await advanceWaitForWin(env,payload,state,targetStart);
+    state=advanced.state;
+    if(!advanced.unlocked)return;
+    resumedFromWaitTarget=Number(advanced.winTarget||0);
+  }else if(Number(state.waitWinTarget||0)>0){
+    resumedFromWaitTarget=Number(state.waitWinTarget||0);
   }
 
   if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
@@ -508,9 +598,11 @@ async function maybePrepare(env,payload,nowSec){
       step,
       amount,
       payoutRate:settings.payout,
+      resumeFromWaitTarget:resumedFromWaitTarget||0,
       entrySent:false,
       createdAt:new Date().toISOString()
     };
+    state.waitWinTarget=0;
     await writeTradeState(env,state);
   }
 
@@ -519,11 +611,15 @@ async function maybePrepare(env,payload,nowSec){
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const resumeLine=Number(pending.resumeFromWaitTarget||0)>0
+    ?"✅ Nhịp chờ <b>"+frameText(Number(pending.resumeFromWaitTarget))+"</b> vừa THẮNG → mở lại lệnh.\n"
+    :"";
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
     "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
     "Quy tắc: <b>vào phiên +10 phút, chốt màu ở +15 phút</b>\n"+
+    resumeLine+
     "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
@@ -556,6 +652,9 @@ function resultMessagePart(result,settings){
   const skipLine=result.skipTriggered
     ?"\n⏸ <b>THUA 2 LỆNH LIÊN TIẾP • BỎ 2 NHỊP KẾ TIẾP</b>"
     :"";
+  const waitLine=result.waitTriggered
+    ?"\n⏳ <b>THUA 1 LỆNH • CHỜ MỘT NHỊP GIẢ LẬP THẮNG</b> rồi mới vào lệnh kế tiếp."
+    :"";
 
   return (
     title+"\n"+
@@ -565,7 +664,8 @@ function resultMessagePart(result,settings){
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
-    skipLine
+    skipLine+
+    waitLine
   );
 }
 
@@ -625,6 +725,7 @@ export default {
         strategyVersion:STRATEGY_VERSION,
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
+        waitForWinAfterOneLoss:true,
         skipBeatsAfterTwoLosses:SKIP_BEATS_AFTER_TWO_LOSSES,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
