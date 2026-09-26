@@ -48,21 +48,18 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
         self.assertIn("BỎ 2 NHỊP KẾ TIẾP", self.worker)
 
-    def test_24h_calendar_is_24_by_12_with_every_order_slot_present(self):
+    def test_24h_calendar_shows_only_six_order_slots_per_hour(self):
         self.assertIn("24 hàng giờ", self.source)
-        self.assertIn("12 ô × 5 phút", self.source)
-        self.assertIn("00/10/20/30/40/50", self.source)
         self.assertIn("05/15/25/35/45/55", self.source)
-        self.assertIn("for(let i=0;i<288;i++)", self.source)
+        self.assertIn("for(const minute of [5,15,25,35,45,55])", self.source)
         self.assertIn("for(let row=0;row<24;row++)", self.source)
-        self.assertIn("slice(row*12,row*12+12)", self.source)
-        self.assertIn('const eligible=sourceT!==null', self.source)
-        self.assertIn('status="SOURCE"', self.source)
+        self.assertIn("slice(row*6,row*6+6)", self.source)
+        self.assertNotIn('status="SOURCE"', self.source)
         self.assertIn('status="SKIP"', self.source)
         self.assertIn('status="WAIT"', self.source)
         self.assertIn('d.textContent="B"', self.source)
-        self.assertIn('d.textContent="·"', self.source)
-        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB+" • · "+rowN', self.source)
+        self.assertNotIn('d.textContent="·"', self.source)
+        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB', self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
