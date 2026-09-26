@@ -1,50 +1,40 @@
-# Boss 5 Nến Cloud — Cloudflare Worker
+# Boss 8 Nhóm Cloud — Cloudflare Worker
 
-Mục tiêu: đồng bộ dữ liệu khi iPhone khóa màn hình và gửi tín hiệu/kết quả qua Telegram.
+Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone không mở web.
 
-## Cấu hình bắt buộc
+## Cấu hình
 
-1. KV namespace binding: `BOSS_KV`.
-2. Runtime secret: `PREDICT_API_KEY`.
-3. Runtime secret: `CLOUD_TELEGRAM_BOT_TOKEN`.
-4. Runtime secret: `CLOUD_TELEGRAM_CHAT_ID`.
-5. Cron chạy mỗi phút.
+- KV binding: `BOSS_KV`
+- Secret: `PREDICT_API_KEY`
+- Secret: `CLOUD_TELEGRAM_BOT_TOKEN`
+- Secret: `CLOUD_TELEGRAM_CHAT_ID`
+- Cron: mỗi phút
+
+## Logic hiện tại
+
+- Chỉ dùng 8 nhóm màu mới.
+- Mỗi nhóm nhận dạng bằng 3 nến đã đóng + màu nến live.
+- Khi còn khoảng 1 phút của phiên hiện tại, nếu khớp nhóm và không trong thời gian tạm dừng, Telegram gửi lệnh cho phiên kế tiếp.
+- Khi lệnh có kết quả, Telegram báo thắng/thua, lãi/lỗ riêng của lệnh, lãi/lỗ hôm nay và tổng thắng/thua.
+- Sau 2 lệnh thua liên tiếp, ngừng phát lệnh mới 15 phút. Hết thời gian này, hệ thống tự hoạt động lại khi gặp nhóm màu hợp lệ.
 
 ## Tiền lệnh mặc định
 
-Nếu không khai báo thêm:
 - Lệnh 1: 1 USDT
 - Lệnh 2: 2 USDT
 - Trả thưởng: 80%
-- Vốn theo dõi ban đầu: 0 USDT
+- Vốn theo dõi: 0 USDT
 
-Có thể đặt runtime variables:
+Có thể cấu hình bằng:
 - `CLOUD_BET1`
 - `CLOUD_BET2`
 - `CLOUD_PAYOUT_PERCENT`
 - `CLOUD_START_BALANCE`
 
-## Telegram
+## Endpoints
 
-Khi có tín hiệu chính thức, Telegram ghi rõ Lệnh 1/Lệnh 2 và số USDT.
-
-Sau khi vòng đó có kết quả, Boss Cloud gửi thêm:
-- THẮNG hoặc THUA
-- Lệnh 1 hay Lệnh 2
-- số USDT đã vào
-- lãi/lỗ riêng của lệnh
-- lãi/lỗ trong ngày
-- tổng Thắng/Thua trong ngày
-- số dư theo dõi
-- Lệnh tiếp theo và số USDT
-
-Quy tắc bước tiền giữ cùng logic với web iPhone:
-- Lệnh 1 thắng -> Lệnh 2
-- Lệnh 1 thua -> Lệnh 1
-- Sau Lệnh 2 -> Lệnh 1
-
-Endpoints:
-- /health
-- /category?ts=...
-- /history
-- /sync
+- `/health`
+- `/category?ts=...`
+- `/history`
+- `/trade-state`
+- `/sync`
