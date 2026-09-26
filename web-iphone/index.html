@@ -63,10 +63,10 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau đúng 15 phút, đặt lệnh cùng màu với nến ở mốc đó.</div>
+  <div class="note" style="margin-top:6px">Xét 3 nến liên tiếp bắt đầu ở mốc phút 00, 10, 20, 30, 40, 50. Chỉ đặt lệnh khi 3 nến là XĐX, ĐXĐ, XĐĐ hoặc ĐXX. Lệnh sau 15 phút mua theo màu của nến đầu.</div>
   <div class="stats" style="margin-top:12px">
-    <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
-    <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
+    <div class="stat"><span class="label">3 mốc xét</span><b id="sourceFrame">--:--</b></div>
+    <div class="stat"><span class="label">Mẫu 3 nến</span><b id="sourceColor">CHỜ</b></div>
     <div class="stat"><span class="label">Phiên đặt lệnh</span><b id="targetFrame">--:--–--:--</b></div>
     <div class="stat"><span class="label">Lệnh dự kiến</span><b id="buy">CHỜ</b></div>
   </div>
@@ -115,7 +115,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="row">
     <div>
       <b>Lịch 24 giờ theo mốc chẵn +15 phút</b>
-      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • lệnh ở phút 05/15/25/35/45/55</div>
+      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • chỉ có lệnh khi 3 nến lọc khớp XĐX / ĐXĐ / XĐĐ / ĐXX</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -126,7 +126,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Không lệnh</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • · = không có lệnh hoặc nhịp bị bỏ • … = thời gian chưa tới. Sau 2 lệnh thua liên tiếp, bỏ đúng 2 nhịp đặt lệnh kế tiếp.</div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • · = không có lệnh (mẫu 3 nến không hợp lệ hoặc nhịp bị bỏ) • … = thời gian chưa tới. Sau 2 lệnh thua liên tiếp, bỏ đúng 2 nhịp kế tiếp.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -142,8 +142,9 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <script>
 const SOURCE_STEP=600;
 const ENTRY_DELAY=900;
+const FILTER_PATTERNS=new Set(["GRG","RGR","GRR","RGG"]);
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-plus15-v1";
+const STRATEGY_VERSION="even-10m-3c-filter-v2";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -235,8 +236,9 @@ function firePrepareAlert(liveStart,remain,stage){
   const lastSkipped=Number(cloudTradeState?.lastSkippedTarget||0);
   if(skipRemaining>0||lastSkipped===targetStart)return;
 
-  const sourceColor=roundColorAt(sourceStart);
-  if(!sourceColor)return;
+  const sourcePattern=sourcePatternAt(sourceStart);
+  if(!sourcePattern?.allowed)return;
+  const sourceColor=sourcePattern.direction;
 
   prepare60Start=targetStart;
   sessionStorage.setItem("prepare_60_start",String(targetStart));
@@ -245,8 +247,9 @@ function firePrepareAlert(liveStart,remain,stage){
   showTradeAlert(
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    "Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ")+
-    " • sau 15 phút MUA "+buyText+" • phiên "+fmtFrame(targetStart)
+    "3 nến "+patternText(sourcePattern.pattern)+" • "+
+    shortClock(sourceStart)+"/"+shortClock(sourceStart+INTERVAL)+"/"+shortClock(sourceStart+2*INTERVAL)+
+    " • MUA "+buyText+" • phiên "+fmtFrame(targetStart)
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -419,7 +422,7 @@ async function resetTradeStateAndHistory(){
     prepare60Start=0;
     await Promise.allSettled([fetchTradeState(),fetchCloudHistory(true)]);
     render();
-    setStatus("Đã reset về 0 và tải lại lịch sử mốc chẵn.","ok");
+    setStatus("Đã reset về 0 và tải lại lịch sử lọc 3 nến.","ok");
 
     if(btn){
       btn.classList.remove("working","fail");
@@ -556,6 +559,25 @@ function sourceStartForTarget(targetStart){
 function roundColorAt(ts){
   return rounds.find(x=>Number(x.t)===Number(ts))?.c||null;
 }
+
+function sourcePatternAt(sourceStart){
+  const colors=[
+    roundColorAt(sourceStart),
+    roundColorAt(sourceStart+INTERVAL),
+    roundColorAt(sourceStart+2*INTERVAL)
+  ];
+  if(colors.some(c=>!c))return null;
+  const pattern=colors.join("");
+  return {
+    pattern,
+    allowed:FILTER_PATTERNS.has(pattern),
+    direction:colors[0],
+    colors
+  };
+}
+function patternText(code){
+  return String(code||"").split("").map(c=>c==="G"?"X":c==="R"?"Đ":"?").join("");
+}
 function upcomingTargetStart(nowSec=Date.now()/1000){
   const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
   for(let i=0;i<8;i++){
@@ -571,14 +593,17 @@ function buildTimeSignals(){
   for(const source of rounds){
     const sourceT=Number(source.t);
     if(!isSourceStart(sourceT)||!source.c)continue;
+    const sourcePattern=sourcePatternAt(sourceT);
     const targetT=sourceT+ENTRY_DELAY;
     const actual=byTime.get(targetT)?.c||null;
     out.push({
       sourceT,
       targetT,
-      direction:source.c,
+      pattern:sourcePattern?.pattern||"",
+      allowed:!!sourcePattern?.allowed,
+      direction:sourcePattern?.direction||source.c,
       actual,
-      rawWin:actual?source.c===actual:null
+      rawWin:sourcePattern?.allowed&&actual?sourcePattern.direction===actual:null
     });
   }
   return out.sort((a,b)=>a.targetT-b.targetT);
@@ -593,6 +618,11 @@ function buildTimedHistory(){
     if(skipRemaining>0){
       out.push({...s,status:"NO_ORDER",reason:"SKIP_BEAT",skipBefore:skipRemaining});
       skipRemaining--;
+      continue;
+    }
+
+    if(!s.allowed){
+      out.push({...s,status:"NO_ORDER",reason:"FILTER_MISS"});
       continue;
     }
 
@@ -620,7 +650,8 @@ function nextTimeSignalInfo(){
   const targetStart=upcomingTargetStart();
   if(targetStart===null)return null;
   const sourceStart=sourceStartForTarget(targetStart);
-  const sourceColor=roundColorAt(sourceStart);
+  const sourcePattern=sourcePatternAt(sourceStart);
+  const sourceColor=sourcePattern?.direction||null;
   const pending=cloudTradeState?.pending;
   const skipped=Number(cloudTradeState?.lastSkippedTarget||0)===targetStart;
   const skipRemaining=Number(cloudTradeState?.skipSignals||0);
@@ -628,6 +659,7 @@ function nextTimeSignalInfo(){
   return{
     sourceStart,
     sourceColor,
+    sourcePattern,
     targetStart,
     skipped,
     skipRemaining,
@@ -814,11 +846,14 @@ function renderCalendar24h(){
       if(slot.status==="FUTURE"){
         detail+="chưa tới";
       }else if(s?.status==="WIN"||s?.status==="LOSS"){
-        detail+="mốc "+shortClock(s.sourceT)+" • "+
-          (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +15 phút mua cùng màu • kết quả "+
+        detail+="3 nến "+patternText(s.pattern)+" • "+
+          shortClock(s.sourceT)+"/"+shortClock(s.sourceT+INTERVAL)+"/"+shortClock(s.sourceT+2*INTERVAL)+
+          " • mua "+(s.direction==="G"?"XANH":"ĐỎ")+" • kết quả "+
           (s.actual==="G"?"XANH":"ĐỎ")+" • "+(s.status==="WIN"?"THẮNG":"THUA");
       }else if(s?.reason==="SKIP_BEAT"){
         detail+="bỏ nhịp sau chuỗi 2 lệnh thua";
+      }else if(s?.reason==="FILTER_MISS"){
+        detail+="không có lệnh • mẫu "+(s.pattern?patternText(s.pattern):"chưa đủ dữ liệu")+" không thuộc XĐX/ĐXĐ/XĐĐ/ĐXX";
       }else if(s?.status==="WAIT"){
         detail+="đang chờ kết quả";
       }else{
@@ -849,20 +884,23 @@ function render(){
   const info=nextTimeSignalInfo();
 
   if(info){
-    $("sourceFrame").textContent=shortClock(info.sourceStart);
-    $("sourceColor").textContent=info.sourceColor==="G"?"🟢 XANH":info.sourceColor==="R"?"🔴 ĐỎ":"CHỜ KẾT QUẢ";
-    $("sourceColor").className=info.sourceColor==="G"?"green":info.sourceColor==="R"?"red":"";
+    $("sourceFrame").textContent=shortClock(info.sourceStart)+" / "+shortClock(info.sourceStart+INTERVAL)+" / "+shortClock(info.sourceStart+2*INTERVAL);
+    $("sourceColor").textContent=info.sourcePattern?patternText(info.sourcePattern.pattern):"CHỜ KẾT QUẢ";
+    $("sourceColor").className=info.sourcePattern?.allowed?"green":"";
     $("targetFrame").textContent=fmtFrame(info.targetStart);
 
     const isSkipped=info.skipped||info.skipRemaining>0;
+    const allowed=!!info.sourcePattern?.allowed;
     const direction=info.pending?.direction||info.sourceColor;
     $("buy").textContent=isSkipped
       ?"BỎ NHỊP"
-      :direction==="G"
-        ?"MUA XANH"
-        :direction==="R"
-          ?"MUA ĐỎ"
-          :"CHỜ MÀU MỐC";
+      :!allowed
+        ?"KHÔNG CÓ LỆNH"
+        :direction==="G"
+          ?"MUA XANH"
+          :direction==="R"
+            ?"MUA ĐỎ"
+            :"CHỜ ĐỦ 3 NẾN";
     $("buy").className=direction==="G"&&!isSkipped?"green":direction==="R"&&!isSkipped?"red":"";
 
     const nextAmount=calc.step===2?calc.bet2:calc.bet1;
@@ -872,10 +910,12 @@ function render(){
 
     if(isSkipped){
       $("freshness").textContent="Nhịp "+fmtFrame(info.targetStart)+" không phát lệnh. Còn "+Math.max(info.skipRemaining,info.skipped?1:0)+" nhịp trong bộ đếm nghỉ.";
-    }else if(info.sourceColor){
-      $("freshness").textContent="Lấy màu tại "+shortClock(info.sourceStart)+" → chờ 15 phút → đặt cùng màu ở "+fmtFrame(info.targetStart)+".";
+    }else if(info.sourcePattern?.allowed){
+      $("freshness").textContent="Mẫu "+patternText(info.sourcePattern.pattern)+" hợp lệ → mua theo màu nến đầu ở "+fmtFrame(info.targetStart)+".";
+    }else if(info.sourcePattern){
+      $("freshness").textContent="Mẫu "+patternText(info.sourcePattern.pattern)+" không thuộc XĐX / ĐXĐ / XĐĐ / ĐXX → không đặt lệnh.";
     }else{
-      $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
+      $("freshness").textContent="Đang chờ đủ 3 nến "+shortClock(info.sourceStart)+", "+shortClock(info.sourceStart+INTERVAL)+", "+shortClock(info.sourceStart+2*INTERVAL)+".";
     }
   }else{
     $("sourceFrame").textContent="--:--";
