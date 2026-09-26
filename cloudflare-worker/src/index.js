@@ -45,6 +45,7 @@ function freshTradeState(day){
     losses:0,
     lossStreak:0,
     lossCapitalMode:false,
+    autoStrategyMode:true,
     reverseColorMode:false,
     lastResultWin:null,
     reverseAfterSecondLossActive:false,
@@ -81,6 +82,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
   if(typeof state.lossCapitalMode!=="boolean")state.lossCapitalMode=false;
+  if(typeof state.autoStrategyMode!=="boolean")state.autoStrategyMode=true;
   if(typeof state.reverseColorMode!=="boolean")state.reverseColorMode=false;
   if(typeof state.lastResultWin!=="boolean")state.lastResultWin=null;
   if(typeof state.reverseAfterSecondLossActive!=="boolean")state.reverseAfterSecondLossActive=false;
@@ -327,6 +329,241 @@ function tradeDirectionFromSource(sourceColor,reverseColorMode=false){
   if(sourceColor!=="G"&&sourceColor!=="R")return null;
   if(!reverseColorMode)return sourceColor;
   return sourceColor==="G"?"R":"G";
+}
+
+
+const AUTO_WINDOW_SECONDS=24*3600;
+const AUTO_VALIDATE_SECONDS=6*3600;
+const AUTO_MIN_TRAIN=36;
+const AUTO_MIN_VALIDATE=12;
+
+function oppositeColor(color){
+  return color==="G"?"R":color==="R"?"G":null;
+}
+
+function majorityColorAt(byTime,sourceStart,count){
+  const colors=[];
+  for(let i=count-1;i>=0;i--){
+    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
+    if(c!=="G"&&c!=="R")return null;
+    colors.push(c);
+  }
+  const greens=colors.filter(c=>c==="G").length;
+  const reds=colors.length-greens;
+  if(greens===reds)return colors[colors.length-1]||null;
+  return greens>reds?"G":"R";
+}
+
+function patternKeyAt(byTime,sourceStart,count){
+  const colors=[];
+  for(let i=count-1;i>=0;i--){
+    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
+    if(c!=="G"&&c!=="R")return null;
+    colors.push(c);
+  }
+  return colors.join("");
+}
+
+function autoSamplesFromRounds(rounds,beforeTarget=Infinity){
+  const sorted=(rounds||[]).slice().sort((a,b)=>a.t-b.t);
+  const byTime=new Map(sorted.map(x=>[Number(x.t),x.c]));
+  const resolvedTargets=sorted
+    .map(x=>Number(x.t))
+    .filter(t=>Number.isFinite(t)&&t<Number(beforeTarget)&&sourceStartForTarget(t)!==null);
+  if(!resolvedTargets.length)return {samples:[],byTime};
+  const latest=resolvedTargets[resolvedTargets.length-1];
+  const floor=latest-AUTO_WINDOW_SECONDS+INTERVAL;
+  const samples=[];
+  for(const targetT of resolvedTargets){
+    if(targetT<floor)continue;
+    const sourceT=sourceStartForTarget(targetT);
+    const source=byTime.get(sourceT)||null;
+    const actual=byTime.get(targetT)||null;
+    if(!source||!actual)continue;
+    samples.push({sourceT,targetT,source,actual});
+  }
+  return {samples,byTime};
+}
+
+function trainPatternMap(train,byTime,count){
+  const stats=new Map();
+  for(const s of train){
+    const key=patternKeyAt(byTime,s.sourceT,count);
+    if(!key)continue;
+    const row=stats.get(key)||{G:0,R:0,total:0};
+    row[s.actual]++;
+    row.total++;
+    stats.set(key,row);
+  }
+  const out=new Map();
+  for(const [key,row] of stats){
+    if(row.total<3)continue;
+    out.set(key,row.G===row.R?null:(row.G>row.R?"G":"R"));
+  }
+  return out;
+}
+
+function baseCandidateDirection(id,sample,byTime,patternMaps){
+  if(!sample)return null;
+  if(id==="source")return sample.source;
+  if(id==="opposite_source")return oppositeColor(sample.source);
+  if(id==="prev5")return byTime.get(sample.sourceT-INTERVAL)||sample.source;
+  if(id==="opposite_prev5")return oppositeColor(byTime.get(sample.sourceT-INTERVAL)||sample.source);
+  if(id==="majority3")return majorityColorAt(byTime,sample.sourceT,3)||sample.source;
+  if(id==="opposite_majority3")return oppositeColor(majorityColorAt(byTime,sample.sourceT,3)||sample.source);
+  if(id==="majority5")return majorityColorAt(byTime,sample.sourceT,5)||sample.source;
+  if(id==="opposite_majority5")return oppositeColor(majorityColorAt(byTime,sample.sourceT,5)||sample.source);
+  const m=id.match(/^pattern([234])$/);
+  if(m){
+    const count=Number(m[1]);
+    const key=patternKeyAt(byTime,sample.sourceT,count);
+    return (key&&patternMaps?.[id]?.get(key))||sample.source;
+  }
+  return sample.source;
+}
+
+function candidateLabel(id){
+  const labels={
+    source:"Theo màu mốc",
+    opposite_source:"Ngược màu mốc",
+    prev5:"Theo nến 5 phút trước mốc",
+    opposite_prev5:"Ngược nến 5 phút trước mốc",
+    majority3:"Theo đa số 3 nến",
+    opposite_majority3:"Ngược đa số 3 nến",
+    majority5:"Theo đa số 5 nến",
+    opposite_majority5:"Ngược đa số 5 nến",
+    pattern2:"Mẫu tự học 2 nến",
+    pattern3:"Mẫu tự học 3 nến",
+    pattern4:"Mẫu tự học 4 nến",
+    reverse_after_order2_loss:"Đảo sau Lệnh 2 thua"
+  };
+  return labels[id]||id;
+}
+
+function evaluateStaticCandidate(id,samples,byTime,patternMaps){
+  let wins=0,losses=0,streak=0,maxLossStreak=0;
+  for(const s of samples){
+    const direction=baseCandidateDirection(id,s,byTime,patternMaps);
+    if(!direction)continue;
+    if(direction===s.actual){wins++;streak=0}
+    else{losses++;streak++;maxLossStreak=Math.max(maxLossStreak,streak)}
+  }
+  const total=wins+losses;
+  return {wins,losses,total,rate:total?wins/total:0,maxLossStreak};
+}
+
+function evaluateReverseAfterOrder2(samples){
+  let wins=0,losses=0,streak=0,maxLossStreak=0;
+  let consecutiveLosses=0;
+  let active=false;
+  for(const s of samples){
+    const direction=active?oppositeColor(s.source):s.source;
+    const win=direction===s.actual;
+    if(win){
+      wins++;streak=0;consecutiveLosses=0;active=false;
+    }else{
+      losses++;streak++;maxLossStreak=Math.max(maxLossStreak,streak);
+      consecutiveLosses++;
+      if(consecutiveLosses>=2)active=true;
+    }
+  }
+  const total=wins+losses;
+  return {wins,losses,total,rate:total?wins/total:0,maxLossStreak,active,consecutiveLosses};
+}
+
+function autoStrategyAnalysis(payload,targetStart){
+  const rounds=internalRounds(payload).filter(x=>x.t<Number(targetStart));
+  const {samples,byTime}=autoSamplesFromRounds(rounds,targetStart);
+  const fallbackSource=byTime.get(sourceStartForTarget(targetStart))||null;
+  if(samples.length<AUTO_MIN_TRAIN+AUTO_MIN_VALIDATE){
+    return {
+      id:"source",name:candidateLabel("source"),direction:fallbackSource,
+      trainWins:0,trainLosses:0,trainRate:null,
+      validateWins:0,validateLosses:0,validateRate:null,
+      maxLossStreak:null,sampleCount:samples.length,
+      reason:"Chưa đủ dữ liệu 24h để AUTO STRATEGY kiểm tra ổn định."
+    };
+  }
+
+  const latest=samples[samples.length-1].targetT;
+  const splitAt=latest-AUTO_VALIDATE_SECONDS+INTERVAL;
+  const train=samples.filter(s=>s.targetT<splitAt);
+  const validate=samples.filter(s=>s.targetT>=splitAt);
+  if(train.length<AUTO_MIN_TRAIN||validate.length<AUTO_MIN_VALIDATE){
+    return {
+      id:"source",name:candidateLabel("source"),direction:fallbackSource,
+      trainWins:0,trainLosses:0,trainRate:null,
+      validateWins:0,validateLosses:0,validateRate:null,
+      maxLossStreak:null,sampleCount:samples.length,
+      reason:"Dữ liệu 18h/6h chưa đủ để chọn công thức."
+    };
+  }
+
+  const candidateIds=[
+    "source","opposite_source","prev5","opposite_prev5",
+    "majority3","opposite_majority3","majority5","opposite_majority5",
+    "pattern2","pattern3","pattern4","reverse_after_order2_loss"
+  ];
+  const trainPatternMaps={
+    pattern2:trainPatternMap(train,byTime,2),
+    pattern3:trainPatternMap(train,byTime,3),
+    pattern4:trainPatternMap(train,byTime,4)
+  };
+
+  const ranked=[];
+  for(const id of candidateIds){
+    let tr,va;
+    if(id==="reverse_after_order2_loss"){
+      tr=evaluateReverseAfterOrder2(train);
+      va=evaluateReverseAfterOrder2(validate);
+    }else{
+      tr=evaluateStaticCandidate(id,train,byTime,trainPatternMaps);
+      va=evaluateStaticCandidate(id,validate,byTime,trainPatternMaps);
+    }
+    if(va.total<AUTO_MIN_VALIDATE)continue;
+    ranked.push({
+      id,name:candidateLabel(id),
+      trainWins:tr.wins,trainLosses:tr.losses,trainRate:tr.rate,
+      validateWins:va.wins,validateLosses:va.losses,validateRate:va.rate,
+      maxLossStreak:va.maxLossStreak
+    });
+  }
+  ranked.sort((a,b)=>
+    b.validateRate-a.validateRate ||
+    a.maxLossStreak-b.maxLossStreak ||
+    b.trainRate-a.trainRate ||
+    b.validateWins-a.validateWins
+  );
+  const best=ranked[0]||{
+    id:"source",name:candidateLabel("source"),
+    trainWins:0,trainLosses:0,trainRate:0,
+    validateWins:0,validateLosses:0,validateRate:0,maxLossStreak:0
+  };
+
+  const allPatternMaps={
+    pattern2:trainPatternMap(samples,byTime,2),
+    pattern3:trainPatternMap(samples,byTime,3),
+    pattern4:trainPatternMap(samples,byTime,4)
+  };
+  const nextSample={
+    sourceT:sourceStartForTarget(targetStart),
+    targetT:Number(targetStart),
+    source:fallbackSource,
+    actual:null
+  };
+  let direction=fallbackSource;
+  if(best.id==="reverse_after_order2_loss"){
+    const sim=evaluateReverseAfterOrder2(samples);
+    direction=sim.active?oppositeColor(fallbackSource):fallbackSource;
+  }else{
+    direction=baseCandidateDirection(best.id,nextSample,byTime,allPatternMaps)||fallbackSource;
+  }
+
+  return {
+    ...best,direction,sampleCount:samples.length,
+    trainCount:train.length,validateCount:validate.length,
+    candidates:ranked.slice(0,5)
+  };
 }
 
 async function resolvedColorAt(env,payload,ts){
@@ -585,6 +822,7 @@ async function maybePrepare(env,payload,nowSec){
   if(state.day!==currentDay&&!state.pending){
     const carriedLossStreak=Number(state.lossStreak||0);
     const carriedLossCapitalMode=!!state.lossCapitalMode;
+    const carriedAutoStrategyMode=!!state.autoStrategyMode;
     const carriedReverseColorMode=!!state.reverseColorMode;
     const carriedLastResultWin=typeof state.lastResultWin==="boolean"?state.lastResultWin:null;
     const carriedReverseAfterSecondLossActive=!!state.reverseAfterSecondLossActive;
@@ -595,6 +833,7 @@ async function maybePrepare(env,payload,nowSec){
     state=freshTradeState(currentDay);
     state.lossStreak=carriedLossStreak;
     state.lossCapitalMode=carriedLossCapitalMode;
+    state.autoStrategyMode=carriedAutoStrategyMode;
     state.reverseColorMode=carriedReverseColorMode;
     state.lastResultWin=carriedLastResultWin;
     state.reverseAfterSecondLossActive=carriedReverseAfterSecondLossActive;
@@ -612,15 +851,13 @@ async function maybePrepare(env,payload,nowSec){
   const sourceColor=await resolvedColorAt(env,payload,sourceStart);
   if(!sourceColor)return;
 
-  // Chế độ theo kết quả lệnh liền trước:
-  // - Chưa có lệnh trước hoặc lệnh trước THẮNG: đi đúng màu nến mốc.
-  // - Lệnh trước THUA: đảo màu nến mốc.
-  // Chỉ quyết định sau khi lệnh trước đã được settle.
-  const reverseThisOrder=
-    !!state.reverseColorMode &&
-    !!state.reverseAfterSecondLossActive &&
-    state.lastResultWin===false;
-  const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
+  // AUTO STRATEGY quét 24h: 18h đầu tạo công thức, 6h cuối kiểm tra.
+  // Quy tắc "đảo sau Lệnh 2 thua" chỉ là một ứng viên, không còn bị ép cố định.
+  const auto=state.autoStrategyMode
+    ?autoStrategyAnalysis(payload,targetStart)
+    :{id:"source",name:"Theo màu mốc",direction:sourceColor,validateRate:null,validateWins:0,validateLosses:0};
+  const direction=auto.direction||sourceColor;
+  const reverseThisOrder=direction!==sourceColor;
   if(!direction)return;
 
   const settings=tradeSettings(env);
@@ -635,7 +872,12 @@ async function maybePrepare(env,payload,nowSec){
       direction,
       strategy:"EVEN_10M_ENTRY10_CLOSE15",
       reverseColorMode:reverseThisOrder,
-      autoReverseAfterLossMode:!!state.reverseColorMode,
+      autoStrategyMode:!!state.autoStrategyMode,
+      autoStrategyId:auto.id,
+      autoStrategyName:auto.name,
+      autoValidateRate:Number.isFinite(Number(auto.validateRate))?Number(auto.validateRate):null,
+      autoValidateWins:Number(auto.validateWins||0),
+      autoValidateLosses:Number(auto.validateLosses||0),
       step:plan.step,
       capitalStage:plan.capitalStage,
       planLabel:plan.label,
@@ -655,19 +897,17 @@ async function maybePrepare(env,payload,nowSec){
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const reverseLine=pending.reverseColorMode
-    ?"🔄 Lệnh trước <b>THUA</b> → đảo màu lệnh này • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
-    :"";
-  const resumeLine=Number(pending.resumeFromWaitTarget||0)>0
-    ?"✅ Nhịp chờ <b>"+frameText(Number(pending.resumeFromWaitTarget))+"</b> vừa THẮNG → mở lại lệnh.\n"
+  const autoRate=Number(pending.autoValidateRate);
+  const autoLine=pending.autoStrategyMode
+    ?"🧠 AUTO 24H: <b>"+String(pending.autoStrategyName||pending.autoStrategyId||"Theo màu mốc")+"</b>"+
+      (Number.isFinite(autoRate)?" • test 6h <b>"+(autoRate*100).toFixed(1)+"%</b> ("+Number(pending.autoValidateWins||0)+"T/"+Number(pending.autoValidateLosses||0)+"B)":"")+"\n"
     :"";
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
     "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
     "Quy tắc: <b>vào phiên +10 phút, chốt màu ở +15 phút</b>\n"+
-    reverseLine+
-    resumeLine+
+    autoLine+
     "➡️ "+buy+"\n"+
     "<b>"+(pending.planLabel||("Lệnh "+Number(pending.step)))+" • "+amountText(pending.amount)+"</b>\n"+
     (pending.lossCapitalMode?"Chế độ vốn thua 4 lệnh: <b>BẬT</b>\n":"")+
@@ -773,7 +1013,10 @@ export default {
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
         waitForWinAfterTwoLosses:false,
-        previousResultColorRule:true,
+        previousResultColorRule:false,
+        autoStrategy24h:true,
+        autoStrategyTrainHours:18,
+        autoStrategyValidateHours:6,
         lossCapitalModeSupported:true,
         lossCapitalSequence:[1,1,2,4],
         reverseColorModeSupported:true,
@@ -812,20 +1055,40 @@ export default {
     }
 
 
+    if(u.pathname==="/auto-strategy"){
+      const nowSec=Math.floor(Date.now()/1000);
+      const targetParam=Number(u.searchParams.get("target"));
+      const targetStart=Number.isFinite(targetParam)&&targetParam>0
+        ?Math.floor(targetParam/INTERVAL)*INTERVAL
+        :Math.floor(nowSec/INTERVAL)*INTERVAL+INTERVAL;
+      const payload=await readHistory(env);
+      const sourceStart=sourceStartForTarget(targetStart);
+      const sourceColor=sourceStart===null?null:await resolvedColorAt(env,payload,sourceStart);
+      const analysis=autoStrategyAnalysis(payload,targetStart);
+      return json({
+        ok:true,targetStart,sourceStart,sourceColor,
+        ...analysis,
+        direction:analysis.direction||sourceColor
+      });
+    }
+
+
     if(u.pathname==="/trade-mode"){
       if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
       let body={};
       try{body=await req.json()}catch(_){}
 
       const hasLossCapital=typeof body?.lossCapitalMode==="boolean";
+      const hasAutoStrategy=typeof body?.autoStrategyMode==="boolean";
       const hasReverseColor=typeof body?.reverseColorMode==="boolean";
-      if(!hasLossCapital&&!hasReverseColor){
-        return json({ok:false,error:"Cần lossCapitalMode hoặc reverseColorMode boolean"},400);
+      if(!hasLossCapital&&!hasAutoStrategy&&!hasReverseColor){
+        return json({ok:false,error:"Cần lossCapitalMode hoặc autoStrategyMode boolean"},400);
       }
 
       const nowSec=Math.floor(Date.now()/1000);
       const state=await readTradeState(env,nowSec);
       if(hasLossCapital)state.lossCapitalMode=body.lossCapitalMode;
+      if(hasAutoStrategy)state.autoStrategyMode=body.autoStrategyMode;
       if(hasReverseColor)state.reverseColorMode=body.reverseColorMode;
 
       // A mode change starts a fresh sequence, but keeps existing PnL/history.
@@ -845,15 +1108,16 @@ export default {
           ?"Đã bật chế độ vốn thua tối đa 4 lệnh."
           :"Đã tắt chế độ vốn thua 4 lệnh.";
       }
-      if(hasReverseColor){
-        message=state.reverseColorMode
-          ?"Đã bật chế độ đặc biệt: lệnh 1 và 2 đi đúng công thức màu; chỉ khi lệnh 2 thua mới kích hoạt đảo màu cho lệnh sau. Gặp lệnh thắng thì quay về công thức màu gốc."
-          :"Đã tắt chế độ đặc biệt: mọi lệnh đi đúng công thức màu đã cài.";
+      if(hasAutoStrategy){
+        message=state.autoStrategyMode
+          ?"Đã bật AUTO STRATEGY 24H: tool tự so sánh công thức bằng 18h học + 6h kiểm tra."
+          :"Đã tắt AUTO STRATEGY: tool quay về đánh theo màu mốc.";
       }
 
       return json({
         ok:true,
         lossCapitalMode:state.lossCapitalMode,
+        autoStrategyMode:state.autoStrategyMode,
         reverseColorMode:state.reverseColorMode,
         message
       });
@@ -869,6 +1133,7 @@ export default {
       const previous=await readTradeState(env,nowSec);
       const state=freshTradeState(dayTextFromSeconds(nowSec));
       state.lossCapitalMode=!!previous.lossCapitalMode;
+      state.autoStrategyMode=!!previous.autoStrategyMode;
       state.reverseColorMode=!!previous.reverseColorMode;
       state.balanceBase=0;
       await writeTradeState(env,state);
