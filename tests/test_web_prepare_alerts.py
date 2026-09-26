@@ -25,7 +25,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("const ENTRY_DELAY=600", self.source)
         self.assertIn("const SOURCE_STEP=600", self.worker)
         self.assertIn("const ENTRY_DELAY=600", self.worker)
-        self.assertIn('STRATEGY_VERSION="even-10m-2loss-skip2-waitwin-v3"', self.worker)
+        self.assertIn('STRATEGY_VERSION="even-10m-2loss-waitwin-v4"', self.worker)
 
     def test_source_color_is_used_15_minutes_later(self):
         self.assertIn("sourceStartForTarget", self.source)
@@ -49,20 +49,18 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
         self.assertIn("17:00 -> order frame 17:10-17:15 -> alert around 17:09", self.worker)
 
-    def test_first_loss_continues_and_two_losses_skip_two_then_wait_for_win(self):
+    def test_first_loss_continues_and_two_losses_wait_for_shadow_win(self):
         self.assertIn("waitForWin:false", self.worker)
         self.assertIn("One real loss alone does not pause or wait", self.worker)
+        self.assertIn("After two consecutive REAL losses, stop real entries immediately", self.worker)
         self.assertIn("state.waitForWin=true", self.worker)
         self.assertIn("advanceWaitForWin", self.worker)
         self.assertIn("shadowSignalAt", self.worker)
-        self.assertIn("Sau 2 nhịp nghỉ", self.worker)
-        self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.source)
-        self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.worker)
-        self.assertIn("skipRemaining=SKIP_BEATS_AFTER_TWO_LOSSES", self.source)
-        self.assertIn("state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
-        self.assertIn("BỎ 2 NHỊP KẾ TIẾP", self.worker)
-        self.assertIn("waitAfterSkips=true", self.source)
-        self.assertIn("if(skipRemaining===0&&waitAfterSkips)", self.source)
+        self.assertIn("THUA 2 LỆNH LIÊN TIẾP • CHỜ 1 NHỊP GIẢ LẬP THẮNG", self.worker)
+        self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.source)
+        self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
+        self.assertNotIn("skipSignals", self.worker)
+        self.assertNotIn("waitAfterSkips", self.source)
         self.assertIn('status:shadowWin?"WAIT_WIN":"WAIT_LOSS"', self.source)
         self.assertIn('d.textContent="C✓"', self.source)
         self.assertIn('d.textContent="C×"', self.source)
@@ -74,11 +72,11 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("for(let row=23;row>=0;row--)", self.source)
         self.assertIn("slice(row*6,row*6+6)", self.source)
         self.assertNotIn('status="SOURCE"', self.source)
-        self.assertIn('status="SKIP"', self.source)
+        self.assertNotIn('status="SKIP"', self.source)
         self.assertIn('status="WAIT"', self.source)
-        self.assertIn('d.textContent="B"', self.source)
+        self.assertNotIn('d.textContent="B"', self.source)
         self.assertNotIn('d.textContent="·"', self.source)
-        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB', self.source)
+        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL', self.source)
 
     def test_24h_money_uses_double_step_after_step1_win(self):
         self.assertIn("function historicalMoneySettings", self.source)
