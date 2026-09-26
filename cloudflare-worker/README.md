@@ -1,4 +1,4 @@
-# Boss 8 Nhóm Cloud — Cloudflare Worker
+# Boss Mốc Chẵn Cloud — Cloudflare Worker
 
 Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone không mở web.
 
@@ -10,13 +10,14 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 - Secret: `CLOUD_TELEGRAM_CHAT_ID`
 - Cron: mỗi phút
 
-## Logic hiện tại
+## Chiến lược hiện tại
 
-- Chỉ dùng 8 nhóm màu mới.
-- Mỗi nhóm nhận dạng bằng 3 nến đã đóng + màu nến live.
-- Khi còn khoảng 1 phút của phiên hiện tại, nếu khớp nhóm và không trong thời gian tạm dừng, Telegram gửi lệnh cho phiên kế tiếp.
-- Khi lệnh có kết quả, Telegram báo thắng/thua, lãi/lỗ riêng của lệnh, lãi/lỗ hôm nay và tổng thắng/thua.
-- Sau 2 lệnh thua liên tiếp, ngừng phát lệnh mới 15 phút. Hết thời gian này, hệ thống tự hoạt động lại khi gặp nhóm màu hợp lệ.
+- Mốc lấy màu: phút 00, 10, 20, 30, 40, 50.
+- Sau 15 phút, lệnh mua dùng đúng màu của nến tại mốc lấy màu.
+- Ví dụ: mốc 14:00 đỏ → phiên 14:15 mua đỏ; mốc 14:10 xanh → phiên 14:25 mua xanh.
+- Telegram phát cảnh báo khoảng 1 phút trước phiên đặt lệnh.
+- Khi lệnh kết thúc, Telegram báo thắng/thua, lãi/lỗ lệnh, tổng lãi/lỗ sau reset và số dư theo dõi.
+- Nếu có 2 lệnh thực tế thua liên tiếp, hệ thống bỏ 2 nhịp đặt lệnh kế tiếp rồi tự hoạt động lại.
 
 ## Tiền lệnh mặc định
 
@@ -37,4 +38,5 @@ Có thể cấu hình bằng:
 - `/category?ts=...`
 - `/history`
 - `/trade-state`
+- `/trade-reset`
 - `/sync`
