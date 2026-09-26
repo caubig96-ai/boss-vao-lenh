@@ -518,10 +518,6 @@ async function maybePrepare(env,payload,nowSec){
   await env.BOSS_KV.put("telegram:last_prepare",String(targetStart));
 }
 
-function sleep(ms){
-  return new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
-}
-
 async function schedulePrepareAt60(env,payload){
   const nowSec=Math.floor(Date.now()/1000);
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
