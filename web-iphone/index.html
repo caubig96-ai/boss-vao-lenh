@@ -20,7 +20,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .candles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
 .history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}.pending{background:#3b3219;color:#ffd36b}
-.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:510px;display:grid;grid-template-columns:46px repeat(12,1fr);gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calCell{height:25px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:720px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -64,7 +64,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="label">3 nến đã đóng + nến live hiện tại • đúng 8 nhóm trong ảnh mới</div>
+  <div class="label">3 nến đã đóng quyết định màu mua • nến live hiện tại không tham gia chọn màu</div>
   <div class="candles" id="candles"></div>
   <div class="row">
     <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
@@ -111,7 +111,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 kết quả lịch sử gần nhất của 8 nhóm</b><div class="label">Cửa sổ trượt 100 kết quả • dùng để lấy 2 kết quả gần nhất và quyết định theo màu gốc hoặc đảo màu</div></div><span id="count" class="label">0/100</span></div>
+  <div class="row"><div><b>100 kết quả gốc gần nhất của 8 nhóm</b><div class="label">100 kết quả gốc trước khi áp dụng quy tắc 2 kết quả gần nhất; bảng 24 giờ phía dưới mới là kết quả sau khi theo/đảo màu</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -119,7 +119,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="row">
     <div>
       <b>Lịch 24 giờ theo nhóm màu nến</b>
-      <div class="label">288 ô • mỗi ô 5 phút • tự cập nhật từ Boss Cloud</div>
+      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • kết quả đã áp dụng quy tắc 2 kết quả gần nhất + đảo màu</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -129,7 +129,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • · = khung 5 phút không khớp nhóm màu trong ảnh mới • … = đang chờ kết quả. Bảng tính theo lệnh gốc của nhóm màu.</div>
+  <div class="note" style="margin-top:9px">V = thắng sau khi áp dụng quy tắc 2 kết quả gần nhất • X = thua • · = không có lệnh (không khớp / chưa đủ 2 kết quả / đang nghỉ 15 phút) • … = thời gian chưa tới.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -138,18 +138,18 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Thống kê 8 nhóm 4 nến</b>
+      <b>Thống kê 8 nhóm • 4 cặp chung 3 nến đầu</b>
       <div class="label">8 nhóm mới • bảng thống kê tham khảo 100 lệnh gần nhất</div>
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng dùng 100 lệnh lịch sử của 8 nhóm. Với nhóm đang khớp, tool chỉ đọc 2 kết quả gần nhất của chính nhóm đó: V-V và V-X đánh theo màu gốc; X-X và X-V đảo màu. Thứ tự hiển thị là gần nhất trước.</div>
+  <div class="note" style="margin-top:7px">8 nhóm trong ảnh được ghép thành 4 cặp vì nến thứ 4 là nến live và không tham gia chọn màu. Tool dùng 3 nến đầu, rồi đọc 2 kết quả gần nhất trong 100 kết quả gốc để quyết định theo màu gốc hoặc đảo màu.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
         <tr>
           <th>Nhóm</th>
-          <th>Nhóm 4 nến</th>
+          <th>3 nến quyết định</th>
           <th>2 gần nhất</th>
           <th>Cách đánh</th>
           <th>Lệnh</th>
@@ -172,17 +172,17 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </main>
 <script>
 const PATTERN_GROUPS=[
-  {name:"Nhóm 1",items:[["RGRR","R"]]},
-  {name:"Nhóm 2",items:[["GRGR","G"]]},
-  {name:"Nhóm 3",items:[["RRGR","R"]]},
-  {name:"Nhóm 4",items:[["GGRR","G"]]},
-  {name:"Nhóm 5",items:[["RGRG","R"]]},
-  {name:"Nhóm 6",items:[["GRGG","G"]]},
-  {name:"Nhóm 7",items:[["RRGG","R"]]},
-  {name:"Nhóm 8",items:[["GGRG","G"]]}
+  {name:"Nhóm 1",variant:"RGRR",key:"RGR",pred:"R"},
+  {name:"Nhóm 2",variant:"GRGR",key:"GRG",pred:"G"},
+  {name:"Nhóm 3",variant:"RRGR",key:"RRG",pred:"R"},
+  {name:"Nhóm 4",variant:"GGRR",key:"GGR",pred:"G"},
+  {name:"Nhóm 5",variant:"RGRG",key:"RGR",pred:"R"},
+  {name:"Nhóm 6",variant:"GRGG",key:"GRG",pred:"G"},
+  {name:"Nhóm 7",variant:"RRGG",key:"RRG",pred:"R"},
+  {name:"Nhóm 8",variant:"GGRG",key:"GGR",pred:"G"}
 ];
-const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
-const PATTERN_VERSION="image-8-v1";
+const PATTERNS={RGR:"R",GRG:"G",RRG:"R",GGR:"G"};
+const PATTERN_VERSION="image-8-prefix3-v2";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -285,7 +285,7 @@ function firePrepareAlert(liveStart,remain,stage){
   showTradeAlert(
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    livePattern.group+" • "+patternIcons(livePattern.code)+" • 2 gần nhất "+decision.pair+" • "+modeText+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+    "3 nến "+patternIcons(livePattern.code)+" • 2 gần nhất "+decision.pair+" • "+modeText+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -634,11 +634,11 @@ function startPolling(){
 }
 function consecutive(a,b){return b.t-a.t===INTERVAL}
 function allPatternCodes(){
-  return PATTERN_GROUPS.flatMap(group=>group.items.map(item=>item[0]));
+  return [...new Set(PATTERN_GROUPS.map(group=>group.key))];
 }
 function patternGroupName(code){
-  const group=PATTERN_GROUPS.find(group=>group.items.some(item=>item[0]===code));
-  return group?group.name:"";
+  const names=PATTERN_GROUPS.filter(group=>group.key===code).map(group=>group.name);
+  return names.join("/");
 }
 function patternIcons(code){return [...code].map(c=>c==="G"?"🟢":"🔴").join("")}
 function buildPatternStats(){
@@ -681,15 +681,25 @@ function renderPatternStats(){
 function buildSignals(){
   const out=[];
   const byTime=new Map(rounds.map(x=>[x.t,x]));
-  for(let i=3;i<rounds.length;i++){
-    const w=rounds.slice(i-3,i+1);
+  for(let i=2;i<rounds.length;i++){
+    const w=rounds.slice(i-2,i+1);
     if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
     const p=w.map(x=>x.c).join("");
     const pred=PATTERNS[p];
     if(!pred)continue;
-    const targetT=w[3].t+INTERVAL;
-    const actual=byTime.get(targetT);
-    out.push({sourceT:w[3].t,targetT,pattern:p,pred,actual:actual?.c||null});
+
+    const live=byTime.get(w[2].t+INTERVAL)||null;
+    const targetT=w[2].t+2*INTERVAL;
+    const actual=byTime.get(targetT)||null;
+    if(!live)continue;
+
+    out.push({
+      sourceT:live.t,
+      targetT,
+      pattern:p,
+      pred,
+      actual:actual?.c||null
+    });
   }
   return out
 }
@@ -697,6 +707,70 @@ function rawPatternSettled(){
   return buildSignals()
     .filter(item=>!!item.actual)
     .map(item=>({...item,win:item.pred===item.actual}));
+}
+
+function adaptiveDecisionFromPrior(code,priorRaw){
+  const pred=PATTERNS[code]||null;
+  if(!pred)return {allow:false,direction:null,mode:"NONE",pair:""};
+
+  const recent100=priorRaw.slice(-100);
+  const sameGroup=recent100.filter(item=>item.pattern===code);
+  const two=sameGroup.slice(-2).reverse();
+  if(two.length<2){
+    return {
+      allow:false,
+      direction:null,
+      mode:"NEED_2",
+      pair:two.map(item=>item.win?"V":"X").join("-")
+    };
+  }
+
+  const pair=two.map(item=>item.win?"V":"X").join("-");
+  const latestWon=two[0].win===true;
+  return {
+    allow:true,
+    direction:latestWon?pred:(pred==="G"?"R":"G"),
+    mode:pair==="V-V"?"FOLLOW_VV":pair==="X-X"?"REVERSE_XX":pair==="V-X"?"FOLLOW_VX":"REVERSE_XV",
+    pair
+  };
+}
+
+function buildAdaptiveHistory(){
+  const raw=rawPatternSettled().sort((a,b)=>a.targetT-b.targetT);
+  const out=[];
+  let lossStreak=0;
+  let pauseUntil=0;
+
+  for(let i=0;i<raw.length;i++){
+    const s=raw[i];
+    const prior=raw.slice(0,i);
+    const d=adaptiveDecisionFromPrior(s.pattern,prior);
+
+    if(Number(s.targetT)<Number(pauseUntil||0)){
+      out.push({...s,adaptive:false,status:"NO_ORDER",reason:"PAUSE_15M",pair:d.pair||"",mode:d.mode||"NONE"});
+      continue;
+    }
+
+    if(!d.allow||!d.direction){
+      out.push({...s,adaptive:false,status:"NO_ORDER",reason:"NEED_2",pair:d.pair||"",mode:d.mode||"NONE"});
+      continue;
+    }
+
+    const win=d.direction===s.actual;
+    out.push({...s,adaptive:true,direction:d.direction,adaptiveWin:win,status:win?"WIN":"LOSS",pair:d.pair,mode:d.mode});
+
+    if(win){
+      lossStreak=0;
+    }else{
+      lossStreak++;
+      if(lossStreak>=2){
+        // Mirror the live system: after the second actual loss, no new order for 15 minutes.
+        pauseUntil=s.targetT+15*60;
+        lossStreak=0;
+      }
+    }
+  }
+  return out;
 }
 function recentTwoDecision(code){
   const pred=PATTERNS[code]||null;
@@ -823,51 +897,48 @@ function latestClosed3(){
 }
 function currentLivePattern(){
   const closed3=latestClosed3();
-  const liveColor=liveMarket.color;
-  if(!closed3||!liveColor)return null;
+  if(!closed3)return null;
   const expectedLiveStart=closed3[2].t+INTERVAL;
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(expectedLiveStart!==currentLiveStart)return null;
-  const code=closed3.map(x=>x.c).join("")+liveColor;
-  return {closed3,liveColor,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
+  const code=closed3.map(x=>x.c).join("");
+  return {closed3,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
 }
 function buildCalendar24h(){
   const now=Math.floor(Date.now()/1000);
-  const latestClosed=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
-  const first=latestClosed-(288-1)*INTERVAL;
-  const signalMap=new Map(buildSignals().map(s=>[Number(s.targetT),s]));
+  const currentHour=Math.floor(now/3600)*3600;
+  const first=currentHour-23*3600;
+  const last=first+24*3600-INTERVAL;
+
+  const adapted=buildAdaptiveHistory();
+  const signalMap=new Map(adapted.map(s=>[Number(s.targetT),s]));
+  const rawMap=new Map(buildSignals().map(s=>[Number(s.targetT),s]));
   const slots=[];
-  let wins=0,losses=0,signals=0,pending=0;
+  let wins=0,losses=0,signals=0,noOrders=0,future=0;
 
   for(let i=0;i<288;i++){
     const t=first+i*INTERVAL;
-    const s=signalMap.get(t)||null;
-    let status="EMPTY";
-    if(s){
-      signals++;
-      if(!s.actual){
-        status="WAIT";
-        pending++;
-      }else if(s.pred===s.actual){
-        status="WIN";
-        wins++;
-      }else{
-        status="LOSS";
-        losses++;
-      }
+    let status="NO_ORDER";
+    let signal=signalMap.get(t)||null;
+    const raw=rawMap.get(t)||null;
+
+    if(t>now){
+      status="FUTURE";
+      future++;
+    }else if(signal?.status==="WIN"){
+      status="WIN";wins++;signals++;
+    }else if(signal?.status==="LOSS"){
+      status="LOSS";losses++;signals++;
+    }else{
+      status="NO_ORDER";noOrders++;
     }
-    slots.push({t,signal:s,status});
+
+    slots.push({t,status,signal,raw});
   }
 
   const settled=wins+losses;
   return{
-    first,
-    latestClosed,
-    slots,
-    wins,
-    losses,
-    signals,
-    pending,
+    first,last,slots,wins,losses,signals,noOrders,future,
     rate:settled?wins/settled*100:null
   };
 }
@@ -882,37 +953,77 @@ function renderCalendar24h(){
   const cal=buildCalendar24h();
   root.innerHTML="";
 
+  const headHour=document.createElement("div");
+  headHour.className="calHead";
+  headHour.textContent="Giờ";
+  root.appendChild(headHour);
+  for(let m=0;m<60;m+=5){
+    const d=document.createElement("div");
+    d.className="calHead";
+    d.textContent=String(m).padStart(2,"0");
+    root.appendChild(d);
+  }
+  const headSum=document.createElement("div");
+  headSum.className="calHead";
+  headSum.textContent="Tổng 1 giờ";
+  root.appendChild(headSum);
+
   for(let row=0;row<24;row++){
     const rowSlots=cal.slots.slice(row*12,row*12+12);
     const label=document.createElement("div");
     label.className="calTime";
-    label.textContent=shortClock(rowSlots[0].t);
+    label.textContent=String(new Date(rowSlots[0].t*1000).getHours()).padStart(2,"0")+":00";
     root.appendChild(label);
 
+    let rowW=0,rowL=0,rowN=0,rowF=0;
     rowSlots.forEach(slot=>{
       const d=document.createElement("div");
       d.className="calCell";
+
       if(slot.status==="WIN"){
+        rowW++;
         d.classList.add("win","signal");
         d.textContent="V";
       }else if(slot.status==="LOSS"){
+        rowL++;
         d.classList.add("loss","signal");
         d.textContent="X";
-      }else if(slot.status==="WAIT"){
-        d.classList.add("wait","signal");
+      }else if(slot.status==="FUTURE"){
+        rowF++;
+        d.classList.add("future");
         d.textContent="…";
       }else{
+        rowN++;
         d.textContent="·";
       }
 
       const s=slot.signal;
-      const detail=s
-        ?shortClock(slot.t)+" • "+patternIcons(s.pattern)+" • mua "+(s.pred==="G"?"XANH":"ĐỎ")+(s.actual?" • kết quả "+(s.actual==="G"?"XANH":"ĐỎ"):" • chờ kết quả")
-        :shortClock(slot.t)+" • không khớp nhóm";
+      const raw=slot.raw;
+      let detail=shortClock(slot.t)+" • ";
+      if(slot.status==="FUTURE"){
+        detail+="chưa tới";
+      }else if(s?.adaptive){
+        detail+=patternIcons(s.pattern)+" • 2 gần nhất "+s.pair+" • "+
+          (String(s.mode).startsWith("REVERSE")?"đảo màu":"theo màu gốc")+
+          " • mua "+(s.direction==="G"?"XANH":"ĐỎ")+
+          " • kết quả "+(s.actual==="G"?"XANH":"ĐỎ")+
+          " • "+(s.adaptiveWin?"THẮNG":"THUA");
+      }else if(s?.reason==="PAUSE_15M"){
+        detail+="không có lệnh • đang nghỉ 15 phút";
+      }else if(raw){
+        detail+=patternIcons(raw.pattern)+" • không có lệnh • chưa đủ 2 kết quả gần nhất";
+      }else{
+        detail+="không có lệnh • 3 nến không thuộc nhóm phù hợp";
+      }
       d.title=detail;
       d.setAttribute("aria-label",detail);
       root.appendChild(d);
     });
+
+    const sum=document.createElement("div");
+    sum.className="calHourSum";
+    sum.textContent="V "+rowW+" • X "+rowL+" • · "+rowN+(rowF?" • … "+rowF:"");
+    root.appendChild(sum);
   }
 
   $("calendar24Signals").textContent=String(cal.signals);
@@ -920,7 +1031,7 @@ function renderCalendar24h(){
   $("calendar24Losses").textContent=String(cal.losses);
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
-  $("calendar24Updated").textContent="đến "+shortClock(cal.latestClosed);
+  $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
 }
 
 function render(){
@@ -932,7 +1043,7 @@ function render(){
     const c=colors[i]||"";
     d.className="dot "+(c==="G"?"g":c==="R"?"r":"");
     d.textContent=c?"●":"·";
-    if(i===3)d.style.outline="2px solid rgba(76,165,255,.7)";
+    if(i===3){d.style.outline="2px solid rgba(76,165,255,.7)";d.style.opacity=".55";}
     $("candles").appendChild(d);
   }
 
@@ -956,13 +1067,13 @@ function render(){
     $("freshness").textContent="Đã có 2 lệnh thua liên tiếp • tạm dừng báo lệnh đến "+shortClock(pauseUntil)+".";
   }else if(livePattern?.pred&&decision?.allow){
     const modeText=String(decision.mode).startsWith("REVERSE")?"ĐẢO MÀU":"THEO MÀU GỐC";
-    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • 2 kết quả gần nhất "+decision.pair+" • "+modeText+" • 1 phút cuối báo MUA "+(decision.direction==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
+    $("freshness").textContent="3 nến "+patternIcons(livePattern.code)+" • 2 kết quả gần nhất "+decision.pair+" • "+modeText+" • 1 phút cuối báo MUA "+(decision.direction==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
   }else if(livePattern?.pred){
-    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • "+(decision?.reason||"Chưa đủ dữ liệu")+" • chưa báo lệnh.";
+    $("freshness").textContent="3 nến "+patternIcons(livePattern.code)+" • "+(decision?.reason||"Chưa đủ dữ liệu")+" • chưa báo lệnh.";
   }else if(livePattern){
     $("freshness").textContent="Nhóm hiện tại "+patternIcons(livePattern.code)+" không thuộc 8 nhóm mới.";
   }else{
-    $("freshness").textContent="Đang chờ đủ 3 nến đã đóng và màu nến live.";
+    $("freshness").textContent="Đang chờ đủ 3 nến đã đóng.";
   }
 
   const hist=rawPatternSettled().slice(-100);
