@@ -386,6 +386,10 @@ function modeText(mode){
   return mode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU";
 }
 
+function candleIcons(code){
+  return String(code||"").split("").map(c=>c==="G"?"🟢":c==="R"?"🔴":"⚪").join(" ");
+}
+
 async function sendReadyOnce(env){
   if(!telegramConfigured(env))return;
   const key="telegram:ready:v1";
@@ -588,6 +592,7 @@ async function maybeFinal(env,payload,nowSec){
     "🚨 <b>BOSS 5 NẾN</b>\n"+
     buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
+    "5 nến trước: <b>"+candleIcons(pending.pattern)+"</b>\n"+
     "Mẫu: <b>"+pending.pattern+"</b> • "+modeText(pending.mode)+"\n"+
     "Thống kê mẫu: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"+
     "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>\n"+
