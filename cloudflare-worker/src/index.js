@@ -454,13 +454,16 @@ async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
 
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
-  const remain=liveStart+INTERVAL-nowSec;
-  if(remain>70||remain<=45)return;
 
   // The next 5-minute frame is the possible order frame.
   const targetStart=liveStart+INTERVAL;
   const sourceStart=sourceStartForTarget(targetStart);
   if(sourceStart===null)return;
+
+  // Only send when the real order frame is about 1 minute away.
+  // Example: source 17:00 -> order 17:15 -> alert around 17:14, never 17:09.
+  const secondsToTarget=targetStart-nowSec;
+  if(secondsToTarget>70||secondsToTarget<=45)return;
 
   let state=await readTradeState(env,nowSec);
   const currentDay=dayTextFromSeconds(targetStart);
