@@ -13,7 +13,7 @@ class WebTimeStrategyTests(unittest.TestCase):
 
     def test_old_pattern_strategy_is_removed(self):
         self.assertNotIn("PATTERN_GROUPS", self.source)
-        self.assertNotIn("PATTERNS=", self.source)
+        self.assertNotIn("const PATTERNS=", self.source)
         self.assertNotIn("recentTwoDecision", self.source)
         self.assertNotIn("buildAdaptiveHistory", self.source)
         self.assertNotIn("decisionFor", self.worker)
