@@ -93,7 +93,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="row" style="margin-bottom:10px">
-    <div><b>Kết quả lệnh tool hôm nay</b><div class="label">Chỉ tính những lệnh tool đã thực sự báo MUA</div></div>
+    <div><b>Kết quả lệnh thực tế hôm nay</b><div class="label">Đồng bộ trực tiếp từ các lệnh Boss Cloud đã gửi về Telegram</div></div>
     <span id="todayToolCountTop" class="label">0 lệnh</span>
   </div>
   <div class="stats">
@@ -120,7 +120,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="row">
-    <div><b>Lệnh tool hôm nay</b><div class="label">Tool báo mua bao nhiêu lệnh trong ngày thì có đúng bấy nhiêu ô • … = đang chờ kết quả</div></div>
+    <div><b>Lệnh Telegram hôm nay</b><div class="label">Lệnh Boss Cloud đã gửi • V = thắng • X = thua • … = đang chờ kết quả</div></div>
     <span id="todayToolCount" class="label">0 lệnh</span>
   </div>
   <div class="history" id="todayToolHistory" style="margin-top:12px"></div>
@@ -195,6 +195,8 @@ let finalizingStart=0;
 let historyLoading=false;
 let lastFinalSignal=JSON.parse(localStorage.getItem("last_final_signal")||"null");
 let toolOrders=JSON.parse(localStorage.getItem("boss_tool_orders")||"[]");
+let cloudTradeState=null;
+let cloudMoneySettings=null;
 
 function validFourPrefixes(){
   return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,4)));
@@ -484,6 +486,28 @@ function roundFromCategory(category){
   const c=parseColor(category);
   return Number.isFinite(t)&&c?{t,c}:null;
 }
+async function fetchTradeState(){
+  try{
+    const r=await fetch(CLOUD+"/trade-state",{cache:"no-store"});
+    if(!r.ok)throw new Error("Boss Cloud trade-state HTTP "+r.status);
+    const j=await r.json();
+    cloudTradeState=j;
+    cloudMoneySettings=j?.settings||null;
+
+    if(cloudMoneySettings){
+      if(document.activeElement!==$("bet1"))$("bet1").value=String(cloudMoneySettings.bet1??1);
+      if(document.activeElement!==$("bet2"))$("bet2").value=String(cloudMoneySettings.bet2??2);
+      if(document.activeElement!==$("startBalance"))$("startBalance").value=String(cloudMoneySettings.startBalance??0);
+      if(document.activeElement!==$("payout"))$("payout").value=String(cloudMoneySettings.payoutPct??80);
+    }
+
+    render();
+    return j;
+  }catch(e){
+    return null;
+  }
+}
+
 async function fetchCloudHistory(forceSync=false){
   const r=await fetch(CLOUD+(forceSync?"/sync":"/history"),{cache:"no-store"});
   if(!r.ok)throw new Error("Boss Cloud HTTP "+r.status);
@@ -583,7 +607,7 @@ async function ensureHistory100(forceSync=false){
 }
 async function autoStart(){
   startPolling();
-  await Promise.allSettled([fetchLiveMarket(),refreshNow(),ensureHistory100(false)]);
+  await Promise.allSettled([fetchLiveMarket(),refreshNow(),ensureHistory100(false),fetchTradeState()]);
   render();
 }
 function mergeRounds(items){
@@ -607,6 +631,7 @@ async function refreshNow(){
     mergeRounds(res.filter(x=>x&&x.c));
     render();
     setStatus("Đã cập nhật qua Boss Cloud "+new Date().toLocaleTimeString(),"ok");
+    fetchTradeState();
     if(historyTradeCount()<100&&!historyLoading)ensureHistory100()
   }catch(e){setStatus(String(e.message||e),"err")}
 }
@@ -614,7 +639,7 @@ function startPolling(){
   if(pollTimer)clearInterval(pollTimer);
   if(liveTimer)clearInterval(liveTimer);
   if(countdownTimer)clearInterval(countdownTimer);
-  pollTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshNow()},20000);
+  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState()}},20000);
   liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
   countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
   fetchLiveMarket();
@@ -798,7 +823,52 @@ function persistToolOrders(){
   localStorage.setItem("boss_tool_orders",JSON.stringify(toolOrders));
 }
 function compute(){
-  const bet1=n("bet1",1),bet2=n("bet2",2),payout=n("payout",80)/100,start=n("startBalance",0);
+  const bet1=cloudMoneySettings?.bet1??n("bet1",1);
+  const bet2=cloudMoneySettings?.bet2??n("bet2",2);
+  const payout=(cloudMoneySettings?.payoutPct??n("payout",80))/100;
+  const start=cloudMoneySettings?.startBalance??n("startBalance",0);
+
+  if(cloudTradeState){
+    const wins=Number(cloudTradeState.wins||0);
+    const losses=Number(cloudTradeState.losses||0);
+    const pnl=Number(cloudTradeState.pnl||0);
+    const step=Number(cloudTradeState.step||1);
+    const completed=Array.isArray(cloudTradeState.completed)?cloudTradeState.completed:[];
+    const pending=cloudTradeState.pending?[cloudTradeState.pending]:[];
+    const orders=[
+      ...completed.map(o=>({
+        ...o,
+        placedAt:Number(o.targetStart||0)*1000,
+        targetStart:Number(o.targetStart||0),
+        direction:o.direction,
+        step:Number(o.step||1),
+        amount:Number(o.amount||0),
+        actual:o.actual||null,
+        win:typeof o.win==="boolean"?o.win:null,
+        cloud:true
+      })),
+      ...pending.map(o=>({
+        ...o,
+        placedAt:Number(o.targetStart||0)*1000,
+        targetStart:Number(o.targetStart||0),
+        direction:o.direction,
+        step:Number(o.step||1),
+        amount:Number(o.amount||0),
+        actual:null,
+        win:null,
+        cloud:true
+      }))
+    ].sort((a,b)=>Number(a.targetStart||0)-Number(b.targetStart||0));
+
+    return{
+      bet1,bet2,payout,start,step,pnl,wins,losses,
+      settled:orders.filter(o=>o.win!==null),
+      orders,
+      hasOrders:(wins+losses+pending.length)>0,
+      cloud:true
+    };
+  }
+
   const today=localDayKey();
   const byTime=new Map(rounds.map(x=>[x.t,x.c]));
   const orders=toolOrders
@@ -809,6 +879,7 @@ function compute(){
       const win=actual?o.direction===actual:null;
       return {...o,actual,win};
     });
+
   let wins=0,losses=0,pnl=0,step=1;
   const settled=[];
   for(const o of orders){
@@ -820,7 +891,7 @@ function compute(){
     const usedStep=Number(o.step)||1;
     step=(usedStep===1&&o.win)?2:1;
   }
-  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,orders,hasOrders:orders.length>0}
+  return{bet1,bet2,payout,start,step,pnl,wins,losses,settled,orders,hasOrders:orders.length>0,cloud:false}
 }
 function recordToolOrder(signal){
   const id=String(signal.targetStart)+"-"+String(signal.code);
@@ -972,7 +1043,7 @@ function render(){
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"){
     if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    refreshNow();fetchLiveMarket()
+    refreshNow();fetchLiveMarket();fetchTradeState()
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
