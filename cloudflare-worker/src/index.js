@@ -279,7 +279,7 @@ function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
   if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",reason:"Không thuộc 16 mẫu"};
 
-  const MIN_SAMPLES=5;
+  const MIN_SAMPLES=3;
   const THRESHOLD=60;
 
   const recent=settledSignals(rounds).slice(-100);
