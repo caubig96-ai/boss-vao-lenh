@@ -13,3 +13,9 @@ id = "843ba5a3a1cf434da559ea21e59d87c7"
 # PREDICT_API_KEY
 # CLOUD_TELEGRAM_BOT_TOKEN
 # CLOUD_TELEGRAM_CHAT_ID
+#
+# Optional runtime variables (defaults shown):
+# CLOUD_BET1 = 1
+# CLOUD_BET2 = 2
+# CLOUD_PAYOUT_PERCENT = 80
+# CLOUD_START_BALANCE = 0
