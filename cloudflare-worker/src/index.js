@@ -415,8 +415,43 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(Number(pending.targetStart)>=currentStart)return {state,result:null};
 
   const rounds=internalRounds(payload);
-  const actual=rounds.find(x=>x.t===Number(pending.targetStart))?.c||null;
-  if(!actual)return {state,result:null};
+  let actual=rounds.find(x=>x.t===Number(pending.targetStart))?.c||null;
+
+  // Do not depend only on the cached history. The just-finished Predict round
+  // can resolve after the history snapshot was written, so fetch that exact
+  // target round directly before giving up.
+  if(!actual){
+    try{
+      const raw=await apiCategory(Number(pending.targetStart),env.PREDICT_API_KEY);
+      const normalized=normalizeCategory(raw);
+      actual=normalized?.color==="V"?"G":normalized?.color==="X"?"R":null;
+
+      // Once the target frame has closed, price data is a safe fallback while
+      // Predict's explicit resolution is still propagating.
+      if(!actual)actual=liveColorFromCategory(raw);
+
+      if(actual){
+        const existing=await readHistory(env);
+        const synthetic={
+          slug:"btc-updown-5m-"+Number(pending.targetStart),
+          ts:Number(pending.targetStart),
+          color:actual==="G"?"V":"X",
+          outcome:actual==="G"?"UP":"DOWN"
+        };
+        await writeHistory(env,[...(existing.rounds||[]),synthetic],{
+          rawMatched:Math.max(Number(existing.rawMatched||0),Number(existing.count||0)+1),
+          skippedWithoutOutcome:Number(existing.skippedWithoutOutcome||0)
+        }).catch(()=>{});
+      }
+    }catch(_){}
+  }
+
+  if(!actual){
+    state.lastSettlementCheckAt=new Date().toISOString();
+    state.lastSettlementTarget=Number(pending.targetStart);
+    await writeTradeState(env,state).catch(()=>{});
+    return {state,result:null};
+  }
 
   const settings=tradeSettings(env);
   const win=String(pending.direction)===actual;
@@ -614,19 +649,22 @@ async function maybeSendSettlement(env,payload,nowSec){
 async function scheduledTick(env){
   const nowSec=Math.floor(Date.now()/1000);
   const minute=Math.floor(nowSec/60);
-  let payload;
+  let payload=await readHistory(env);
+
+  await sendReadyOnce(env).catch(()=>{});
+
+  // Settle first. This prevents a slow full-history sync at the 5-minute
+  // boundary from delaying or skipping the win/loss Telegram message.
+  await maybeSendSettlement(env,payload,nowSec).catch(()=>{});
 
   try{
-    const current=await readHistory(env);
-    payload=(!current.rounds?.length||minute%5===0)
+    payload=(!payload.rounds?.length||minute%5===0)
       ?await sync(env)
       :await refreshRecent(env);
   }catch(_){
     payload=await readHistory(env);
   }
 
-  await sendReadyOnce(env).catch(()=>{});
-  await maybeSendSettlement(env,payload,nowSec).catch(()=>{});
   await schedulePrepareAt60(env,payload).catch(()=>{});
 }
 
