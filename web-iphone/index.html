@@ -139,7 +139,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi khi có lệnh mẫu mới có kết quả, lệnh mới được thêm vào và lệnh cũ nhất bị đẩy ra; tỷ lệ thắng/thua tự cập nhật. Nếu đúng mẫu hiện tại gần nhất thắng thì giữ màu gốc; nếu gần nhất thua thì đảo màu.</div>
+  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi mẫu cần ít nhất 5 lần xuất hiện. Nếu tỷ lệ thắng cao hơn và đạt từ 60% thì giữ màu gốc; nếu tỷ lệ thua cao hơn và đạt từ 60% thì đảo màu; còn lại bỏ lệnh.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -296,7 +296,7 @@ function firePrepareAlert(liveStart,remain,stage){
     sessionStorage.setItem("prepare_30_start",String(liveStart));
   }
   const buyText=decision.direction==="G"?"XANH":"ĐỎ";
-  const modeText=decision.mode==="REVERSE_LOSS"||decision.mode==="GLOBAL_LOSS"
+  const modeText=decision.mode==="REVERSE_RATE"
     ?"CHẾ ĐỘ ĐẢO MÀU"
     :"CHẾ ĐỘ GIỮ MÀU";
   showTradeAlert(
@@ -368,7 +368,7 @@ async function finalizeLiveRound(liveStart){
     showTradeAlert(
       finalDirection==="G"?"green":"red",
       (finalDirection==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
-      (lastFinalSignal.group||"")+" • mẫu "+code+" • "+(decision.mode==="REVERSE_LOSS"||decision.mode==="GLOBAL_LOSS"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+decision.rate.toFixed(1)+"% • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+      (lastFinalSignal.group||"")+" • mẫu "+code+" • "+(decision.mode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+decision.rate.toFixed(1)+"% • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
     );
     threeSecondAlert(finalDirection==="G"?"green":"red");
     flash(finalDirection==="G"?"green":"red");
@@ -713,47 +713,65 @@ function strongestRawSideFromRows(rows){
 function adaptiveDecisionFromRows(code,settled,rows){
   const pred=PATTERNS[code]||null;
   if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 16 mẫu"};
+
+  const MIN_SAMPLES=5;
+  const THRESHOLD=60;
   const row=rows.find(item=>item.code===code);
-  const rates=statRates(row);
-  const recent=decisionFromLast100(code,settled);
-  if(recent.found){
-    if(recent.status==="WIN"){
-      return {
-        allow:rates.winRate!==null&&rates.winRate>=60,
-        mode:"FOLLOW_WIN",
-        direction:pred,
-        rate:rates.winRate,
-        recent,
-        reason:rates.winRate===null?"Chưa có tỷ lệ thắng":"A gần nhất THẮNG → giữ màu gốc"
-      };
-    }
+
+  if(!row||row.settled<MIN_SAMPLES){
     return {
-      allow:rates.lossRate!==null&&rates.lossRate>=60,
-      mode:"REVERSE_LOSS",
+      allow:false,
+      mode:"LOW_SAMPLE",
+      direction:null,
+      rate:null,
+      reason:"Chưa đủ "+MIN_SAMPLES+" lần xuất hiện",
+      wins:row?.wins||0,
+      losses:row?.losses||0,
+      settled:row?.settled||0
+    };
+  }
+
+  const winRate=row.wins/row.settled*100;
+  const lossRate=row.losses/row.settled*100;
+
+  if(winRate>lossRate&&winRate>=THRESHOLD){
+    return {
+      allow:true,
+      mode:"FOLLOW_RATE",
+      direction:pred,
+      rate:winRate,
+      reason:"Tỷ lệ thắng "+winRate.toFixed(1)+"% cao hơn tỷ lệ thua "+lossRate.toFixed(1)+"%",
+      wins:row.wins,
+      losses:row.losses,
+      settled:row.settled
+    };
+  }
+
+  if(lossRate>winRate&&lossRate>=THRESHOLD){
+    return {
+      allow:true,
+      mode:"REVERSE_RATE",
       direction:oppositeColor(pred),
-      rate:rates.lossRate,
-      recent,
-      reason:rates.lossRate===null?"Chưa có tỷ lệ thua":"A gần nhất THUA → đảo màu"
+      rate:lossRate,
+      reason:"Tỷ lệ thua "+lossRate.toFixed(1)+"% cao hơn tỷ lệ thắng "+winRate.toFixed(1)+"% → đảo màu",
+      wins:row.wins,
+      losses:row.losses,
+      settled:row.settled
     };
   }
-  const strongest=strongestRawSideFromRows(rows);
-  if(!strongest)return {allow:false,mode:"NEW",direction:null,rate:null,recent,reason:"Chưa đủ dữ liệu tỷ lệ"};
-  if(strongest.code!==code){
-    return {
-      allow:false,mode:"WAIT_STRONGEST",direction:null,rate:strongest.rate,recent,strongest,
-      reason:"A chưa có trong 100 lệnh • đang chờ mẫu mạnh nhất "+strongest.code
-    };
-  }
-  const reverse=strongest.side==="LOSS";
+
   return {
-    allow:strongest.rate>=60,
-    mode:reverse?"GLOBAL_LOSS":"GLOBAL_WIN",
-    direction:reverse?oppositeColor(pred):pred,
-    rate:strongest.rate,
-    recent,strongest,
-    reason:reverse?"A chưa có • đây là mẫu thua mạnh nhất → đảo màu":"A chưa có • đây là mẫu thắng mạnh nhất → giữ màu gốc"
+    allow:false,
+    mode:"NO_EDGE",
+    direction:null,
+    rate:Math.max(winRate,lossRate),
+    reason:"Không bên nào đạt ưu thế tối thiểu "+THRESHOLD+"%",
+    wins:row.wins,
+    losses:row.losses,
+    settled:row.settled
   };
 }
+
 function rawRowsFromStats(rawStats){
   return allPatternCodes().map(code=>{
     const rs=rawStats[code]||{wins:0,losses:0,settled:0};
@@ -913,7 +931,7 @@ function render(){
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
   if(finalSignal){
-    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.adaptiveMode==="REVERSE_LOSS"||finalSignal.adaptiveMode==="GLOBAL_LOSS"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+Number(finalSignal.adaptiveRate).toFixed(1)+"% • vào lệnh ngay.";
+    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.adaptiveMode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+Number(finalSignal.adaptiveRate).toFixed(1)+"% • vào lệnh ngay.";
   }else if(livePattern?.pred&&adaptive){
     if(adaptive.allow){
       $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+" • chỉ số "+adaptive.rate.toFixed(1)+"% • chờ nến live đóng để chốt.";
