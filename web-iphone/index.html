@@ -19,7 +19,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
 .g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.calendarSummary{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:520px;display:grid;grid-template-columns:48px repeat(6,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
+.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:520px;display:grid;grid-template-columns:48px repeat(6,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -124,9 +124,12 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
     <div><span class="label">Chờ/Bỏ</span><b id="calendar24NoOrders">0</b></div>
+    <div><span class="label">Tiền thắng 24h</span><b class="green" id="calendar24GrossWin">$0.00</b></div>
+    <div><span class="label">Tiền thua 24h</span><b class="red" id="calendar24GrossLoss">$0.00</b></div>
+    <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp giả lập thắng sau giai đoạn nghỉ, mở khóa lệnh kế tiếp • C× = nhịp giả lập thua sau giai đoạn nghỉ, tiếp tục chờ • B = bỏ nhịp sau 2 lệnh thực tế thua liên tiếp • … = chưa có dữ liệu/chưa tới.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp giả lập thắng sau giai đoạn nghỉ, mở khóa lệnh kế tiếp • C× = nhịp giả lập thua sau giai đoạn nghỉ, tiếp tục chờ • B = bỏ nhịp sau 2 lệnh thực tế thua liên tiếp • … = chưa có dữ liệu/chưa tới. Tiền 24h tính đúng quy tắc: lệnh 1 thắng thì lệnh thực tế kế tiếp dùng mức lệnh 2; sau lệnh 2 hoặc lệnh 1 thua thì quay về lệnh 1.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -599,13 +602,34 @@ function buildTimeSignals(){
   }
   return out;
 }
+function historicalMoneySettings(){
+  const bet1=Number(cloudMoneySettings?.bet1??n("bet1",1));
+  const bet2=Number(cloudMoneySettings?.bet2??n("bet2",2));
+  const payout=Number(cloudMoneySettings?.payoutPct??n("payout",80))/100;
+  return {
+    bet1:Number.isFinite(bet1)?bet1:1,
+    bet2:Number.isFinite(bet2)?bet2:2,
+    payout:Number.isFinite(payout)?payout:.8
+  };
+}
+function nextHistoricalStep(step,win){
+  return Number(step)===1&&win?2:1;
+}
+function usd24(value,forceSign=false){
+  const n=Number(value)||0;
+  const sign=forceSign?(n>0?"+":n<0?"-":""):"";
+  return sign+"$"+Math.abs(n).toFixed(2);
+}
+
 function buildTimedHistory(){
   const signals=buildTimeSignals();
   const out=[];
+  const moneySettings=historicalMoneySettings();
   let lossStreak=0;
   let skipRemaining=0;
   let waitForWin=false;
   let waitAfterSkips=false;
+  let step=1;
 
   for(const s of signals){
     if(skipRemaining>0){
@@ -631,7 +655,9 @@ function buildTimedHistory(){
     }
 
     const win=s.direction===s.actual;
-    out.push({...s,status:win?"WIN":"LOSS",win});
+    const amount=step===2?moneySettings.bet2:moneySettings.bet1;
+    const delta=win?amount*moneySettings.payout:-amount;
+    out.push({...s,status:win?"WIN":"LOSS",win,step,amount,delta});
 
     if(win){
       lossStreak=0;
@@ -642,8 +668,9 @@ function buildTimedHistory(){
         lossStreak=0;
         waitAfterSkips=true;
       }
-      // One loss alone continues with the next real order.
     }
+
+    step=nextHistoricalStep(step,win);
   }
   return out;
 }
@@ -764,6 +791,7 @@ function buildCalendar24h(){
   const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
   const slots=[];
   let wins=0,losses=0,signals=0,skips=0,waitChecks=0,future=0,waiting=0;
+  let grossWin=0,grossLoss=0,net=0;
 
   for(let hour=0;hour<24;hour++){
     const hourStart=first+hour*3600;
@@ -778,8 +806,12 @@ function buildCalendar24h(){
         future++;
       }else if(signal?.status==="WIN"){
         status="WIN";wins++;signals++;
+        grossWin+=Math.max(0,Number(signal.delta||0));
+        net+=Number(signal.delta||0);
       }else if(signal?.status==="LOSS"){
         status="LOSS";losses++;signals++;
+        grossLoss+=Math.abs(Math.min(0,Number(signal.delta||0)));
+        net+=Number(signal.delta||0);
       }else if(signal?.status==="SKIP"){
         status="SKIP";skips++;
       }else if(signal?.status==="WAIT_WIN"){
@@ -798,6 +830,7 @@ function buildCalendar24h(){
   const settled=wins+losses;
   return{
     first,last,slots,wins,losses,signals,skips,waitChecks,future,waiting,
+    grossWin,grossLoss,net,
     rate:settled?wins/settled*100:null
   };
 }
@@ -829,22 +862,22 @@ function renderCalendar24h(){
   headSum.textContent="Tổng 1 giờ";
   root.appendChild(headSum);
 
-  for(let row=0;row<24;row++){
+  for(let row=23;row>=0;row--){
     const rowSlots=cal.slots.slice(row*6,row*6+6);
     const label=document.createElement("div");
     label.className="calTime";
     label.textContent=String(new Date(rowSlots[0].t*1000).getHours()).padStart(2,"0")+":00";
     root.appendChild(label);
 
-    let rowW=0,rowL=0,rowB=0,rowCW=0,rowCL=0,rowWait=0,rowF=0;
+    let rowW=0,rowL=0,rowB=0,rowCW=0,rowCL=0,rowWait=0,rowF=0,rowNet=0;
     rowSlots.forEach(slot=>{
       const d=document.createElement("div");
       d.className="calCell signal";
 
       if(slot.status==="WIN"){
-        rowW++;d.classList.add("win");d.textContent="V";
+        rowW++;rowNet+=Number(slot.signal?.delta||0);d.classList.add("win");d.textContent="V";
       }else if(slot.status==="LOSS"){
-        rowL++;d.classList.add("loss");d.textContent="X";
+        rowL++;rowNet+=Number(slot.signal?.delta||0);d.classList.add("loss");d.textContent="X";
       }else if(slot.status==="SKIP"){
         rowB++;d.classList.add("skip");d.textContent="B";
       }else if(slot.status==="WAIT_WIN"){
@@ -864,7 +897,8 @@ function renderCalendar24h(){
       }else if(slot.status==="WIN"||slot.status==="LOSS"){
         detail+="mốc "+shortClock(s.sourceT)+" • "+
           (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +10 phút vào lệnh • kết quả đóng ở +15 phút • "+
-          (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA");
+          (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
+          " • lệnh "+Number(s.step||1)+" • "+usd24(s.amount)+" • "+usd24(s.delta,true);
       }else if(slot.status==="SKIP"){
         detail+="ô đặt lệnh • bỏ nhịp sau chuỗi 2 lệnh thực tế thua";
       }else if(slot.status==="WAIT_WIN"){
@@ -882,7 +916,8 @@ function renderCalendar24h(){
 
     const sum=document.createElement("div");
     sum.className="calHourSum";
-    sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
+    sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB+
+      " • "+usd24(rowNet,true)+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
     root.appendChild(sum);
   }
 
@@ -890,6 +925,10 @@ function renderCalendar24h(){
   $("calendar24Wins").textContent=String(cal.wins);
   $("calendar24Losses").textContent=String(cal.losses);
   $("calendar24NoOrders").textContent=String(cal.skips+cal.waitChecks);
+  $("calendar24GrossWin").textContent=usd24(cal.grossWin);
+  $("calendar24GrossLoss").textContent="-$"+Number(cal.grossLoss||0).toFixed(2);
+  $("calendar24Net").textContent=usd24(cal.net,true);
+  $("calendar24Net").className=cal.net>0?"green":cal.net<0?"red":"";
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
   $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
