@@ -10,14 +10,14 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Boss 12 Mẫu — iPhone</title>
+<title>Boss 8 Nhóm — iPhone</title>
 <style>
 :root{color-scheme:dark;--bg:#0e1217;--panel:#171d24;--line:#29323d;--txt:#f4f7f9;--muted:#96a3b0;--g:#09c878;--r:#ff4b4b;--b:#4ca5ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{max-width:620px;margin:auto;padding:calc(14px + env(safe-area-inset-top)) 13px calc(30px + env(safe-area-inset-bottom))}
 h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-height:1.45}.card{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:15px;margin:11px 0}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
-.candles{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
+.candles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:13px 0}.dot{height:52px;display:grid;place-items:center;border-radius:13px;background:#10161c;font-size:35px}.g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
 .history{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}.cell{aspect-ratio:1;border-radius:6px;display:grid;place-items:center;background:#10161c;font:700 11px ui-monospace,monospace}.v{background:#103b2b;color:#50e99d}.x{background:#452020;color:#ff7979}.pending{background:#3b3219;color:#ffd36b}
 .calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:510px;display:grid;grid-template-columns:46px repeat(12,1fr);gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calCell{height:25px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
@@ -32,7 +32,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss 12 Mẫu</h1><div class="sub">BẢN 12 MẪU MỚI • 26/09 11:21 • lịch 24h • Boss Cloud</div></div>
+  <div><h1>Boss 8 Nhóm</h1><div class="sub">BẢN 8 NHÓM MỚI • 26/09 11:21 • lịch 24h • Boss Cloud</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -62,7 +62,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="label">4 nến đã đóng + nến live hiện tại • đúng 12 mẫu trong ảnh mới</div>
+  <div class="label">3 nến đã đóng + nến live hiện tại • đúng 8 nhóm trong ảnh mới</div>
   <div class="candles" id="candles"></div>
   <div class="row">
     <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
@@ -106,7 +106,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div class="stat"><span class="label">Lãi/lỗ lệnh tool</span><b id="pnl">--</b></div>
     <div class="stat"><span class="label">Số dư theo lệnh tool</span><b id="balance">--</b></div>
   </div>
-  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 12 mẫu phía dưới không cộng vào lãi/lỗ.</div>
+  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 8 nhóm phía dưới không cộng vào lãi/lỗ.</div>
 </section>
 
 <section class="card">
@@ -131,7 +131,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất của 12 mẫu màu</b><div class="label">Cửa sổ trượt 100 lệnh • lệnh mới vào thì lệnh cũ nhất ra • V/X dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
+  <div class="row"><div><b>100 lệnh gần nhất của 8 nhóm màu</b><div class="label">Cửa sổ trượt 100 lệnh • lệnh mới vào thì lệnh cũ nhất ra • V/X dùng để xét mẫu gần nhất thắng hay thua</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -158,18 +158,18 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Thống kê 12 mô hình 5 nến</b>
-      <div class="label">3 nhóm × 4 mẫu • thống kê đúng cửa sổ 100 lệnh gần nhất</div>
+      <b>Thống kê 8 nhóm 4 nến</b>
+      <div class="label">8 nhóm mới • thống kê đúng cửa sổ 100 lệnh gần nhất</div>
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng này dùng đúng 12 mẫu màu trong ảnh mới và tính trên 100 lệnh mẫu gần nhất. Mỗi mẫu cần ít nhất 3 lần xuất hiện để bộ lọc tỷ lệ xét lệnh.</div>
+  <div class="note" style="margin-top:7px">Bảng dùng đúng 8 nhóm màu trong ảnh mới. Mỗi nhóm gồm 3 nến đã đóng + nến live; kết quả được tính bằng màu của phiên 5 phút kế tiếp.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
         <tr>
           <th>Nhóm</th>
-          <th>Mẫu 5 nến</th>
+          <th>Nhóm 4 nến</th>
           <th>Lệnh</th>
           <th>Xuất hiện</th>
           <th>Thắng</th>
@@ -192,12 +192,17 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </main>
 <script>
 const PATTERN_GROUPS=[
-  {name:"Nhóm 1",items:[["RGGRR","R"],["GGRRR","G"],["GRRGG","G"],["RRGGG","R"]]},
-  {name:"Nhóm 2",items:[["RGRRR","R"],["GRGGR","R"],["RRGRR","R"],["GGRGR","R"]]},
-  {name:"Nhóm 3",items:[["RGRRG","G"],["GRGGG","G"],["RRGRG","G"],["GGRGG","G"]]}
+  {name:"Nhóm 1",items:[["RGRR","R"]]},
+  {name:"Nhóm 2",items:[["GRGR","G"]]},
+  {name:"Nhóm 3",items:[["RRGR","R"]]},
+  {name:"Nhóm 4",items:[["GGRR","G"]]},
+  {name:"Nhóm 5",items:[["RGRG","R"]]},
+  {name:"Nhóm 6",items:[["GRGG","G"]]},
+  {name:"Nhóm 7",items:[["RRGG","R"]]},
+  {name:"Nhóm 8",items:[["GGRG","G"]]}
 ];
 const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
-const PATTERN_VERSION="image-12-v1";
+const PATTERN_VERSION="image-8-v1";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -223,26 +228,21 @@ let toolOrders=JSON.parse(localStorage.getItem("boss_tool_orders")||"[]");
 let cloudTradeState=null;
 let cloudMoneySettings=null;
 
-function validFourPrefixes(){
-  return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,4)));
+function validThreePrefixes(){
+  return new Set(Object.keys(PATTERNS).map(code=>code.slice(0,3)));
 }
-function getClosed4Before(liveStart){
+function getClosed3Before(liveStart){
   const byTime=new Map(rounds.map(x=>[x.t,x]));
-  const wanted=[liveStart-4*INTERVAL,liveStart-3*INTERVAL,liveStart-2*INTERVAL,liveStart-INTERVAL];
+  const wanted=[liveStart-3*INTERVAL,liveStart-2*INTERVAL,liveStart-INTERVAL];
   const items=wanted.map(t=>byTime.get(t)).filter(Boolean);
-  return items.length===4?items:null;
+  return items.length===3?items:null;
 }
 function prefixInfo(liveStart){
-  const closed4=getClosed4Before(liveStart);
-  if(!closed4)return null;
-  const prefix=closed4.map(x=>x.c).join("");
-  if(!validFourPrefixes().has(prefix))return null;
-  const redCode=prefix+"R",greenCode=prefix+"G";
-  return {
-    closed4,prefix,
-    redBuy:PATTERNS[redCode]||null,
-    greenBuy:PATTERNS[greenCode]||null
-  };
+  const closed3=getClosed3Before(liveStart);
+  if(!closed3)return null;
+  const prefix=closed3.map(x=>x.c).join("");
+  if(!validThreePrefixes().has(prefix))return null;
+  return {closed3,prefix};
 }
 async function enableAlerts(){
   try{
@@ -307,41 +307,30 @@ function hideTradeAlert(){
   $("tradeAlert").className="alertbox";
 }
 function firePrepareAlert(liveStart,remain,stage){
-  if(stage===60&&prepare60Start===liveStart)return;
-  if(stage===30&&prepare30Start===liveStart)return;
+  if(stage!==30||prepare30Start===liveStart)return;
+  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
+  if(pauseUntil>Date.now()/1000)return;
+
   const livePattern=currentLivePattern();
   if(!livePattern||!livePattern.pred)return;
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(currentLiveStart!==liveStart)return;
-  const decision=currentAdaptiveDecision(livePattern.code);
-  if(!decision.allow)return;
-  if(stage===60){
-    prepare60Start=liveStart;
-    sessionStorage.setItem("prepare_60_start",String(liveStart));
-  }else{
-    prepare30Start=liveStart;
-    sessionStorage.setItem("prepare_30_start",String(liveStart));
-  }
-  const buyText=decision.direction==="G"?"XANH":"ĐỎ";
-  const modeText=decision.mode==="REVERSE_RATE"
-    ?"CHẾ ĐỘ ĐẢO MÀU"
-    :"CHẾ ĐỘ GIỮ MÀU";
+
+  prepare30Start=liveStart;
+  sessionStorage.setItem("prepare_30_start",String(liveStart));
+
+  const buyText=livePattern.pred==="G"?"XANH":"ĐỎ";
   showTradeAlert(
     "prepare",
-    stage===60?"⚠️ CHUẨN BỊ PHIÊN SAU":"⚠️ CÒN 30 GIÂY • PHIÊN SAU",
-    livePattern.group+" • "+livePattern.code+" • "+modeText+" • chỉ số "+decision.rate.toFixed(1)+"% • nếu màu live giữ đến lúc đóng → phiên sau dự kiến MUA "+buyText+"."
+    "⚠️ CÒN 30 GIÂY • VÀO LỆNH PHIÊN SAU",
+    livePattern.group+" • "+patternIcons(livePattern.code)+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
   );
   threeSecondAlert("prepare");
   flash("prepare");
 }
+
 async function finalizeLiveRound(liveStart){
   if(finalizingStart===liveStart||finalizedLiveStart===liveStart)return;
-  const info=prefixInfo(liveStart);
-  if(!info){
-    finalizedLiveStart=liveStart;
-    sessionStorage.setItem("finalized_live_start",String(liveStart));
-    return;
-  }
   finalizingStart=liveStart;
   try{
     let closed=null;
@@ -350,58 +339,12 @@ async function finalizeLiveRound(liveStart){
       if(closed?.c)break;
       await new Promise(r=>setTimeout(r,1000));
     }
-    if(!closed?.c)return;
-    mergeRounds([closed]);
-    const code=info.prefix+closed.c;
-    const pred=PATTERNS[code]||null;
+    if(closed?.c)mergeRounds([closed]);
     finalizedLiveStart=liveStart;
     sessionStorage.setItem("finalized_live_start",String(liveStart));
-    if(!pred){
-      lastFinalSignal=null;
-      localStorage.removeItem("last_final_signal");
-      hideTradeAlert();
-      return;
-    }
-    const decision=currentAdaptiveDecision(code);
-    if(!decision.allow){
-      lastFinalSignal=null;
-      localStorage.removeItem("last_final_signal");
-      hideTradeAlert();
-      setStatus(
-        "BỎ LỆNH "+code+" • "+decision.reason+(decision.rate===null?"":" • chỉ số "+decision.rate.toFixed(1)+"%"),
-        ""
-      );
-      render();
-      return;
-    }
-    const finalDirection=decision.direction;
-    lastFinalSignal={
-      sourceStart:liveStart,
-      targetStart:liveStart+INTERVAL,
-      code,
-      pred:finalDirection,
-      originalPred:pred,
-      group:patternGroupName(code),
-      closedColor:closed.c,
-      adaptiveMode:decision.mode,
-      adaptiveRate:decision.rate
-    };
-    const toolOrder=recordToolOrder(lastFinalSignal);
-    lastFinalSignal.toolOrderId=toolOrder.id;
-    lastFinalSignal.orderStep=toolOrder.step;
-    lastFinalSignal.orderAmount=toolOrder.amount;
-    localStorage.setItem("last_final_signal",JSON.stringify(lastFinalSignal));
-    const buyText=finalDirection==="G"?"MUA XANH":"MUA ĐỎ";
-    showTradeAlert(
-      finalDirection==="G"?"green":"red",
-      (finalDirection==="G"?"🟢 ":"🔴 ")+buyText+" NGAY",
-      (lastFinalSignal.group||"")+" • mẫu "+code+" • "+(decision.mode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+decision.rate.toFixed(1)+"% • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
-    );
-    threeSecondAlert(finalDirection==="G"?"green":"red");
-    flash(finalDirection==="G"?"green":"red");
     render();
   }catch(e){
-    setStatus("Lỗi chốt nến live: "+(e.message||e),"err");
+    setStatus("Lỗi cập nhật nến vừa đóng: "+(e.message||e),"err");
   }finally{
     finalizingStart=0;
   }
@@ -725,15 +668,15 @@ function renderPatternStats(){
 function buildSignals(){
   const out=[];
   const byTime=new Map(rounds.map(x=>[x.t,x]));
-  for(let i=4;i<rounds.length;i++){
-    const w=rounds.slice(i-4,i+1);
+  for(let i=3;i<rounds.length;i++){
+    const w=rounds.slice(i-3,i+1);
     if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
     const p=w.map(x=>x.c).join("");
     const pred=PATTERNS[p];
     if(!pred)continue;
-    const targetT=w[4].t+INTERVAL;
+    const targetT=w[3].t+INTERVAL;
     const actual=byTime.get(targetT);
-    out.push({sourceT:w[4].t,targetT,pattern:p,pred,actual:actual?.c||null});
+    out.push({sourceT:w[3].t,targetT,pattern:p,pred,actual:actual?.c||null});
   }
   return out
 }
@@ -770,7 +713,7 @@ function strongestRawSideFromRows(rows){
 }
 function adaptiveDecisionFromRows(code,settled,rows){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 12 mẫu"};
+  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 8 nhóm"};
 
   const MIN_SAMPLES=3;
   const THRESHOLD=60;
@@ -842,7 +785,20 @@ function rawPatternSettled(){
     .map(item=>({...item,win:item.pred===item.actual}));
 }
 function currentAdaptiveDecision(code){
-  return adaptiveDecisionFromRows(code,rawPatternSettled(),buildPatternStats());
+  const pred=PATTERNS[code]||null;
+  if(!pred)return {allow:false,direction:null,mode:"NONE",rate:null,reason:"Không thuộc 8 nhóm"};
+  const row=buildPatternStats().find(item=>item.code===code);
+  const rate=row?.settled?row.wins/row.settled*100:null;
+  return {
+    allow:true,
+    direction:pred,
+    mode:"DIRECT_8",
+    rate,
+    reason:"Khớp 1 trong 8 nhóm màu mới",
+    wins:row?.wins||0,
+    losses:row?.losses||0,
+    settled:row?.settled||0
+  };
 }
 function localDayKey(ms=Date.now()){
   const d=new Date(ms);
@@ -988,23 +944,23 @@ function renderLive(){
   $("liveColorText").className="big "+(c==="G"?"green":c==="R"?"red":"");
   $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
 }
-function latestClosed4(){
-  if(rounds.length<4)return null;
-  for(let end=rounds.length-1;end>=3;end--){
-    const w=rounds.slice(end-3,end+1);
+function latestClosed3(){
+  if(rounds.length<3)return null;
+  for(let end=rounds.length-1;end>=2;end--){
+    const w=rounds.slice(end-2,end+1);
     if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w;
   }
   return null;
 }
 function currentLivePattern(){
-  const closed4=latestClosed4();
+  const closed3=latestClosed3();
   const liveColor=liveMarket.color;
-  if(!closed4||!liveColor)return null;
-  const expectedLiveStart=closed4[3].t+INTERVAL;
+  if(!closed3||!liveColor)return null;
+  const expectedLiveStart=closed3[2].t+INTERVAL;
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(expectedLiveStart!==currentLiveStart)return null;
-  const code=closed4.map(x=>x.c).join("")+liveColor;
-  return {closed4,liveColor,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
+  const code=closed3.map(x=>x.c).join("")+liveColor;
+  return {closed3,liveColor,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
 }
 function buildCalendar24h(){
   const now=Math.floor(Date.now()/1000);
@@ -1100,44 +1056,40 @@ function renderCalendar24h(){
 
 function render(){
   const livePattern=currentLivePattern(),calc=compute();$("candles").innerHTML="";
-  const closedColors=livePattern?livePattern.closed4.map(x=>x.c):(latestClosed4()?.map(x=>x.c)||[]);
+  const closedColors=livePattern?livePattern.closed3.map(x=>x.c):(latestClosed3()?.map(x=>x.c)||[]);
   const colors=[...closedColors,liveMarket.color||""];
-  for(let i=0;i<5;i++){
+  for(let i=0;i<4;i++){
     const d=document.createElement("div");
     const c=colors[i]||"";
     d.className="dot "+(c==="G"?"g":c==="R"?"r":"");
     d.textContent=c?"●":"·";
-    if(i===4)d.style.outline="2px solid rgba(76,165,255,.7)";
+    if(i===3)d.style.outline="2px solid rgba(76,165,255,.7)";
     $("candles").appendChild(d);
   }
-  const currentStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
-  const finalSignal=(lastFinalSignal&&lastFinalSignal.targetStart===currentStart)?lastFinalSignal:null;
-  const adaptive=livePattern?.pred?currentAdaptiveDecision(livePattern.code):null;
-  const tentativeAllowed=!!(livePattern?.pred&&adaptive?.allow);
-  const pred=finalSignal?.pred||(tentativeAllowed?adaptive.direction:null);
-  const targetT=finalSignal?currentStart:(liveMarket.end||null);
-  $("buy").textContent=finalSignal
-    ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
-    :livePattern?.pred&&!tentativeAllowed
-      ?"CHỜ / KHÔNG ĐẠT ĐIỀU KIỆN"
-      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 12 MẪU":"CHỜ MÀU LIVE");
+
+  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
+  const paused=pauseUntil>Date.now()/1000;
+  const pred=!paused&&livePattern?.pred?livePattern.pred:null;
+  const targetT=liveMarket.end||null;
+
+  $("buy").textContent=paused
+    ?"TẠM DỪNG 15 PHÚT"
+    :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 8 NHÓM":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
   $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
-  if(finalSignal){
-    $("freshness").textContent="ĐÃ CHỐT • "+finalSignal.group+" • mẫu "+finalSignal.code+" • "+(finalSignal.adaptiveMode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU")+" • chỉ số "+Number(finalSignal.adaptiveRate).toFixed(1)+"% • vào lệnh ngay.";
-  }else if(livePattern?.pred&&adaptive){
-    if(adaptive.allow){
-      $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+" • chỉ số "+adaptive.rate.toFixed(1)+"% • chờ nến live đóng để chốt.";
-    }else{
-      $("freshness").textContent=livePattern.group+" • mẫu "+livePattern.code+" • "+adaptive.reason+(adaptive.rate===null?"":" • chỉ số "+adaptive.rate.toFixed(1)+"%")+" → chưa báo lệnh.";
-    }
+
+  if(paused){
+    $("freshness").textContent="Đã có 2 lệnh thua liên tiếp • tạm dừng báo lệnh đến "+shortClock(pauseUntil)+".";
+  }else if(livePattern?.pred){
+    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • khớp 8 nhóm mới • 30 giây cuối sẽ báo MUA "+(livePattern.pred==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
   }else if(livePattern){
-    $("freshness").textContent="Mẫu tạm thời "+livePattern.code+" không thuộc 12 mẫu; vẫn chờ màu đóng cuối cùng.";
+    $("freshness").textContent="Nhóm hiện tại "+patternIcons(livePattern.code)+" không thuộc 8 nhóm mới.";
   }else{
-    $("freshness").textContent="Đang chờ đủ 4 nến đóng liên tiếp và màu nến live.";
+    $("freshness").textContent="Đang chờ đủ 3 nến đã đóng và màu nến live.";
   }
+
   $("wins").textContent=calc.wins;
   $("losses").textContent=calc.losses;
   $("todayToolCount").textContent=calc.orders.length+" lệnh";
@@ -1152,6 +1104,7 @@ function render(){
     else{d.className="cell "+(o.win?"v":"x");d.textContent=o.win?"V":"X"}
     $("todayToolHistory").appendChild(d);
   });
+
   const hist=rawPatternSettled().slice(-100);
   $("count").textContent=hist.length+"/100"+(historyLoading?" • đang tải":"");
   $("history").innerHTML="";
