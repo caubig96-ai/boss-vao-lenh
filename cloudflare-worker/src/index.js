@@ -39,6 +39,7 @@ function dayTextFromSeconds(ts){
 function freshTradeState(day){
   return {
     day,
+    strategyVersion:STRATEGY_VERSION,
     step:1,
     pnl:0,
     wins:0,
@@ -59,6 +60,16 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   let state=null;
   try{state=raw?JSON.parse(raw):null}catch(_){}
   if(!state||typeof state!=="object")state=freshTradeState(dayTextFromSeconds(nowSec));
+
+  // A strategy change must not carry an old pending order, old streak or old PnL
+  // into the new method.
+  if(state.strategyVersion!==STRATEGY_VERSION){
+    const balanceBase=state.balanceBase===null||state.balanceBase===undefined?null:Number(state.balanceBase);
+    state=freshTradeState(dayTextFromSeconds(nowSec));
+    state.balanceBase=Number.isFinite(balanceBase)?balanceBase:null;
+    await writeTradeState(env,state);
+  }
+
   if(!Number.isFinite(Number(state.step)))state.step=1;
   if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
