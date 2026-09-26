@@ -324,8 +324,8 @@ function firePrepareAlert(liveStart,remain,stage){
     :"CHẾ ĐỘ GIỮ MÀU";
   showTradeAlert(
     "prepare",
-    stage===60?"⚠️ CHUẨN BỊ VÀO LỆNH":"⚠️ CÒN 30 GIÂY",
-    livePattern.group+" • "+livePattern.code+" • "+modeText+" • chỉ số "+decision.rate.toFixed(1)+"% • nếu giữ mẫu đến lúc đóng → MUA "+buyText+"."
+    stage===60?"⚠️ CHUẨN BỊ PHIÊN SAU":"⚠️ CÒN 30 GIÂY • PHIÊN SAU",
+    livePattern.group+" • "+livePattern.code+" • "+modeText+" • chỉ số "+decision.rate.toFixed(1)+"% • nếu màu live giữ đến lúc đóng → phiên sau dự kiến MUA "+buyText+"."
   );
   threeSecondAlert("prepare");
   flash("prepare");
