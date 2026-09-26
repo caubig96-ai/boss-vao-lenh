@@ -277,55 +277,72 @@ function opposite(c){return c==="G"?"R":"G"}
 
 function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE"};
+  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",reason:"Không thuộc 16 mẫu"};
+
+  const MIN_SAMPLES=5;
+  const THRESHOLD=60;
 
   const recent=settledSignals(rounds).slice(-100);
-  const stats={};
-  for(const k of Object.keys(PATTERNS))stats[k]={code:k,wins:0,losses:0,settled:0};
+  let wins=0,losses=0,settled=0;
+
   for(const s of recent){
-    const row=stats[s.pattern];
-    if(!row)continue;
-    row.settled++;
-    if(s.win)row.wins++;else row.losses++;
+    if(s.pattern!==code)continue;
+    settled++;
+    if(s.win)wins++;
+    else losses++;
   }
 
-  const row=stats[code];
-  let last=null;
-  for(let i=recent.length-1;i>=0;i--){
-    if(recent[i].pattern===code){last=recent[i];break}
+  if(settled<MIN_SAMPLES){
+    return {
+      allow:false,
+      direction:null,
+      rate:null,
+      mode:"LOW_SAMPLE",
+      wins,
+      losses,
+      settled,
+      reason:"Chưa đủ "+MIN_SAMPLES+" lần xuất hiện"
+    };
   }
 
-  const winRate=row.settled?row.wins/row.settled*100:null;
-  const lossRate=row.settled?row.losses/row.settled*100:null;
+  const winRate=wins/settled*100;
+  const lossRate=losses/settled*100;
 
-  if(last){
-    if(last.win){
-      return {allow:winRate!==null&&winRate>=60,direction:pred,rate:winRate,mode:"FOLLOW_WIN"};
-    }
-    return {allow:lossRate!==null&&lossRate>=60,direction:opposite(pred),rate:lossRate,mode:"REVERSE_LOSS"};
+  if(winRate>lossRate&&winRate>=THRESHOLD){
+    return {
+      allow:true,
+      direction:pred,
+      rate:winRate,
+      mode:"FOLLOW_RATE",
+      wins,
+      losses,
+      settled,
+      reason:"Tỷ lệ thắng cao hơn tỷ lệ thua"
+    };
   }
 
-  let bestWin=null,bestLoss=null;
-  for(const r of Object.values(stats)){
-    if(!r.settled)continue;
-    const wr=r.wins/r.settled*100;
-    const lr=r.losses/r.settled*100;
-    if(!bestWin||wr>bestWin.rate)bestWin={code:r.code,rate:wr,side:"WIN"};
-    if(!bestLoss||lr>bestLoss.rate)bestLoss={code:r.code,rate:lr,side:"LOSS"};
+  if(lossRate>winRate&&lossRate>=THRESHOLD){
+    return {
+      allow:true,
+      direction:opposite(pred),
+      rate:lossRate,
+      mode:"REVERSE_RATE",
+      wins,
+      losses,
+      settled,
+      reason:"Tỷ lệ thua cao hơn tỷ lệ thắng"
+    };
   }
 
-  let strongest=null;
-  if(bestWin&&!bestLoss)strongest=bestWin;
-  else if(bestLoss&&!bestWin)strongest=bestLoss;
-  else if(bestWin&&bestLoss)strongest=bestWin.rate>=bestLoss.rate?bestWin:bestLoss;
-  if(!strongest||strongest.code!==code)return {allow:false,direction:null,rate:strongest?.rate??null,mode:"WAIT_STRONGEST"};
-
-  const reverse=strongest.side==="LOSS";
   return {
-    allow:strongest.rate>=60,
-    direction:reverse?opposite(pred):pred,
-    rate:strongest.rate,
-    mode:reverse?"GLOBAL_LOSS":"GLOBAL_WIN"
+    allow:false,
+    direction:null,
+    rate:Math.max(winRate,lossRate),
+    mode:"NO_EDGE",
+    wins,
+    losses,
+    settled,
+    reason:"Không bên nào đạt ưu thế đủ mạnh"
   };
 }
 
@@ -364,7 +381,7 @@ function frameText(ts){
 }
 
 function modeText(mode){
-  return mode==="REVERSE_LOSS"||mode==="GLOBAL_LOSS"?"ĐẢO MÀU":"GIỮ MÀU";
+  return mode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU";
 }
 
 async function sendReadyOnce(env){
@@ -483,6 +500,7 @@ async function maybePrepare(env,payload,nowSec){
     "⚠️ <b>CHUẨN BỊ VÀO LỆNH</b>\n"+
     buy+"\n"+
     "Mẫu: <b>"+code+"</b> • "+modeText(d.mode)+"\n"+
+    "Thống kê mẫu: <b>"+Number(d.wins||0)+" thắng / "+Number(d.losses||0)+" thua</b>\n"+
     "Chỉ số: <b>"+Number(d.rate||0).toFixed(1)+"%</b>\n"+
     "Nếu màu giữ đến lúc đóng, áp dụng vòng "+frameText(liveStart+INTERVAL)
   );
@@ -533,6 +551,9 @@ async function maybeFinal(env,payload,nowSec){
       direction:d.direction,
       mode:d.mode,
       rate:Number(d.rate||0),
+      wins:Number(d.wins||0),
+      losses:Number(d.losses||0),
+      settled:Number(d.settled||0),
       step,
       amount,
       payoutRate:settings.payout,
@@ -551,6 +572,7 @@ async function maybeFinal(env,payload,nowSec){
     buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "Mẫu: <b>"+pending.pattern+"</b> • "+modeText(pending.mode)+"\n"+
+    "Thống kê mẫu: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"+
     "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>\n"+
     "Vòng: <b>"+frameText(pending.targetStart)+"</b>"
   );
