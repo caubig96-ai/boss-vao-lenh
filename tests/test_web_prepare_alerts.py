@@ -29,8 +29,8 @@ class WebTimeStrategyTests(unittest.TestCase):
 
     def test_source_color_is_used_15_minutes_later(self):
         self.assertIn("sourceStartForTarget", self.source)
-        self.assertIn("targetT=sourceT+ENTRY_DELAY", self.source)
-        self.assertIn("direction:source.c", self.source)
+        self.assertIn("sourceStartForTarget(t)", self.source)
+        self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
         self.assertIn("direction:sourceColor", self.worker)
 
