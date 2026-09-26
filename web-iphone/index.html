@@ -139,7 +139,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi mẫu cần ít nhất 5 lần xuất hiện. Nếu tỷ lệ thắng cao hơn và đạt từ 60% thì giữ màu gốc; nếu tỷ lệ thua cao hơn và đạt từ 60% thì đảo màu; còn lại bỏ lệnh.</div>
+  <div class="note" style="margin-top:7px">Bảng này chỉ tính 100 lệnh gần nhất của 16 mẫu màu. Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100. Mỗi mẫu cần ít nhất 3 lần xuất hiện. Nếu trong 3 lần có 2 thắng / 1 thua thì giữ màu gốc; nếu có 2 thua / 1 thắng thì đảo màu. Với nhiều hơn 3 lần, phía chiếm ưu thế phải đạt từ 60%; còn lại bỏ lệnh.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
@@ -714,7 +714,7 @@ function adaptiveDecisionFromRows(code,settled,rows){
   const pred=PATTERNS[code]||null;
   if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 16 mẫu"};
 
-  const MIN_SAMPLES=5;
+  const MIN_SAMPLES=3;
   const THRESHOLD=60;
   const row=rows.find(item=>item.code===code);
 
