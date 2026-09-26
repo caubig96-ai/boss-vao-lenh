@@ -41,6 +41,14 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("Mốc lấy màu:", self.worker)
         self.assertIn("sau 15 phút mua cùng màu", self.worker)
 
+    def test_signal_is_not_shown_early(self):
+        self.assertIn("function isEntryAlertWindow", self.source)
+        self.assertIn("alertStartForTarget", self.source)
+        self.assertIn('?"CHỜ "+shortClock(alertAt)', self.source)
+        self.assertIn("const secondsToTarget=targetStart-nowSec", self.worker)
+        self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
+        self.assertIn("17:00 -> order 17:15 -> alert around 17:14", self.worker)
+
     def test_two_losses_skip_two_beats(self):
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.source)
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.worker)
