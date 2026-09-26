@@ -288,26 +288,56 @@ function settledSignals(rounds){
 
 function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",wins:0,losses:0,settled:0,reason:"Không thuộc 8 nhóm"};
+  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",wins:0,losses:0,settled:0,pair:"",reason:"Không thuộc 8 nhóm"};
 
-  const recent=settledSignals(rounds).slice(-100);
-  let wins=0,losses=0,settled=0;
-  for(const s of recent){
-    if(s.pattern!==code)continue;
-    settled++;
+  const recent100=settledSignals(rounds).slice(-100);
+  const sameGroup=recent100.filter(s=>s.pattern===code);
+  let wins=0,losses=0;
+  for(const s of sameGroup){
     if(s.win)wins++;
     else losses++;
   }
 
+  // Two nearest results are stored newest first to match the requested reading:
+  // V-V => follow; X-X => reverse; V-X => follow; X-V => reverse.
+  const two=sameGroup.slice(-2).reverse();
+  if(two.length<2){
+    return {
+      allow:false,
+      direction:null,
+      rate:sameGroup.length?wins/sameGroup.length*100:null,
+      mode:"NEED_2",
+      wins,
+      losses,
+      settled:sameGroup.length,
+      pair:two.map(x=>x.win?"V":"X").join("-"),
+      reason:"Chưa đủ 2 kết quả gần nhất của nhóm này trong 100 lệnh"
+    };
+  }
+
+  const pair=two.map(x=>x.win?"V":"X").join("-");
+  const latestWon=two[0].win===true;
+  const direction=latestWon?pred:(pred==="G"?"R":"G");
+  const mode=pair==="V-V"
+    ?"FOLLOW_VV"
+    :pair==="X-X"
+      ?"REVERSE_XX"
+      :pair==="V-X"
+        ?"FOLLOW_VX"
+        :"REVERSE_XV";
+
   return {
     allow:true,
-    direction:pred,
-    rate:settled?wins/settled*100:null,
-    mode:"DIRECT_8",
+    direction,
+    rate:wins/(wins+losses)*100,
+    mode,
     wins,
     losses,
-    settled,
-    reason:"Khớp 1 trong 8 nhóm màu mới"
+    settled:sameGroup.length,
+    pair,
+    reason:latestWon
+      ?"Kết quả gần nhất thắng → đánh theo màu gốc của nhóm"
+      :"Kết quả gần nhất thua → đảo màu lệnh"
   };
 }
 
@@ -481,7 +511,8 @@ async function maybePrepare(env,payload,nowSec){
       targetStart,
       pattern:code,
       direction:d.direction,
-      mode:"DIRECT_8",
+      mode:d.mode,
+      recentPair:d.pair||"",
       rate:Number(d.rate||0),
       wins:Number(d.wins||0),
       losses:Number(d.losses||0),
@@ -499,16 +530,16 @@ async function maybePrepare(env,payload,nowSec){
   if(pending.entrySent)return;
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
-  const statsLine=Number(pending.settled||0)>0
-    ?"Lịch sử nhóm: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"
-    :"";
+  const modeText=String(pending.mode||"").startsWith("REVERSE")?"ĐẢO MÀU":"ĐÁNH THEO MÀU GỐC";
+  const statsLine="2 kết quả gần nhất: <b>"+String(pending.recentPair||"--")+"</b> • <b>"+modeText+"</b>\n"+
+    "Trong 100 lệnh: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n";
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • VÀO LỆNH PHIÊN SAU</b>\n"+
     "4 nến nhận dạng: <b>"+candleIcons(pending.pattern)+"</b>\n"+
+    statsLine+
     buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
-    statsLine+
     "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>"
   );
 
