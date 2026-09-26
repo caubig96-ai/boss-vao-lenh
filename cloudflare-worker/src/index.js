@@ -47,6 +47,7 @@ function freshTradeState(day){
     lossCapitalMode:false,
     reverseColorMode:false,
     lastResultWin:null,
+    reverseAfterSecondLossActive:false,
     waitForWin:false,
     waitAfterTarget:0,
     waitLastCheckedTarget:0,
@@ -82,6 +83,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(typeof state.lossCapitalMode!=="boolean")state.lossCapitalMode=false;
   if(typeof state.reverseColorMode!=="boolean")state.reverseColorMode=false;
   if(typeof state.lastResultWin!=="boolean")state.lastResultWin=null;
+  if(typeof state.reverseAfterSecondLossActive!=="boolean")state.reverseAfterSecondLossActive=false;
   if(typeof state.waitForWin!=="boolean")state.waitForWin=false;
   if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
   if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
@@ -373,7 +375,10 @@ async function advanceWaitForWin(env,payload,state,currentTarget){
     // Khi chuỗi đã chạm giới hạn thua, lossStreak được reset về 0.
     // Nhịp giả lập chờ thắng vì thế luôn kiểm tra theo màu nến gốc,
     // đúng với cách một chuỗi mới sẽ bắt đầu ở lệnh 1.
-    const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0;
+    const reverseThisOrder=
+      !!state.reverseColorMode &&
+      !!state.reverseAfterSecondLossActive &&
+      state.lastResultWin===false;
     const shadow=await shadowSignalAt(env,payload,target,reverseThisOrder);
     if(!shadow)break;
 
@@ -493,17 +498,23 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(win)state.wins=Number(state.wins||0)+1;
   else state.losses=Number(state.losses||0)+1;
 
-  // Chỉ dùng kết quả của LỆNH THỰC TẾ LIỀN TRƯỚC để chọn màu cho lệnh kế tiếp.
-  // Thắng => lệnh sau đi đúng màu nến mốc. Thua => lệnh sau đảo màu nến mốc.
+  // Chỉ kích hoạt quy tắc đảo màu SAU KHI lệnh vốn 2/4 bị THUA.
+  // Trước thời điểm đó, lệnh 1 và lệnh 2 luôn đi đúng công thức màu đã cài.
+  // Khi đã kích hoạt: lệnh trước thua => lệnh sau đảo màu; gặp một lệnh thắng
+  // thì tắt trạng thái đặc biệt và quay về công thức màu gốc.
   state.lastResultWin=win;
 
   if(win){
     state.lossStreak=0;
+    state.reverseAfterSecondLossActive=false;
   }else{
+    if(
+      state.lossCapitalMode &&
+      Number(pending.capitalStage||0)===2
+    ){
+      state.reverseAfterSecondLossActive=true;
+    }
     state.lossStreak=Number(state.lossStreak||0)+1;
-    // Chuỗi vốn 1 → 1 → 2 → 4 hoàn tất sau lệnh vốn 4.
-    // Sau đó vốn quay về lệnh 1, nhưng màu của lệnh kế tiếp vẫn dựa vào
-    // kết quả lệnh 4 vừa xong thông qua lastResultWin.
     if(state.lossCapitalMode&&state.lossStreak>=4)state.lossStreak=0;
   }
 
@@ -576,6 +587,7 @@ async function maybePrepare(env,payload,nowSec){
     const carriedLossCapitalMode=!!state.lossCapitalMode;
     const carriedReverseColorMode=!!state.reverseColorMode;
     const carriedLastResultWin=typeof state.lastResultWin==="boolean"?state.lastResultWin:null;
+    const carriedReverseAfterSecondLossActive=!!state.reverseAfterSecondLossActive;
     const carriedWaitForWin=false;
     const carriedWaitAfterTarget=Number(state.waitAfterTarget||0);
     const carriedWaitLastCheckedTarget=Number(state.waitLastCheckedTarget||0);
@@ -585,6 +597,7 @@ async function maybePrepare(env,payload,nowSec){
     state.lossCapitalMode=carriedLossCapitalMode;
     state.reverseColorMode=carriedReverseColorMode;
     state.lastResultWin=carriedLastResultWin;
+    state.reverseAfterSecondLossActive=carriedReverseAfterSecondLossActive;
     state.waitForWin=false;
     state.waitAfterTarget=carriedWaitAfterTarget;
     state.waitLastCheckedTarget=carriedWaitLastCheckedTarget;
@@ -603,7 +616,10 @@ async function maybePrepare(env,payload,nowSec){
   // - Chưa có lệnh trước hoặc lệnh trước THẮNG: đi đúng màu nến mốc.
   // - Lệnh trước THUA: đảo màu nến mốc.
   // Chỉ quyết định sau khi lệnh trước đã được settle.
-  const reverseThisOrder=!!state.reverseColorMode&&state.lastResultWin===false;
+  const reverseThisOrder=
+    !!state.reverseColorMode &&
+    !!state.reverseAfterSecondLossActive &&
+    state.lastResultWin===false;
   const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
   if(!direction)return;
 
@@ -819,6 +835,7 @@ export default {
       state.waitLastCheckedTarget=0;
       state.waitWinTarget=0;
       state.lastResultWin=null;
+      state.reverseAfterSecondLossActive=false;
       state.step=1;
       await writeTradeState(env,state);
 
@@ -830,8 +847,8 @@ export default {
       }
       if(hasReverseColor){
         message=state.reverseColorMode
-          ?"Đã bật chế độ theo kết quả lệnh trước: thắng giữ màu nến, thua đảo màu ở lệnh kế tiếp."
-          :"Đã tắt chế độ theo kết quả lệnh trước: mọi lệnh đi đúng màu nến mốc.";
+          ?"Đã bật chế độ đặc biệt: lệnh 1 và 2 đi đúng công thức màu; chỉ khi lệnh 2 thua mới kích hoạt đảo màu cho lệnh sau. Gặp lệnh thắng thì quay về công thức màu gốc."
+          :"Đã tắt chế độ đặc biệt: mọi lệnh đi đúng công thức màu đã cài.";
       }
 
       return json({
