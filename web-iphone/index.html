@@ -63,7 +63,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau 1 lệnh thực tế thua, tool tạm không vào lệnh và theo dõi các nhịp giả lập cho tới khi gặp 1 nhịp thắng; lệnh kế tiếp mới vào lại. Nếu 2 lệnh thực tế liên tiếp đều thua, tool bỏ đúng 2 nhịp rồi vào lại.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Thua 1 lệnh vẫn chạy bình thường. Chỉ khi thua 2 lệnh thực tế liên tiếp, tool bỏ đúng 2 nhịp; sau đó tiếp tục chờ đến khi có 1 nhịp giả lập thắng, rồi lệnh kế tiếp mới vào lại.</div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -126,7 +126,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Chờ/Bỏ</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp chờ giả lập thắng, mở khóa lệnh kế tiếp • C× = nhịp chờ giả lập thua, tiếp tục chờ • B = bỏ nhịp sau 2 lệnh thực tế thua liên tiếp • … = chưa có dữ liệu/chưa tới.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp giả lập thắng sau giai đoạn nghỉ, mở khóa lệnh kế tiếp • C× = nhịp giả lập thua sau giai đoạn nghỉ, tiếp tục chờ • B = bỏ nhịp sau 2 lệnh thực tế thua liên tiếp • … = chưa có dữ liệu/chưa tới.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -143,7 +143,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 const SOURCE_STEP=600;
 const ENTRY_DELAY=600;
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-entry10-close15-v2";
+const STRATEGY_VERSION="even-10m-2loss-skip2-waitwin-v3";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -605,11 +605,16 @@ function buildTimedHistory(){
   let lossStreak=0;
   let skipRemaining=0;
   let waitForWin=false;
+  let waitAfterSkips=false;
 
   for(const s of signals){
     if(skipRemaining>0){
       out.push({...s,status:"SKIP",reason:"SKIP_BEAT",skipBefore:skipRemaining});
       skipRemaining--;
+      if(skipRemaining===0&&waitAfterSkips){
+        waitForWin=true;
+        waitAfterSkips=false;
+      }
       continue;
     }
 
@@ -635,10 +640,9 @@ function buildTimedHistory(){
       if(lossStreak>=2){
         skipRemaining=SKIP_BEATS_AFTER_TWO_LOSSES;
         lossStreak=0;
-        waitForWin=false;
-      }else{
-        waitForWin=true;
+        waitAfterSkips=true;
       }
+      // One loss alone continues with the next real order.
     }
   }
   return out;
@@ -928,7 +932,7 @@ function render(){
     $("bet").textContent=isSkipped
       ?"Sau 2 lệnh thực tế thua liên tiếp • đang bỏ nhịp kế tiếp"
       :isWaitingWin
-        ?"Sau 1 lệnh thực tế thua • đang chờ một nhịp giả lập thắng"
+        ?"Sau 2 lệnh thực tế thua và 2 nhịp nghỉ • đang chờ một nhịp giả lập thắng"
         :inAlertWindow
           ?"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT"
           :"Chưa báo lệnh • sẽ báo khoảng "+shortClock(alertAt);
@@ -936,7 +940,7 @@ function render(){
     if(isSkipped){
       $("freshness").textContent="Nhịp "+fmtFrame(info.targetStart)+" không phát lệnh. Còn "+Math.max(info.skipRemaining,info.skipped?1:0)+" nhịp trong bộ đếm nghỉ.";
     }else if(isWaitingWin){
-      $("freshness").textContent="Đang tạm ngừng vào lệnh sau 1 lệnh thực tế thua. Tool chỉ theo dõi giả lập; gặp 1 nhịp thắng thì lệnh kế tiếp mới hoạt động lại.";
+      $("freshness").textContent="Đã hoàn thành 2 nhịp nghỉ sau 2 lệnh thực tế thua. Tool đang theo dõi giả lập; gặp 1 nhịp thắng thì lệnh kế tiếp mới hoạt động lại.";
     }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(direction==="G"?"XANH":"ĐỎ")+" → đặt ở "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
