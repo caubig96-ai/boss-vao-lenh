@@ -11,13 +11,22 @@ class WebPrepareAlertsTests(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT / "web-iphone" / "index.html").read_text(encoding="utf-8")
 
-    def test_exact_16_patterns_remain_in_web(self):
-        self.assertIn("4 nhóm × 4 mẫu", self.source)
-        self.assertIn('["RGGRR","G"]', self.source)
-        self.assertIn('["RGGRG","R"]', self.source)
-        self.assertIn('["RGRRR","G"]', self.source)
-        self.assertIn('["RGRRG","R"]', self.source)
-        self.assertIn('["GGRGG","G"]', self.source)
+    def test_exact_12_image_patterns_are_the_only_active_web_rules(self):
+        self.assertIn("Boss 12 Mẫu", self.source)
+        self.assertIn("3 nhóm × 4 mẫu", self.source)
+        expected = [
+            '["RGGRR","R"]', '["GGRRR","G"]', '["GRRGG","G"]', '["RRGGG","R"]',
+            '["RGRRR","R"]', '["GRGGR","R"]', '["RRGRR","R"]', '["GGRGR","R"]',
+            '["RGRRG","G"]', '["GRGGG","G"]', '["RRGRG","G"]', '["GGRGG","G"]',
+        ]
+        for item in expected:
+            self.assertIn(item, self.source)
+        self.assertNotIn('["GRRGR","G"]', self.source)
+        self.assertNotIn('["RGGRG","R"]', self.source)
+        self.assertNotIn('["GGRRG","R"]', self.source)
+        self.assertNotIn('["RRGGR","G"]', self.source)
+        self.assertNotIn("4 nhóm × 4 mẫu", self.source)
+        self.assertNotIn("16 mô hình 5 nến", self.source)
 
     def test_prepare_alert_happens_twice_for_three_seconds(self):
         self.assertIn("remain<=60&&remain>30", self.source)
@@ -35,45 +44,42 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("MUA XANH", self.source)
         self.assertIn("MUA ĐỎ", self.source)
 
-    def test_last_100_same_pattern_drives_adaptive_mode(self):
-        self.assertIn("function decisionFromLast100", self.source)
-        self.assertIn('status:item.win===true?"WIN":"LOSS"', self.source)
-        self.assertIn('return {status:"NEW"', self.source)
-        self.assertIn("A gần nhất THẮNG → giữ màu gốc", self.source)
-        self.assertIn("A gần nhất THUA → đảo màu", self.source)
-
-    def test_adaptive_mode_uses_60_percent_threshold(self):
+    def test_adaptive_mode_uses_three_samples_and_60_percent(self):
         self.assertIn("function adaptiveDecisionFromRows", self.source)
-        self.assertIn("rates.winRate>=60", self.source)
-        self.assertIn("rates.lossRate>=60", self.source)
-        self.assertIn("GLOBAL_WIN", self.source)
-        self.assertIn("GLOBAL_LOSS", self.source)
+        self.assertIn("const MIN_SAMPLES=3", self.source)
+        self.assertIn("const THRESHOLD=60", self.source)
+        self.assertIn("winRate>lossRate&&winRate>=THRESHOLD", self.source)
+        self.assertIn("lossRate>winRate&&lossRate>=THRESHOLD", self.source)
+        self.assertIn('mode:"REVERSE_RATE"', self.source)
         self.assertIn("oppositeColor", self.source)
-
 
     def test_pattern_stats_use_rolling_last_100_raw_signals(self):
         self.assertIn("const recent=rawPatternSettled().slice(-100)", self.source)
         self.assertIn('recentCount+"/100 lệnh"', self.source)
-        self.assertIn("Tổng cột “Xuất hiện” của cả 16 mẫu tối đa bằng 100", self.source)
         self.assertIn("Cửa sổ trượt 100 lệnh", self.source)
+        self.assertIn("12 mẫu màu", self.source)
 
-    def test_raw_pattern_history_is_separate_from_daily_tool_orders(self):
+    def test_24h_calendar_uses_288_five_minute_slots(self):
+        self.assertIn("Lịch 24 giờ theo nhóm màu nến", self.source)
+        self.assertIn("288 ô", self.source)
+        self.assertIn("function buildCalendar24h", self.source)
+        self.assertIn("for(let i=0;i<288;i++)", self.source)
+        self.assertIn("renderCalendar24h", self.source)
+        self.assertIn("INTERVAL*1000", self.source)
+
+    def test_cloud_history_and_daily_tool_orders_are_separate(self):
         self.assertIn("function rawPatternSettled", self.source)
-        self.assertIn("100 kết quả gần nhất của 16 mẫu màu", self.source)
         self.assertIn("function recordToolOrder", self.source)
         self.assertIn("boss_tool_orders", self.source)
-        self.assertIn("Lệnh tool hôm nay", self.source)
+        self.assertIn("Lệnh Telegram hôm nay", self.source)
         self.assertIn("todayToolHistory", self.source)
-        self.assertIn('calc.hasOrders?((calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT"):"--"', self.source)
 
-    def test_auto_start_and_history_bootstrap(self):
+    def test_auto_start_loads_cloud_history(self):
         self.assertIn("async function autoStart", self.source)
+        self.assertIn("fetchCloudHistory(false)", self.source)
         self.assertIn("async function ensureHistory100", self.source)
-        self.assertIn("fetchResolvedCategoryPage", self.source)
-        self.assertIn("fetchOlderRoundsFallback", self.source)
         self.assertIn("setTimeout(autoStart,100)", self.source)
         self.assertIn("slice(-6000)", self.source)
-        self.assertIn("/100 lệnh", self.source)
 
     def test_browser_vibration_is_best_effort(self):
         self.assertIn("navigator.vibrate", self.source)
