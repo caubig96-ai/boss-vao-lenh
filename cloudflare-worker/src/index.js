@@ -45,6 +45,7 @@ function freshTradeState(day){
     losses:0,
     lossStreak:0,
     lossCapitalMode:false,
+    reverseColorMode:false,
     waitForWin:false,
     waitAfterTarget:0,
     waitLastCheckedTarget:0,
@@ -78,6 +79,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
   if(typeof state.lossCapitalMode!=="boolean")state.lossCapitalMode=false;
+  if(typeof state.reverseColorMode!=="boolean")state.reverseColorMode=false;
   if(typeof state.waitForWin!=="boolean")state.waitForWin=false;
   if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
   if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
@@ -317,6 +319,12 @@ function sourceStartForTarget(targetStart){
   return isSourceStart(source)?source:null;
 }
 
+function tradeDirectionFromSource(sourceColor,reverseColorMode=false){
+  if(sourceColor!=="G"&&sourceColor!=="R")return null;
+  if(!reverseColorMode)return sourceColor;
+  return sourceColor==="G"?"R":"G";
+}
+
 async function resolvedColorAt(env,payload,ts){
   const rounds=internalRounds(payload);
   const cached=rounds.find(x=>x.t===Number(ts))?.c||null;
@@ -333,19 +341,22 @@ async function resolvedColorAt(env,payload,ts){
   }
 }
 
-async function shadowSignalAt(env,payload,targetStart){
+async function shadowSignalAt(env,payload,targetStart,reverseColorMode=false){
   const sourceStart=sourceStartForTarget(targetStart);
   if(sourceStart===null)return null;
-  const [direction,actual]=await Promise.all([
+  const [sourceColor,actual]=await Promise.all([
     resolvedColorAt(env,payload,sourceStart),
     resolvedColorAt(env,payload,targetStart)
   ]);
-  if(!direction||!actual)return null;
+  const direction=tradeDirectionFromSource(sourceColor,reverseColorMode);
+  if(!sourceColor||!direction||!actual)return null;
   return {
     sourceStart,
     targetStart:Number(targetStart),
+    sourceColor,
     direction,
     actual,
+    reverseColorMode:!!reverseColorMode,
     win:direction===actual
   };
 }
@@ -357,7 +368,7 @@ async function advanceWaitForWin(env,payload,state,currentTarget){
   if(!cursor)return {state,unlocked:false,winTarget:0};
 
   for(let target=cursor+SOURCE_STEP;target<Number(currentTarget);target+=SOURCE_STEP){
-    const shadow=await shadowSignalAt(env,payload,target);
+    const shadow=await shadowSignalAt(env,payload,target,!!state.reverseColorMode);
     if(!shadow)break;
 
     state.waitLastCheckedTarget=target;
@@ -527,6 +538,7 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     nextStep,
     capitalStage:Number(pending.capitalStage||0),
     lossCapitalMode:!!pending.lossCapitalMode,
+    reverseColorMode:!!pending.reverseColorMode,
     lossStreakAfter:Number(state.lossStreak||0),
     waitTriggered,
     waitForWinAfter:!!state.waitForWin,
@@ -562,12 +574,16 @@ async function maybePrepare(env,payload,nowSec){
 
   if(state.day!==currentDay&&!state.pending){
     const carriedLossStreak=Number(state.lossStreak||0);
+    const carriedLossCapitalMode=!!state.lossCapitalMode;
+    const carriedReverseColorMode=!!state.reverseColorMode;
     const carriedWaitForWin=!!state.waitForWin;
     const carriedWaitAfterTarget=Number(state.waitAfterTarget||0);
     const carriedWaitLastCheckedTarget=Number(state.waitLastCheckedTarget||0);
     const carriedWaitWinTarget=Number(state.waitWinTarget||0);
     state=freshTradeState(currentDay);
     state.lossStreak=carriedLossStreak;
+    state.lossCapitalMode=carriedLossCapitalMode;
+    state.reverseColorMode=carriedReverseColorMode;
     state.waitForWin=carriedWaitForWin;
     state.waitAfterTarget=carriedWaitAfterTarget;
     state.waitLastCheckedTarget=carriedWaitLastCheckedTarget;
@@ -590,6 +606,8 @@ async function maybePrepare(env,payload,nowSec){
 
   const sourceColor=await resolvedColorAt(env,payload,sourceStart);
   if(!sourceColor)return;
+  const direction=tradeDirectionFromSource(sourceColor,!!state.reverseColorMode);
+  if(!direction)return;
 
   const settings=tradeSettings(env);
   if(!state.pending){
@@ -600,8 +618,9 @@ async function maybePrepare(env,payload,nowSec){
       sourceStart,
       sourceColor,
       targetStart,
-      direction:sourceColor,
+      direction,
       strategy:"EVEN_10M_ENTRY10_CLOSE15",
+      reverseColorMode:!!state.reverseColorMode,
       step:plan.step,
       capitalStage:plan.capitalStage,
       planLabel:plan.label,
@@ -621,6 +640,9 @@ async function maybePrepare(env,payload,nowSec){
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const reverseLine=pending.reverseColorMode
+    ?"🔄 Đảo màu: <b>BẬT</b> • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
+    :"";
   const resumeLine=Number(pending.resumeFromWaitTarget||0)>0
     ?"✅ Nhịp chờ <b>"+frameText(Number(pending.resumeFromWaitTarget))+"</b> vừa THẮNG → mở lại lệnh.\n"
     :"";
@@ -629,6 +651,7 @@ async function maybePrepare(env,payload,nowSec){
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
     "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
     "Quy tắc: <b>vào phiên +10 phút, chốt màu ở +15 phút</b>\n"+
+    reverseLine+
     resumeLine+
     "➡️ "+buy+"\n"+
     "<b>"+(pending.planLabel||("Lệnh "+Number(pending.step)))+" • "+amountText(pending.amount)+"</b>\n"+
@@ -737,6 +760,7 @@ export default {
         waitForWinAfterTwoLosses:true,
         lossCapitalModeSupported:true,
         lossCapitalSequence:[1,1,2,4],
+        reverseColorModeSupported:true,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -776,13 +800,19 @@ export default {
       if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
       let body={};
       try{body=await req.json()}catch(_){}
-      if(typeof body?.lossCapitalMode!=="boolean"){
-        return json({ok:false,error:"Thiếu lossCapitalMode boolean"},400);
+
+      const hasLossCapital=typeof body?.lossCapitalMode==="boolean";
+      const hasReverseColor=typeof body?.reverseColorMode==="boolean";
+      if(!hasLossCapital&&!hasReverseColor){
+        return json({ok:false,error:"Cần lossCapitalMode hoặc reverseColorMode boolean"},400);
       }
 
       const nowSec=Math.floor(Date.now()/1000);
       const state=await readTradeState(env,nowSec);
-      state.lossCapitalMode=body.lossCapitalMode;
+      if(hasLossCapital)state.lossCapitalMode=body.lossCapitalMode;
+      if(hasReverseColor)state.reverseColorMode=body.reverseColorMode;
+
+      // A mode change starts a fresh sequence, but keeps existing PnL/history.
       state.lossStreak=0;
       state.waitForWin=false;
       state.waitAfterTarget=0;
@@ -791,12 +821,23 @@ export default {
       state.step=1;
       await writeTradeState(env,state);
 
+      let message="Đã cập nhật chế độ.";
+      if(hasLossCapital){
+        message=state.lossCapitalMode
+          ?"Đã bật chế độ vốn thua tối đa 4 lệnh."
+          :"Đã tắt chế độ vốn thua 4 lệnh.";
+      }
+      if(hasReverseColor){
+        message=state.reverseColorMode
+          ?"Đã bật đảo màu: nến đỏ mua xanh, nến xanh mua đỏ."
+          :"Đã tắt đảo màu: mua cùng màu nến mốc.";
+      }
+
       return json({
         ok:true,
         lossCapitalMode:state.lossCapitalMode,
-        message:state.lossCapitalMode
-          ?"Đã bật chế độ vốn thua tối đa 4 lệnh."
-          :"Đã tắt chế độ vốn thua 4 lệnh."
+        reverseColorMode:state.reverseColorMode,
+        message
       });
     }
 
@@ -810,6 +851,7 @@ export default {
       const previous=await readTradeState(env,nowSec);
       const state=freshTradeState(dayTextFromSeconds(nowSec));
       state.lossCapitalMode=!!previous.lossCapitalMode;
+      state.reverseColorMode=!!previous.reverseColorMode;
       state.balanceBase=0;
       await writeTradeState(env,state);
 
