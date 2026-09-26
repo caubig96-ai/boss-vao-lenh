@@ -10,7 +10,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Boss 8 Nhóm — iPhone</title>
+<title>Boss Mốc Chẵn — iPhone</title>
 <style>
 :root{color-scheme:dark;--bg:#0e1217;--panel:#171d24;--line:#29323d;--txt:#f4f7f9;--muted:#96a3b0;--g:#09c878;--r:#ff4b4b;--b:#4ca5ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -32,7 +32,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss 8 Nhóm</h1><div class="sub">BẢN 8 NHÓM MỚI • 26/09 11:21 • lịch 24h • Boss Cloud</div></div>
+  <div><h1>Boss Mốc Chẵn</h1><div class="sub">00/10/20/30/40/50 • lấy màu mốc • +15 phút đặt cùng màu</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -55,22 +55,25 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <b>Boss Cloud</b>
   <div class="note" style="margin:6px 0 12px">API key được giữ trong Cloudflare Secret. iPhone không cần lưu API key; lịch sử được lấy từ Boss Cloud.</div>
   <div style="display:none"><input id="apiKey" type="password"><input id="rememberKey" type="checkbox"></div>
-  <button id="connectBtn" style="width:100%" onclick="forceHistory100()">ĐỒNG BỘ BOSS CLOUD</button>
-  <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="forceHistory100()">↻ CẬP NHẬT 100 LỆNH</button>
+  <button id="connectBtn" style="width:100%" onclick="refreshHistory()">ĐỒNG BỘ BOSS CLOUD</button>
+  <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="refreshHistory()">↻ CẬP NHẬT LỊCH SỬ</button>
   <button id="resetBtn" class="danger" style="width:100%;margin-top:8px" onclick="resetTradeStateAndHistory()">RESET LÃI/LỖ + SỐ DƯ + LỆNH</button>
-  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, huỷ trạng thái tạm dừng; sau đó nạp lại 100 lệnh lịch sử của 8 nhóm.</div>
+  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, đồng thời xoá bộ đếm bỏ 2 nhịp.</div>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
 </section>
 
 <section class="card">
-  <div class="label">3 nến đã đóng quyết định màu mua • nến live hiện tại không tham gia chọn màu</div>
-  <div class="candles" id="candles"></div>
-  <div class="row">
-    <div><div class="label">Lệnh vòng kế tiếp</div><div class="big" id="buy">CHỜ DỮ LIỆU</div></div>
-    <div style="text-align:right"><b id="frame">--:--–--:--</b><div class="label" id="bet">--</div></div>
+  <div class="label">Chiến lược mốc thời gian chẵn</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau đúng 15 phút, đặt lệnh cùng màu với nến ở mốc đó.</div>
+  <div class="stats" style="margin-top:12px">
+    <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
+    <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
+    <div class="stat"><span class="label">Phiên đặt lệnh</span><b id="targetFrame">--:--–--:--</b></div>
+    <div class="stat"><span class="label">Lệnh dự kiến</span><b id="buy">CHỜ</b></div>
   </div>
-  <div id="freshness" class="note" style="margin-top:8px"></div>
+  <div id="bet" class="note" style="margin-top:9px">--</div>
+  <div id="freshness" class="note" style="margin-top:5px"></div>
 </section>
 
 <section class="card">
@@ -111,15 +114,10 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row"><div><b>100 kết quả gốc gần nhất của 8 nhóm</b><div class="label">100 kết quả gốc trước khi áp dụng quy tắc 2 kết quả gần nhất; bảng 24 giờ phía dưới mới là kết quả sau khi theo/đảo màu</div></div><span id="count" class="label">0/100</span></div>
-  <div class="history" id="history" style="margin-top:12px"></div>
-</section>
-
-<section class="card">
   <div class="row">
     <div>
-      <b>Lịch 24 giờ theo nhóm màu nến</b>
-      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • kết quả đã áp dụng quy tắc 2 kết quả gần nhất + đảo màu</div>
+      <b>Lịch 24 giờ theo mốc chẵn +15 phút</b>
+      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • lệnh ở phút 05/15/25/35/45/55</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -130,37 +128,9 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Không lệnh</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng sau khi áp dụng quy tắc 2 kết quả gần nhất • X = thua • · = không có lệnh (không khớp / chưa đủ 2 kết quả / đang nghỉ 15 phút) • … = thời gian chưa tới.</div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • · = không có lệnh hoặc nhịp bị bỏ • … = thời gian chưa tới. Sau 2 lệnh thua liên tiếp, bỏ đúng 2 nhịp đặt lệnh kế tiếp.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
-  </div>
-</section>
-
-<section class="card">
-  <div class="row">
-    <div>
-      <b>Thống kê 8 nhóm • 4 cặp chung 3 nến đầu</b>
-      <div class="label">8 nhóm mới • bảng thống kê tham khảo 100 lệnh gần nhất</div>
-    </div>
-    <span id="patternRoundCount" class="label">0 vòng</span>
-  </div>
-  <div class="note" style="margin-top:7px">8 nhóm trong ảnh được ghép thành 4 cặp vì nến thứ 4 là nến live và không tham gia chọn màu. Tool dùng 3 nến đầu, rồi đọc 2 kết quả gần nhất trong 100 kết quả gốc để quyết định theo màu gốc hoặc đảo màu.</div>
-  <div class="tablewrap">
-    <table class="ptable">
-      <thead>
-        <tr>
-          <th>Nhóm</th>
-          <th>3 nến quyết định</th>
-          <th>2 gần nhất</th>
-          <th>Cách đánh</th>
-          <th>Lệnh</th>
-          <th>Xuất hiện</th>
-          <th>Thắng</th>
-          <th>Thua</th>
-        </tr>
-      </thead>
-      <tbody id="patternStats"></tbody>
-    </table>
   </div>
 </section>
 
@@ -169,21 +139,13 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div id="status" class="status"></div>
 </section>
 
-<div class="note">Boss Cloud đồng bộ lịch sử theo lịch chạy trên Cloudflare. Khi mở lại trang trên iPhone, dữ liệu lịch sử mới nhất sẽ được nạp từ cloud; cảnh báo âm thanh trên iPhone vẫn chỉ hoạt động khi trang đang chạy.</div>
+<div class="note">Boss Cloud theo dõi chiến lược mốc chẵn ngay cả khi iPhone đóng web. Cảnh báo âm thanh trong trang chỉ hoạt động khi trang đang mở.</div>
 </main>
 <script>
-const PATTERN_GROUPS=[
-  {name:"Nhóm 1",variant:"RGRR",key:"RGR",pred:"R"},
-  {name:"Nhóm 2",variant:"GRGR",key:"GRG",pred:"G"},
-  {name:"Nhóm 3",variant:"RRGR",key:"RRG",pred:"R"},
-  {name:"Nhóm 4",variant:"GGRR",key:"GGR",pred:"G"},
-  {name:"Nhóm 5",variant:"RGRG",key:"RGR",pred:"R"},
-  {name:"Nhóm 6",variant:"GRGG",key:"GRG",pred:"G"},
-  {name:"Nhóm 7",variant:"RRGG",key:"RRG",pred:"R"},
-  {name:"Nhóm 8",variant:"GGRG",key:"GGR",pred:"G"}
-];
-const PATTERNS={RGR:"R",GRG:"G",RRG:"R",GGR:"G"};
-const PATTERN_VERSION="image-8-prefix3-v2";
+const SOURCE_STEP=600;
+const ENTRY_DELAY=900;
+const SKIP_BEATS_AFTER_TWO_LOSSES=2;
+const STRATEGY_VERSION="even-10m-plus15-v1";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -266,27 +228,27 @@ function showTradeAlert(kind,title,detail){
   $("tradeAlertDetail").textContent=detail;
 }
 function firePrepareAlert(liveStart,remain,stage){
-  if(stage!==60||prepare60Start===liveStart)return;
-  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
-  if(pauseUntil>Date.now()/1000)return;
+  if(stage!==60)return;
+  const targetStart=liveStart+INTERVAL;
+  const sourceStart=sourceStartForTarget(targetStart);
+  if(sourceStart===null||prepare60Start===targetStart)return;
 
-  const livePattern=currentLivePattern();
-  if(!livePattern||!livePattern.pred)return;
-  const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
-  if(currentLiveStart!==liveStart)return;
+  const skipRemaining=Number(cloudTradeState?.skipSignals||0);
+  const lastSkipped=Number(cloudTradeState?.lastSkippedTarget||0);
+  if(skipRemaining>0||lastSkipped===targetStart)return;
 
-  const decision=recentTwoDecision(livePattern.code);
-  if(!decision.allow)return;
+  const sourceColor=roundColorAt(sourceStart);
+  if(!sourceColor)return;
 
-  prepare60Start=liveStart;
-  sessionStorage.setItem("prepare_60_start",String(liveStart));
+  prepare60Start=targetStart;
+  sessionStorage.setItem("prepare_60_start",String(targetStart));
 
-  const buyText=decision.direction==="G"?"XANH":"ĐỎ";
-  const modeText=String(decision.mode).startsWith("REVERSE")?"ĐẢO MÀU":"THEO MÀU GỐC";
+  const buyText=sourceColor==="G"?"XANH":"ĐỎ";
   showTradeAlert(
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    "3 nến "+patternIcons(livePattern.code)+" • 2 gần nhất "+decision.pair+" • "+modeText+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+    "Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ")+
+    " • sau 15 phút MUA "+buyText+" • phiên "+fmtFrame(targetStart)
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -435,7 +397,7 @@ async function fetchTradeState(){
 
 async function resetTradeStateAndHistory(){
   const btn=$("resetBtn");
-  const ok=confirm("Reset toàn bộ lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và thời gian tạm dừng về 0? 100 lệnh lịch sử 8 nhóm sẽ được tải lại.");
+  const ok=confirm("Reset toàn bộ lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và bộ đếm bỏ nhịp về 0?");
   if(!ok)return;
 
   if(btn){
@@ -455,21 +417,16 @@ async function resetTradeStateAndHistory(){
     if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
 
     cloudTradeState=null;
-    rounds=[];
-    localStorage.removeItem("boss_rounds");
     sessionStorage.removeItem("prepare_60_start");
     prepare60Start=0;
-
-    await fetchTradeState();
-    await fetchCloudHistory(true);
-    await ensureHistory100(true);
+    await Promise.allSettled([fetchTradeState(),fetchCloudHistory(true)]);
     render();
-    setStatus("Đã reset về 0 và cập nhật lại 100 lệnh lịch sử của 8 nhóm.","ok");
+    setStatus("Đã reset về 0 và tải lại lịch sử mốc chẵn.","ok");
 
     if(btn){
       btn.classList.remove("working","fail");
       btn.classList.add("success");
-      btn.textContent="✓ ĐÃ RESET VÀ CẬP NHẬT 100 LỆNH";
+      btn.textContent="✓ ĐÃ RESET";
     }
   }catch(e){
     setStatus("Reset lỗi: "+String(e.message||e),"err");
@@ -484,7 +441,7 @@ async function resetTradeStateAndHistory(){
       setTimeout(()=>{
         btn.classList.remove("working","success","fail");
         btn.textContent="RESET LÃI/LỖ + SỐ DƯ + LỆNH";
-      },3500);
+      },3000);
     }
   }
 }
@@ -501,96 +458,55 @@ async function fetchCloudHistory(forceSync=false){
     return Number.isFinite(t)&&c?{t,c}:null;
   }).filter(Boolean);
   if(mapped.length)mergeRounds(mapped);
-  return {cloudCount:mapped.length,tradeCount:historyTradeCount(),updatedAt:j?.updatedAt||null};
+  return {cloudCount:mapped.length,updatedAt:j?.updatedAt||null};
 }
-function historyTradeCount(){
-  try{return rawPatternSettled().length}catch(_){return 0}
+function historyRoundCount(){
+  return rounds.length;
 }
-async function forceHistory100(){
-  if(historyLoading){
-    setStatus("Lịch sử đang được tải. Vui lòng chờ số đếm 0/100 tăng lên.","ok");
-    return;
-  }
+async function refreshHistory(){
+  if(historyLoading)return;
+  historyLoading=true;
   const btn=$("historyBtn");
   if(btn){
     btn.disabled=true;
-    btn.classList.remove("success","fail");
     btn.classList.add("working");
     btn.textContent="⏳ ĐANG CẬP NHẬT...";
   }
   try{
-    await refreshNow();
-    const count=await ensureHistory100(true);
-    if(count<=0)throw new Error("Không lấy được dữ liệu lịch sử từ Boss Cloud");
+    progress(0,1,"Đang đồng bộ lịch sử Boss Cloud...");
+    const cloud=await fetchCloudHistory(true);
+    render();
+    progress(1,1,"Đã tải "+cloud.cloudCount+" nến đã đóng.");
+    setStatus("Đã cập nhật lịch sử mốc chẵn từ Boss Cloud.","ok");
     if(btn){
-      btn.classList.remove("working");
-      if(count>=100){
-        btn.classList.add("success");
-        btn.textContent="✓ ĐÃ CẬP NHẬT ĐỦ 100 LỆNH";
-      }else{
-        btn.classList.add("fail");
-        btn.textContent="⚠ CHỈ CÓ "+count+"/100 LỆNH";
-      }
+      btn.classList.remove("working","fail");
+      btn.classList.add("success");
+      btn.textContent="✓ ĐÃ CẬP NHẬT";
     }
   }catch(e){
+    setStatus("Lỗi Boss Cloud: "+String(e.message||e),"err");
     if(btn){
       btn.classList.remove("working","success");
       btn.classList.add("fail");
       btn.textContent="✕ CẬP NHẬT LỖI";
     }
-    throw e;
   }finally{
+    historyLoading=false;
     if(btn){
       btn.disabled=false;
       setTimeout(()=>{
         btn.classList.remove("working","success","fail");
-        btn.textContent="↻ CẬP NHẬT 100 LỆNH";
-      },3000);
+        btn.textContent="↻ CẬP NHẬT LỊCH SỬ";
+      },2500);
     }
-  }
-}
-async function ensureHistory100(forceSync=false){
-  if(historyLoading)return historyTradeCount();
-  if(historyTradeCount()>=100&&!forceSync){render();return historyTradeCount()}
-  historyLoading=true;
-  try{
-    setStatus("Đang tải lịch sử từ Boss Cloud...","");
-    progress(0,100,"Đang tải lịch sử cloud • hiện có "+historyTradeCount()+"/100 lệnh");
-
-    let cloud=await fetchCloudHistory(false);
-    render();
-    let count=historyTradeCount();
-    progress(Math.min(count,100),100,"Boss Cloud: "+cloud.cloudCount+" vòng • đã dựng "+Math.min(count,100)+"/100 lệnh");
-
-    if(forceSync||count<100){
-      setStatus("Đang yêu cầu Boss Cloud đồng bộ Prediction...","");
-      cloud=await fetchCloudHistory(true);
-      render();
-      count=historyTradeCount();
-      progress(Math.min(count,100),100,"Đã đồng bộ "+cloud.cloudCount+" vòng • "+Math.min(count,100)+"/100 lệnh");
-    }
-
-    if(count>=100){
-      progress(1,1,"Đã có đủ 100 lệnh lịch sử từ Boss Cloud.");
-      setStatus("Boss Cloud hoạt động • đã dựng đủ 100 lệnh V/X.","ok");
-    }else{
-      progress(count,100,"Hiện có "+count+"/100 lệnh mẫu.");
-      setStatus("Boss Cloud đã trả dữ liệu nhưng mới dựng được "+count+"/100 lệnh mẫu.","err");
-    }
-    return count;
-  }catch(e){
-    const msg=String(e.message||e);
-    setStatus("Lỗi Boss Cloud: "+msg,"err");
-    throw e;
-  }finally{
-    historyLoading=false;
   }
 }
 async function autoStart(){
   startPolling();
-  await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),ensureHistory100(false),fetchTradeState()]);
+  await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),fetchTradeState()]);
   render();
 }
+
 function mergeRounds(items){
   const map=new Map(rounds.map(x=>[x.t,x]));items.filter(Boolean).forEach(x=>map.set(x.t,x));
   rounds=[...map.values()].sort((a,b)=>a.t-b.t).slice(-6000);
@@ -602,7 +518,7 @@ async function mapLimit(values,limit,fn,onProgress){
   await Promise.all(Array.from({length:limit},worker));return out
 }
 async function connect(){
-  return forceHistory100();
+  return refreshHistory();
 }
 async function refreshNow(){
   try{
@@ -613,7 +529,6 @@ async function refreshNow(){
     render();
     setStatus("Đã cập nhật qua Boss Cloud "+new Date().toLocaleTimeString(),"ok");
     fetchTradeState();
-    if(historyTradeCount()<100&&!historyLoading)ensureHistory100()
   }catch(e){setStatus(String(e.message||e),"err")}
 }
 function startPolling(){
@@ -633,177 +548,95 @@ function startPolling(){
   countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
   fetchLiveMarket();
 }
-function consecutive(a,b){return b.t-a.t===INTERVAL}
-function allPatternCodes(){
-  return [...new Set(PATTERN_GROUPS.map(group=>group.key))];
+function isSourceStart(ts){
+  return Number.isFinite(Number(ts))&&Math.floor(Number(ts))%SOURCE_STEP===0;
 }
-function patternGroupName(code){
-  const names=PATTERN_GROUPS.filter(group=>group.key===code).map(group=>group.name);
-  return names.join("/");
+function sourceStartForTarget(targetStart){
+  const source=Number(targetStart)-ENTRY_DELAY;
+  return isSourceStart(source)?source:null;
 }
-function patternIcons(code){return [...code].map(c=>c==="G"?"🟢":"🔴").join("")}
-function buildPatternStats(){
-  const stats={};
-  allPatternCodes().forEach(code=>stats[code]={code,pred:PATTERNS[code]||null,occurrences:0,wins:0,losses:0,settled:0});
-  const recent=rawPatternSettled().slice(-100);
-  for(const item of recent){
-    const row=stats[item.pattern];
-    if(!row)continue;
-    row.occurrences++;
-    row.settled++;
-    if(item.win)row.wins++;else row.losses++;
+function roundColorAt(ts){
+  return rounds.find(x=>Number(x.t)===Number(ts))?.c||null;
+}
+function upcomingTargetStart(nowSec=Date.now()/1000){
+  const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
+  for(let i=0;i<8;i++){
+    const t=base+i*INTERVAL;
+    if(t+1<nowSec)continue;
+    if(sourceStartForTarget(t)!==null)return t;
   }
-  return allPatternCodes().map(code=>stats[code]);
+  return null;
 }
-function renderPatternStats(){
-  const statsByKey=Object.fromEntries(buildPatternStats().map(row=>[row.code,row]));
-  const recentCount=rawPatternSettled().slice(-100).length;
-  $("patternRoundCount").textContent=recentCount+"/100 lệnh";
-  $("patternStats").innerHTML="";
-
-  PATTERN_GROUPS.forEach(group=>{
-    const row=statsByKey[group.key]||{occurrences:0,wins:0,losses:0};
-    const decision=recentTwoDecision(group.key);
-    const pair=decision.pair||"—";
-    const mode=decision.allow?(String(decision.mode).startsWith("REVERSE")?"ĐẢO":"THEO GỐC"):"CHỜ";
-    const action=decision.allow?(decision.direction==="G"?"MUA XANH":"MUA ĐỎ"):"—";
-    const actionClass=decision.direction==="G"?"buyg":decision.direction==="R"?"buyr":"";
-    const tr=document.createElement("tr");
-    tr.innerHTML=
-      '<td>'+group.name+'</td>'+
-      '<td><span class="picons">'+patternIcons(group.variant)+'</span><span class="mini">'+group.variant+' • dùng '+group.key+'</span></td>'+
-      '<td>'+pair+'</td>'+
-      '<td>'+mode+'</td>'+
-      '<td class="'+actionClass+'">'+action+'</td>'+
-      '<td>'+row.occurrences+'</td>'+
-      '<td class="green">'+row.wins+'</td>'+
-      '<td class="red">'+row.losses+'</td>';
-    $("patternStats").appendChild(tr);
-  });
-}
-function buildSignals(){
+function buildTimeSignals(){
+  const byTime=new Map(rounds.map(x=>[Number(x.t),x]));
   const out=[];
-  const byTime=new Map(rounds.map(x=>[x.t,x]));
-  for(let i=2;i<rounds.length;i++){
-    const w=rounds.slice(i-2,i+1);
-    if(!w.slice(1).every((x,k)=>consecutive(w[k],x)))continue;
-    const p=w.map(x=>x.c).join("");
-    const pred=PATTERNS[p];
-    if(!pred)continue;
-
-    const live=byTime.get(w[2].t+INTERVAL)||null;
-    const targetT=w[2].t+2*INTERVAL;
-    const actual=byTime.get(targetT)||null;
-    if(!live)continue;
-
+  for(const source of rounds){
+    const sourceT=Number(source.t);
+    if(!isSourceStart(sourceT)||!source.c)continue;
+    const targetT=sourceT+ENTRY_DELAY;
+    const actual=byTime.get(targetT)?.c||null;
     out.push({
-      sourceT:live.t,
+      sourceT,
       targetT,
-      pattern:p,
-      pred,
-      actual:actual?.c||null
+      direction:source.c,
+      actual,
+      rawWin:actual?source.c===actual:null
     });
   }
-  return out
+  return out.sort((a,b)=>a.targetT-b.targetT);
 }
-function rawPatternSettled(){
-  return buildSignals()
-    .filter(item=>!!item.actual)
-    .map(item=>({...item,win:item.pred===item.actual}));
-}
-
-function adaptiveDecisionFromPrior(code,priorRaw){
-  const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,mode:"NONE",pair:""};
-
-  const recent100=priorRaw.slice(-100);
-  const sameGroup=recent100.filter(item=>item.pattern===code);
-  const two=sameGroup.slice(-2).reverse();
-  if(two.length<2){
-    return {
-      allow:false,
-      direction:null,
-      mode:"NEED_2",
-      pair:two.map(item=>item.win?"V":"X").join("-")
-    };
-  }
-
-  const pair=two.map(item=>item.win?"V":"X").join("-");
-  const latestWon=two[0].win===true;
-  return {
-    allow:true,
-    direction:latestWon?pred:(pred==="G"?"R":"G"),
-    mode:pair==="V-V"?"FOLLOW_VV":pair==="X-X"?"REVERSE_XX":pair==="V-X"?"FOLLOW_VX":"REVERSE_XV",
-    pair
-  };
-}
-
-function buildAdaptiveHistory(){
-  const raw=rawPatternSettled().sort((a,b)=>a.targetT-b.targetT);
+function buildTimedHistory(){
+  const signals=buildTimeSignals();
   const out=[];
   let lossStreak=0;
-  let pauseUntil=0;
+  let skipRemaining=0;
 
-  for(let i=0;i<raw.length;i++){
-    const s=raw[i];
-    const prior=raw.slice(0,i);
-    const d=adaptiveDecisionFromPrior(s.pattern,prior);
-
-    if(Number(s.targetT)<Number(pauseUntil||0)){
-      out.push({...s,adaptive:false,status:"NO_ORDER",reason:"PAUSE_15M",pair:d.pair||"",mode:d.mode||"NONE"});
+  for(const s of signals){
+    if(skipRemaining>0){
+      out.push({...s,status:"NO_ORDER",reason:"SKIP_BEAT",skipBefore:skipRemaining});
+      skipRemaining--;
       continue;
     }
 
-    if(!d.allow||!d.direction){
-      out.push({...s,adaptive:false,status:"NO_ORDER",reason:"NEED_2",pair:d.pair||"",mode:d.mode||"NONE"});
+    if(!s.actual){
+      out.push({...s,status:"WAIT"});
       continue;
     }
 
-    const win=d.direction===s.actual;
-    out.push({...s,adaptive:true,direction:d.direction,adaptiveWin:win,status:win?"WIN":"LOSS",pair:d.pair,mode:d.mode});
+    const win=s.direction===s.actual;
+    out.push({...s,status:win?"WIN":"LOSS",win});
 
     if(win){
       lossStreak=0;
     }else{
       lossStreak++;
       if(lossStreak>=2){
-        // Mirror the live system: after the second actual loss, no new order for 15 minutes.
-        pauseUntil=s.targetT+15*60;
+        skipRemaining=SKIP_BEATS_AFTER_TWO_LOSSES;
         lossStreak=0;
       }
     }
   }
   return out;
 }
-function recentTwoDecision(code){
-  const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,mode:"NONE",pair:"",reason:"Không thuộc 8 nhóm"};
+function nextTimeSignalInfo(){
+  const targetStart=upcomingTargetStart();
+  if(targetStart===null)return null;
+  const sourceStart=sourceStartForTarget(targetStart);
+  const sourceColor=roundColorAt(sourceStart);
+  const pending=cloudTradeState?.pending;
+  const skipped=Number(cloudTradeState?.lastSkippedTarget||0)===targetStart;
+  const skipRemaining=Number(cloudTradeState?.skipSignals||0);
 
-  const recent100=rawPatternSettled().slice(-100);
-  const sameGroup=recent100.filter(item=>item.pattern===code);
-  const two=sameGroup.slice(-2).reverse();
-  const wins=sameGroup.filter(item=>item.win).length;
-  const losses=sameGroup.length-wins;
-
-  if(two.length<2){
-    return {
-      allow:false,direction:null,mode:"NEED_2",
-      pair:two.map(item=>item.win?"V":"X").join("-"),
-      wins,losses,settled:sameGroup.length,
-      reason:"Chưa đủ 2 kết quả gần nhất của nhóm này trong 100 lệnh"
-    };
-  }
-
-  const pair=two.map(item=>item.win?"V":"X").join("-");
-  const latestWon=two[0].win===true;
-  return {
-    allow:true,
-    direction:latestWon?pred:(pred==="G"?"R":"G"),
-    mode:pair==="V-V"?"FOLLOW_VV":pair==="X-X"?"REVERSE_XX":pair==="V-X"?"FOLLOW_VX":"REVERSE_XV",
-    pair,wins,losses,settled:sameGroup.length,
-    reason:latestWon?"Kết quả gần nhất thắng → theo màu gốc":"Kết quả gần nhất thua → đảo màu"
+  return{
+    sourceStart,
+    sourceColor,
+    targetStart,
+    skipped,
+    skipRemaining,
+    pending:pending&&Number(pending.targetStart)===targetStart?pending:null
   };
 }
+
 function compute(){
   const bet1=cloudMoneySettings?.bet1??n("bet1",1);
   const bet2=cloudMoneySettings?.bet2??n("bet2",2);
@@ -890,40 +723,21 @@ function renderLive(){
   $("liveColorText").className="big "+(c==="G"?"green":c==="R"?"red":"");
   $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
 }
-function latestClosed3(){
-  if(rounds.length<3)return null;
-  for(let end=rounds.length-1;end>=2;end--){
-    const w=rounds.slice(end-2,end+1);
-    if(w.slice(1).every((x,k)=>consecutive(w[k],x)))return w;
-  }
-  return null;
-}
-function currentLivePattern(){
-  const closed3=latestClosed3();
-  if(!closed3)return null;
-  const expectedLiveStart=closed3[2].t+INTERVAL;
-  const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
-  if(expectedLiveStart!==currentLiveStart)return null;
-  const code=closed3.map(x=>x.c).join("");
-  return {closed3,code,pred:PATTERNS[code]||null,group:patternGroupName(code)};
-}
 function buildCalendar24h(){
   const now=Math.floor(Date.now()/1000);
   const currentHour=Math.floor(now/3600)*3600;
   const first=currentHour-23*3600;
   const last=first+24*3600-INTERVAL;
 
-  const adapted=buildAdaptiveHistory();
-  const signalMap=new Map(adapted.map(s=>[Number(s.targetT),s]));
-  const rawMap=new Map(buildSignals().map(s=>[Number(s.targetT),s]));
+  const timed=buildTimedHistory();
+  const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
   const slots=[];
   let wins=0,losses=0,signals=0,noOrders=0,future=0;
 
   for(let i=0;i<288;i++){
     const t=first+i*INTERVAL;
+    const signal=signalMap.get(t)||null;
     let status="NO_ORDER";
-    let signal=signalMap.get(t)||null;
-    const raw=rawMap.get(t)||null;
 
     if(t>now){
       status="FUTURE";
@@ -932,11 +746,13 @@ function buildCalendar24h(){
       status="WIN";wins++;signals++;
     }else if(signal?.status==="LOSS"){
       status="LOSS";losses++;signals++;
+    }else if(signal?.status==="WAIT"){
+      status="WAIT";
     }else{
       status="NO_ORDER";noOrders++;
     }
 
-    slots.push({t,status,signal,raw});
+    slots.push({t,status,signal});
   }
 
   const settled=wins+losses;
@@ -984,39 +800,31 @@ function renderCalendar24h(){
       d.className="calCell";
 
       if(slot.status==="WIN"){
-        rowW++;
-        d.classList.add("win","signal");
-        d.textContent="V";
+        rowW++;d.classList.add("win","signal");d.textContent="V";
       }else if(slot.status==="LOSS"){
-        rowL++;
-        d.classList.add("loss","signal");
-        d.textContent="X";
+        rowL++;d.classList.add("loss","signal");d.textContent="X";
+      }else if(slot.status==="WAIT"){
+        d.classList.add("wait","signal");d.textContent="…";
       }else if(slot.status==="FUTURE"){
-        rowF++;
-        d.classList.add("future");
-        d.textContent="…";
+        rowF++;d.classList.add("future");d.textContent="…";
       }else{
-        rowN++;
-        d.textContent="·";
+        rowN++;d.textContent="·";
       }
 
       const s=slot.signal;
-      const raw=slot.raw;
       let detail=shortClock(slot.t)+" • ";
       if(slot.status==="FUTURE"){
         detail+="chưa tới";
-      }else if(s?.adaptive){
-        detail+=patternIcons(s.pattern)+" • 2 gần nhất "+s.pair+" • "+
-          (String(s.mode).startsWith("REVERSE")?"đảo màu":"theo màu gốc")+
-          " • mua "+(s.direction==="G"?"XANH":"ĐỎ")+
-          " • kết quả "+(s.actual==="G"?"XANH":"ĐỎ")+
-          " • "+(s.adaptiveWin?"THẮNG":"THUA");
-      }else if(s?.reason==="PAUSE_15M"){
-        detail+="không có lệnh • đang nghỉ 15 phút";
-      }else if(raw){
-        detail+=patternIcons(raw.pattern)+" • không có lệnh • chưa đủ 2 kết quả gần nhất";
+      }else if(s?.status==="WIN"||s?.status==="LOSS"){
+        detail+="mốc "+shortClock(s.sourceT)+" • "+
+          (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +15 phút mua cùng màu • kết quả "+
+          (s.actual==="G"?"XANH":"ĐỎ")+" • "+(s.status==="WIN"?"THẮNG":"THUA");
+      }else if(s?.reason==="SKIP_BEAT"){
+        detail+="bỏ nhịp sau chuỗi 2 lệnh thua";
+      }else if(s?.status==="WAIT"){
+        detail+="đang chờ kết quả";
       }else{
-        detail+="không có lệnh • 3 nến không thuộc nhóm phù hợp";
+        detail+="không phải nhịp đặt lệnh";
       }
       d.title=detail;
       d.setAttribute("aria-label",detail);
@@ -1039,58 +847,49 @@ function renderCalendar24h(){
 }
 
 function render(){
-  const livePattern=currentLivePattern(),calc=compute();$("candles").innerHTML="";
-  const closedColors=livePattern?livePattern.closed3.map(x=>x.c):(latestClosed3()?.map(x=>x.c)||[]);
-  const colors=[...closedColors,liveMarket.color||""];
-  for(let i=0;i<4;i++){
-    const d=document.createElement("div");
-    const c=colors[i]||"";
-    d.className="dot "+(c==="G"?"g":c==="R"?"r":"");
-    d.textContent=c?"●":"·";
-    if(i===3){d.style.outline="2px solid rgba(76,165,255,.7)";d.style.opacity=".55";}
-    $("candles").appendChild(d);
-  }
+  const calc=compute();
+  const info=nextTimeSignalInfo();
 
-  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
-  const paused=pauseUntil>Date.now()/1000;
-  const decision=livePattern?.pred?recentTwoDecision(livePattern.code):null;
-  const pred=!paused&&decision?.allow?decision.direction:null;
-  const targetT=liveMarket.end||null;
+  if(info){
+    $("sourceFrame").textContent=shortClock(info.sourceStart);
+    $("sourceColor").textContent=info.sourceColor==="G"?"🟢 XANH":info.sourceColor==="R"?"🔴 ĐỎ":"CHỜ KẾT QUẢ";
+    $("sourceColor").className=info.sourceColor==="G"?"green":info.sourceColor==="R"?"red":"";
+    $("targetFrame").textContent=fmtFrame(info.targetStart);
 
-  $("buy").textContent=paused
-    ?"TẠM DỪNG 15 PHÚT"
-    :livePattern?.pred&&!decision?.allow
-      ?"CHỜ / CHƯA ĐỦ 2 KẾT QUẢ"
-      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 8 NHÓM":"CHỜ MÀU LIVE");
-  $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
-  $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
-  const nextAmount=calc.step===2?calc.bet2:calc.bet1;
-  $("bet").textContent="Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
+    const isSkipped=info.skipped||info.skipRemaining>0;
+    const direction=info.pending?.direction||info.sourceColor;
+    $("buy").textContent=isSkipped
+      ?"BỎ NHỊP"
+      :direction==="G"
+        ?"MUA XANH"
+        :direction==="R"
+          ?"MUA ĐỎ"
+          :"CHỜ MÀU MỐC";
+    $("buy").className=direction==="G"&&!isSkipped?"green":direction==="R"&&!isSkipped?"red":"";
 
-  if(paused){
-    $("freshness").textContent="Đã có 2 lệnh thua liên tiếp • tạm dừng báo lệnh đến "+shortClock(pauseUntil)+".";
-  }else if(livePattern?.pred&&decision?.allow){
-    const modeText=String(decision.mode).startsWith("REVERSE")?"ĐẢO MÀU":"THEO MÀU GỐC";
-    $("freshness").textContent="3 nến "+patternIcons(livePattern.code)+" • 2 kết quả gần nhất "+decision.pair+" • "+modeText+" • 1 phút cuối báo MUA "+(decision.direction==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
-  }else if(livePattern?.pred){
-    $("freshness").textContent="3 nến "+patternIcons(livePattern.code)+" • "+(decision?.reason||"Chưa đủ dữ liệu")+" • chưa báo lệnh.";
-  }else if(livePattern){
-    $("freshness").textContent="Nhóm hiện tại "+patternIcons(livePattern.code)+" không thuộc 8 nhóm mới.";
+    const nextAmount=calc.step===2?calc.bet2:calc.bet1;
+    $("bet").textContent=isSkipped
+      ?"Sau 2 lệnh thua liên tiếp • đang bỏ nhịp kế tiếp"
+      :"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
+
+    if(isSkipped){
+      $("freshness").textContent="Nhịp "+fmtFrame(info.targetStart)+" không phát lệnh. Còn "+Math.max(info.skipRemaining,info.skipped?1:0)+" nhịp trong bộ đếm nghỉ.";
+    }else if(info.sourceColor){
+      $("freshness").textContent="Lấy màu tại "+shortClock(info.sourceStart)+" → chờ 15 phút → đặt cùng màu ở "+fmtFrame(info.targetStart)+".";
+    }else{
+      $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
+    }
   }else{
-    $("freshness").textContent="Đang chờ đủ 3 nến đã đóng.";
+    $("sourceFrame").textContent="--:--";
+    $("sourceColor").textContent="CHỜ";
+    $("sourceColor").className="";
+    $("targetFrame").textContent="--:--–--:--";
+    $("buy").textContent="CHỜ";
+    $("buy").className="";
+    $("bet").textContent="--";
+    $("freshness").textContent="Đang xác định mốc thời gian kế tiếp.";
   }
 
-  const hist=rawPatternSettled().slice(-100);
-  $("count").textContent=hist.length+"/100"+(historyLoading?" • đang tải":"");
-  $("history").innerHTML="";
-  const padded=Array(100-hist.length).fill(null).concat(hist);
-  padded.forEach(item=>{
-    const d=document.createElement("div");
-    if(!item){d.className="cell";d.textContent="·"}
-    else{d.className="cell "+(item.win?"v":"x");d.textContent=item.win?"V":"X"}
-    $("history").appendChild(d);
-  });
-  renderPatternStats();
   renderCalendar24h();
 }
 document.addEventListener("visibilitychange",async()=>{
