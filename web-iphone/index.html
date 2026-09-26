@@ -924,9 +924,5 @@ document.addEventListener("visibilitychange",async()=>{
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
-if("serviceWorker"in navigator){
-  navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
-  caches?.keys?.().then(keys=>Promise.all(keys.filter(k=>k.startsWith("boss-iphone-static")).map(k=>caches.delete(k)))).catch(()=>{});
-}
 </script>
 </body></html>
