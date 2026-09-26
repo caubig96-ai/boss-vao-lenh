@@ -25,21 +25,23 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("const ENTRY_DELAY=900", self.source)
         self.assertIn("const SOURCE_STEP=600", self.worker)
         self.assertIn("const ENTRY_DELAY=900", self.worker)
-        self.assertIn('STRATEGY_VERSION="even-10m-plus15-v1"', self.worker)
+        self.assertIn('STRATEGY_VERSION="even-10m-3c-filter-v2"', self.worker)
 
-    def test_source_color_is_used_15_minutes_later(self):
-        self.assertIn("sourceStartForTarget", self.source)
-        self.assertIn("targetT=sourceT+ENTRY_DELAY", self.source)
-        self.assertIn("direction:source.c", self.source)
-        self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("direction:sourceColor", self.worker)
+    def test_three_candle_filter_controls_entry(self):
+        self.assertIn('FILTER_PATTERNS=new Set(["GRG","RGR","GRR","RGG"])', self.source)
+        self.assertIn('FILTER_PATTERNS=new Set(["GRG","RGR","GRR","RGG"])', self.worker)
+        self.assertIn("function sourcePatternAt", self.source)
+        self.assertIn("async function sourcePatternAt", self.worker)
+        self.assertIn("if(!sourcePattern||!sourcePattern.allowed)return", self.worker)
+        self.assertIn("direction:sourcePattern.direction", self.worker)
+        self.assertIn("if(!s.allowed)", self.source)
 
     def test_one_minute_telegram_alert(self):
         self.assertIn("remain<=60&&remain>30", self.source)
         self.assertIn("CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU", self.source)
         self.assertIn("CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU", self.worker)
-        self.assertIn("Mốc lấy màu:", self.worker)
-        self.assertIn("sau 15 phút mua cùng màu", self.worker)
+        self.assertIn("3 nến:", self.worker)
+        self.assertIn("XĐX / ĐXĐ / XĐĐ / ĐXX", self.worker)
 
     def test_two_losses_skip_two_beats(self):
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.source)
