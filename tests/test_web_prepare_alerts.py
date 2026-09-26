@@ -22,10 +22,10 @@ class WebTimeStrategyTests(unittest.TestCase):
 
     def test_even_time_strategy_constants(self):
         self.assertIn("const SOURCE_STEP=600", self.source)
-        self.assertIn("const ENTRY_DELAY=900", self.source)
+        self.assertIn("const ENTRY_DELAY=600", self.source)
         self.assertIn("const SOURCE_STEP=600", self.worker)
-        self.assertIn("const ENTRY_DELAY=900", self.worker)
-        self.assertIn('STRATEGY_VERSION="even-10m-plus15-v1"', self.worker)
+        self.assertIn("const ENTRY_DELAY=600", self.worker)
+        self.assertIn('STRATEGY_VERSION="even-10m-entry10-close15-v2"', self.worker)
 
     def test_source_color_is_used_15_minutes_later(self):
         self.assertIn("sourceStartForTarget", self.source)
@@ -39,7 +39,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU", self.source)
         self.assertIn("CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU", self.worker)
         self.assertIn("Mốc lấy màu:", self.worker)
-        self.assertIn("sau 15 phút mua cùng màu", self.worker)
+        self.assertIn("vào phiên +10 phút, chốt màu ở +15 phút", self.worker)
 
     def test_signal_is_not_shown_early(self):
         self.assertIn("function isEntryAlertWindow", self.source)
@@ -47,7 +47,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('?"CHỜ "+shortClock(alertAt)', self.source)
         self.assertIn("const secondsToTarget=targetStart-nowSec", self.worker)
         self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
-        self.assertIn("17:00 -> order 17:15 -> alert around 17:14", self.worker)
+        self.assertIn("17:00 -> order frame 17:10-17:15 -> alert around 17:09", self.worker)
 
     def test_two_losses_skip_two_beats(self):
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.source)
@@ -58,8 +58,8 @@ class WebTimeStrategyTests(unittest.TestCase):
 
     def test_24h_calendar_shows_only_six_order_slots_per_hour(self):
         self.assertIn("24 hàng giờ", self.source)
-        self.assertIn("05/15/25/35/45/55", self.source)
-        self.assertIn("for(const minute of [5,15,25,35,45,55])", self.source)
+        self.assertIn("00/10/20/30/40/50", self.source)
+        self.assertIn("for(const minute of [0,10,20,30,40,50])", self.source)
         self.assertIn("for(let row=0;row<24;row++)", self.source)
         self.assertIn("slice(row*6,row*6+6)", self.source)
         self.assertNotIn('status="SOURCE"', self.source)
