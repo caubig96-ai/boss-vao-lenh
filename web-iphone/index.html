@@ -63,7 +63,14 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Thua 1 lệnh vẫn chạy bình thường. Khi thua 2 lệnh thực tế liên tiếp, tool dừng vào tiền ngay và theo dõi giả lập cho tới khi có 1 nhịp thắng; lệnh kế tiếp mới vào lại.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Chế độ thường dừng sau 2 lệnh thua liên tiếp. Khi bật chế độ vốn thua 4 lệnh, chuỗi vốn là $1 → $1 → $2 → $4; tối đa 4 lệnh thua liên tiếp rồi mới chuyển sang chờ một nhịp giả lập thắng.</div>
+  <div class="row" style="margin-top:12px;background:#10161c;border-radius:12px;padding:11px">
+    <div>
+      <b>Chế độ vốn thua 4 lệnh</b>
+      <div class="label">1 → 1 → 2 → 4 • lệnh thắng vẫn giữ nhịp x2 rồi về lệnh 1</div>
+    </div>
+    <button id="lossCapitalModeBtn" class="secondary" onclick="toggleLossCapitalMode()">ĐANG TẢI</button>
+  </div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -129,7 +136,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp giả lập thắng sau 2 lệnh thua, mở khóa lệnh kế tiếp • C× = nhịp giả lập thua, tiếp tục chờ • … = chưa có dữ liệu/chưa tới. Tiền 24h chỉ tính lệnh thực tế: lệnh 1 thắng thì lệnh thực tế kế tiếp dùng mức lệnh 2; sau lệnh 2 hoặc lệnh 1 thua thì quay về lệnh 1.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp giả lập thắng mở khóa lệnh kế tiếp • C× = nhịp giả lập thua, tiếp tục chờ • … = chưa có dữ liệu/chưa tới. Khi bật vốn thua 4 lệnh, bảng 24h tự tính theo $1 → $1 → $2 → $4; lệnh thắng vẫn giữ nhịp x2 rồi quay về lệnh 1.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -395,6 +402,29 @@ async function fetchTradeState(){
   }
 }
 
+async function toggleLossCapitalMode(){
+  const btn=$("lossCapitalModeBtn");
+  const current=!!cloudTradeState?.lossCapitalMode;
+  if(btn){btn.disabled=true;btn.textContent="ĐANG LƯU...";}
+  try{
+    const r=await fetch(CLOUD+"/trade-mode",{
+      method:"POST",
+      cache:"no-store",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({lossCapitalMode:!current})
+    });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
+    await fetchTradeState();
+    render();
+    setStatus(j.message||"Đã cập nhật chế độ vốn.","ok");
+  }catch(e){
+    setStatus("Lỗi đổi chế độ vốn: "+String(e.message||e),"err");
+  }finally{
+    if(btn)btn.disabled=false;
+  }
+}
+
 async function resetTradeStateAndHistory(){
   const btn=$("resetBtn");
   const ok=confirm("Reset toàn bộ lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và trạng thái chờ thắng về 0?");
@@ -612,6 +642,23 @@ function historicalMoneySettings(){
 function nextHistoricalStep(step,win){
   return Number(step)===1&&win?2:1;
 }
+
+function historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode){
+  if(lossCapitalMode&&lossStreak>0){
+    const capitalStage=Math.min(4,lossStreak+1);
+    const multiplier=capitalStage===2?1:capitalStage===3?2:4;
+    return {
+      step,
+      capitalStage,
+      amount:moneySettings.bet1*multiplier
+    };
+  }
+  return {
+    step,
+    capitalStage:lossCapitalMode?1:0,
+    amount:step===2?moneySettings.bet2:moneySettings.bet1
+  };
+}
 function usd24(value,forceSign=false){
   const n=Number(value)||0;
   const sign=forceSign?(n>0?"+":n<0?"-":""):"";
@@ -622,6 +669,8 @@ function buildTimedHistory(){
   const signals=buildTimeSignals();
   const out=[];
   const moneySettings=historicalMoneySettings();
+  const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
+  const maxLosses=lossCapitalMode?4:2;
   let lossStreak=0;
   let waitForWin=false;
   let step=1;
@@ -639,16 +688,25 @@ function buildTimedHistory(){
       continue;
     }
 
+    const plan=historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode);
     const win=s.direction===s.actual;
-    const amount=step===2?moneySettings.bet2:moneySettings.bet1;
-    const delta=win?amount*moneySettings.payout:-amount;
-    out.push({...s,status:win?"WIN":"LOSS",win,step,amount,delta});
+    const delta=win?plan.amount*moneySettings.payout:-plan.amount;
+    out.push({
+      ...s,
+      status:win?"WIN":"LOSS",
+      win,
+      step:plan.step,
+      capitalStage:plan.capitalStage,
+      amount:plan.amount,
+      delta,
+      lossCapitalMode
+    });
 
     if(win){
       lossStreak=0;
     }else{
       lossStreak++;
-      if(lossStreak>=2){
+      if(lossStreak>=maxLosses){
         lossStreak=0;
         waitForWin=true;
       }
@@ -874,7 +932,10 @@ function renderCalendar24h(){
         detail+="mốc "+shortClock(s.sourceT)+" • "+
           (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +10 phút vào lệnh • kết quả đóng ở +15 phút • "+
           (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
-          " • lệnh "+Number(s.step||1)+" • "+usd24(s.amount)+" • "+usd24(s.delta,true);
+          " • "+(s.lossCapitalMode&&Number(s.capitalStage||0)>0
+            ?"vốn "+Number(s.capitalStage)+"/4"
+            :"lệnh "+Number(s.step||1))+
+          " • "+usd24(s.amount)+" • "+usd24(s.delta,true);
       }else if(slot.status==="WAIT_WIN"){
         detail+="nhịp chờ giả lập THẮNG • mở khóa lệnh kế tiếp";
       }else if(slot.status==="WAIT_LOSS"){
@@ -911,6 +972,12 @@ function renderCalendar24h(){
 function render(){
   const calc=compute();
   const info=nextTimeSignalInfo();
+  const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
+  const modeBtn=$("lossCapitalModeBtn");
+  if(modeBtn){
+    modeBtn.textContent=lossCapitalMode?"BẬT":"TẮT";
+    modeBtn.className=lossCapitalMode?"success":"secondary";
+  }
 
   if(info){
     $("sourceFrame").textContent=shortClock(info.sourceStart);
@@ -938,15 +1005,26 @@ function render(){
         ?"red"
         :"";
 
-    const nextAmount=calc.step===2?calc.bet2:calc.bet1;
+    const currentLossStreak=Math.max(0,Number(cloudTradeState?.lossStreak||0));
+    const pendingAmount=Number(info.pending?.amount);
+    const localPlan=historicalTradePlan(calc.step,currentLossStreak,{bet1:calc.bet1,bet2:calc.bet2,payout:calc.payout},lossCapitalMode);
+    const nextAmount=Number.isFinite(pendingAmount)&&pendingAmount>0?pendingAmount:localPlan.amount;
+    const planText=lossCapitalMode
+      ?(currentLossStreak>0
+        ?"Vốn thua "+Math.min(4,currentLossStreak+1)+"/4"
+        :calc.step===2?"Lệnh thắng x2":"Vốn thua 1/4")
+      :"Lệnh "+calc.step;
+
     $("bet").textContent=isWaitingWin
-      ?"Sau 2 lệnh thực tế thua • đang chờ một nhịp giả lập thắng"
+      ?(lossCapitalMode
+        ?"Đã chạm 4 lệnh thua liên tiếp • đang chờ một nhịp giả lập thắng"
+        :"Sau 2 lệnh thực tế thua • đang chờ một nhịp giả lập thắng")
       :inAlertWindow
-        ?"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT"
-        :"Chưa báo lệnh • sẽ báo khoảng "+shortClock(alertAt);
+        ?planText+" • "+nextAmount.toFixed(2)+" USDT"
+        :"Chưa báo lệnh • "+planText+" • "+nextAmount.toFixed(2)+" USDT • sẽ báo khoảng "+shortClock(alertAt);
 
     if(isWaitingWin){
-      $("freshness").textContent="Sau 2 lệnh thực tế thua liên tiếp, tool dừng vào tiền và theo dõi giả lập. Gặp 1 nhịp thắng thì lệnh kế tiếp mới hoạt động lại.";
+      $("freshness").textContent="Tool đang dừng vào tiền và theo dõi giả lập. Gặp 1 nhịp thắng thì lệnh kế tiếp mới hoạt động lại.";
     }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(direction==="G"?"XANH":"ĐỎ")+" → đặt ở "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
