@@ -39,8 +39,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Cảnh báo 30 giây</b>
-      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp ở 30 giây cuối</div>
+      <b>Cảnh báo 1 phút</b>
+      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp ở 1 phút cuối</div>
     </div>
     <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
   </div>
@@ -218,7 +218,7 @@ let audioContext=null;
 let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
 let alertsEnabled=false;
 let wakeLock=null;
-let prepare30Start=Number(sessionStorage.getItem("prepare_30_start")||0);
+let prepare60Start=Number(sessionStorage.getItem("prepare_60_start")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
 let historyLoading=false;
@@ -306,7 +306,7 @@ function hideTradeAlert(){
   $("tradeAlert").className="alertbox";
 }
 function firePrepareAlert(liveStart,remain,stage){
-  if(stage!==30||prepare30Start===liveStart)return;
+  if(stage!==60||prepare60Start===liveStart)return;
   const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
   if(pauseUntil>Date.now()/1000)return;
 
@@ -315,13 +315,13 @@ function firePrepareAlert(liveStart,remain,stage){
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(currentLiveStart!==liveStart)return;
 
-  prepare30Start=liveStart;
-  sessionStorage.setItem("prepare_30_start",String(liveStart));
+  prepare60Start=liveStart;
+  sessionStorage.setItem("prepare_60_start",String(liveStart));
 
   const buyText=livePattern.pred==="G"?"XANH":"ĐỎ";
   showTradeAlert(
     "prepare",
-    "⚠️ CÒN 30 GIÂY • VÀO LỆNH PHIÊN SAU",
+    "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
     livePattern.group+" • "+patternIcons(livePattern.code)+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
   );
   threeSecondAlert("prepare");
@@ -817,7 +817,7 @@ function alertTick(){
   const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
   const end=liveMarket.end||start+INTERVAL;
   const remain=Math.max(0,Math.ceil(end-now));
-  if(remain<=30&&remain>0)firePrepareAlert(start,remain,30);
+  if(remain<=60&&remain>30)firePrepareAlert(start,remain,60);
   if(now>=end&&start>0)finalizeLiveRound(start);
 }
 function renderLive(){
@@ -983,7 +983,7 @@ function render(){
   if(paused){
     $("freshness").textContent="Đã có 2 lệnh thua liên tiếp • tạm dừng báo lệnh đến "+shortClock(pauseUntil)+".";
   }else if(livePattern?.pred){
-    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • khớp 8 nhóm mới • 30 giây cuối sẽ báo MUA "+(livePattern.pred==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
+    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • khớp 8 nhóm mới • 1 phút cuối sẽ báo MUA "+(livePattern.pred==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
   }else if(livePattern){
     $("freshness").textContent="Nhóm hiện tại "+patternIcons(livePattern.code)+" không thuộc 8 nhóm mới.";
   }else{
