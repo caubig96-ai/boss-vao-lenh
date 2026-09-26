@@ -1,17 +1,19 @@
 const API="https://api.predict.fun";
 const INTERVAL=300;
-const PATTERN_VERSION="image-8-v1";
+const PATTERN_VERSION="image-8-prefix3-v2";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
+const PATTERN_VARIANTS={
+  RGRR:"R",RGRG:"R",
+  GRGR:"G",GRGG:"G",
+  RRGR:"R",RRGG:"R",
+  GGRR:"G",GGRG:"G"
+};
 const PATTERNS={
-  RGRR:"R",
-  GRGR:"G",
-  RRGR:"R",
-  GGRR:"G",
-  RGRG:"R",
-  GRGG:"G",
-  RRGG:"R",
-  GGRG:"G"
+  RGR:"R",
+  GRG:"G",
+  RRG:"R",
+  GGR:"G"
 };
 
 function numericEnv(value,fallback){
@@ -276,14 +278,26 @@ function contiguous(arr){
 function settledSignals(rounds){
   const byTime=new Map(rounds.map(x=>[x.t,x]));
   const out=[];
-  for(let i=3;i<rounds.length;i++){
-    const w=rounds.slice(i-3,i+1);
+  for(let i=2;i<rounds.length;i++){
+    const w=rounds.slice(i-2,i+1);
     if(!contiguous(w))continue;
     const code=w.map(x=>x.c).join("");
     const pred=PATTERNS[code];
     if(!pred)continue;
-    const actual=byTime.get(w[3].t+INTERVAL)?.c||null;
-    if(actual)out.push({pattern:code,pred,actual,win:pred===actual,sourceT:w[3].t});
+
+    // Candle 4 is the live/current frame and is intentionally ignored for color selection.
+    const live=byTime.get(w[2].t+INTERVAL)||null;
+    const actual=byTime.get(w[2].t+2*INTERVAL)?.c||null;
+    if(live&&actual){
+      out.push({
+        pattern:code,
+        pred,
+        actual,
+        win:pred===actual,
+        sourceT:live.t,
+        targetT:live.t+INTERVAL
+      });
+    }
   }
   return out;
 }
@@ -474,14 +488,10 @@ async function maybePrepare(env,payload,nowSec){
     liveStart-2*INTERVAL,
     liveStart-INTERVAL
   ].map(t=>byTime.get(t));
-  if(closed3.some(x=>!x))return;
+  if(closed3.some(x=>!x)||!contiguous(closed3))return;
 
-  let liveRaw=null;
-  try{liveRaw=await apiCategory(liveStart,env.PREDICT_API_KEY)}catch(_){return}
-  const liveColor=liveColorFromCategory(liveRaw);
-  if(!liveColor)return;
-
-  const code=closed3.map(x=>x.c).join("")+liveColor;
+  // Only the 3 closed candles decide the base color. The current live candle is ignored.
+  const code=closed3.map(x=>x.c).join("");
   const d=decisionFor(code,rounds);
   if(!d.allow||!d.direction)return;
 
@@ -540,7 +550,7 @@ async function maybePrepare(env,payload,nowSec){
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
-    "4 nến: <b>"+candleIcons(pending.pattern)+"</b>\n"+
+    "3 nến quyết định: <b>"+candleIcons(pending.pattern)+"</b>\n"+
     statsLine+
     "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
@@ -637,7 +647,7 @@ export default {
         ok:true,
         service:"Boss 8 Nhom Cloud",
         patternVersion:PATTERN_VERSION,
-        patternCount:Object.keys(PATTERNS).length,
+        patternCount:Object.keys(PATTERN_VARIANTS).length,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
