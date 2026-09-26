@@ -52,6 +52,7 @@ function freshTradeState(day){
     losses:0,
     lossStreak:0,
     pauseUntil:0,
+    balanceBase:null,
     pending:null,
     unsentResult:null,
     completed:[],
@@ -70,6 +71,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
   if(!Number.isFinite(Number(state.pauseUntil)))state.pauseUntil=0;
+  if(state.balanceBase!==null&&!Number.isFinite(Number(state.balanceBase)))state.balanceBase=null;
   if(!Array.isArray(state.completed))state.completed=[];
   if(state.unsentResult===undefined)state.unsentResult=null;
   if(!state.day)state.day=dayTextFromSeconds(nowSec);
@@ -427,6 +429,7 @@ async function settlePreviousOrder(env,payload,nowSec,state){
 
   const nextStep=nextStepAfter(pending.step,win);
   state.step=nextStep;
+  const balanceBase=state.balanceBase===null?settings.startBalance:Number(state.balanceBase);
 
   const result={
     id:pending.id,
@@ -439,6 +442,7 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     win,
     delta,
     pnlAfter:Number(state.pnl||0),
+    balanceAfter:balanceBase+Number(state.pnl||0),
     winsAfter:Number(state.wins||0),
     lossesAfter:Number(state.losses||0),
     nextStep,
@@ -535,12 +539,12 @@ async function maybePrepare(env,payload,nowSec){
     "Trong 100 lệnh: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n";
 
   await sendTelegram(env,
-    "🚨 <b>CÒN ~1 PHÚT • VÀO LỆNH PHIÊN SAU</b>\n"+
-    "4 nến nhận dạng: <b>"+candleIcons(pending.pattern)+"</b>\n"+
+    "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
+    "4 nến: <b>"+candleIcons(pending.pattern)+"</b>\n"+
     statsLine+
-    buy+"\n"+
+    "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
-    "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>"
+    "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
   );
 
   pending.entrySent=true;
@@ -564,18 +568,19 @@ function resultMessagePart(result,settings){
   const title=result.win?"✅ <b>THẮNG LỆNH</b>":"❌ <b>THUA LỆNH</b>";
   const actualText=result.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
   const entered=result.direction==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const balance=settings.startBalance+Number(result.pnlAfter||0);
+  const balance=Number.isFinite(Number(result.balanceAfter))
+    ?Number(result.balanceAfter)
+    :settings.startBalance+Number(result.pnlAfter||0);
   const pauseLine=result.pauseTriggered
     ?"\n⏸ <b>TẠM DỪNG BÁO LỆNH 15 PHÚT</b> • chạy lại sau "+timeText(result.pauseUntilAfter)
     :"";
 
   return (
     title+"\n"+
-    "Phiên: <b>"+frameText(result.targetStart)+"</b>\n"+
+    "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
-    "Lãi/lỗ lệnh: <b>"+money(result.delta)+"</b>\n"+
-    "Lãi/lỗ hôm nay: <b>"+money(result.pnlAfter)+"</b>\n"+
-    "Thắng/Thua hôm nay: <b>"+Number(result.winsAfter)+"/"+Number(result.lossesAfter)+"</b>\n"+
+    "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
+    "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
     pauseLine
   );
@@ -622,7 +627,8 @@ export default {
     if(req.method==="OPTIONS"){
       return new Response(null,{headers:{
         ...JSON_HEADERS,
-        "access-control-allow-methods":"GET,OPTIONS"
+        "access-control-allow-methods":"GET,POST,OPTIONS",
+        "access-control-allow-headers":"content-type"
       }});
     }
 
@@ -661,18 +667,36 @@ export default {
       return json({
         ...state,
         settings,
-        balance:settings.startBalance+Number(state.pnl||0),
+        balance:(state.balanceBase===null?settings.startBalance:Number(state.balanceBase))+Number(state.pnl||0),
         total:Number(state.wins||0)+Number(state.losses||0)
       });
     }
 
+
+    if(u.pathname==="/trade-reset"){
+      if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
+      let body={};
+      try{body=await req.json()}catch(_){}
+      if(body?.confirm!=="RESET")return json({ok:false,error:"Thiếu xác nhận RESET"},400);
+
+      const nowSec=Math.floor(Date.now()/1000);
+      const state=freshTradeState(dayTextFromSeconds(nowSec));
+      state.balanceBase=0;
+      await writeTradeState(env,state);
+
+      return json({
+        ok:true,
+        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và thời gian tạm dừng về 0.",
+        state
+      });
+    }
 
     if(u.pathname==="/sync"){
       try{return json(await sync(env))}
       catch(e){return json({ok:false,error:String(e.message||e)},500)}
     }
 
-    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/sync"]});
+    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/trade-reset","/sync"]});
   },
 
   async scheduled(controller,env,ctx){
