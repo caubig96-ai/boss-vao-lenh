@@ -32,7 +32,8 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("sourceStartForTarget(t)", self.source)
         self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&state.lastResultWin===false", self.worker)
+        self.assertIn("!!state.reverseAfterSecondLossActive", self.worker)
+        self.assertIn("state.lastResultWin===false", self.worker)
         self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
 
     def test_one_minute_telegram_alert(self):
