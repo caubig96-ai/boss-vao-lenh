@@ -25,7 +25,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("const ENTRY_DELAY=600", self.source)
         self.assertIn("const SOURCE_STEP=600", self.worker)
         self.assertIn("const ENTRY_DELAY=600", self.worker)
-        self.assertIn('STRATEGY_VERSION="even-10m-entry10-close15-v2"', self.worker)
+        self.assertIn('STRATEGY_VERSION="even-10m-2loss-skip2-waitwin-v3"', self.worker)
 
     def test_source_color_is_used_15_minutes_later(self):
         self.assertIn("sourceStartForTarget", self.source)
@@ -49,17 +49,20 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
         self.assertIn("17:00 -> order frame 17:10-17:15 -> alert around 17:09", self.worker)
 
-    def test_loss_recovery_waits_for_shadow_win_and_two_losses_skip_two_beats(self):
+    def test_first_loss_continues_and_two_losses_skip_two_then_wait_for_win(self):
         self.assertIn("waitForWin:false", self.worker)
+        self.assertIn("One real loss alone does not pause or wait", self.worker)
         self.assertIn("state.waitForWin=true", self.worker)
         self.assertIn("advanceWaitForWin", self.worker)
         self.assertIn("shadowSignalAt", self.worker)
-        self.assertIn("CHỜ MỘT NHỊP GIẢ LẬP THẮNG", self.worker)
+        self.assertIn("Sau 2 nhịp nghỉ", self.worker)
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.source)
         self.assertIn("SKIP_BEATS_AFTER_TWO_LOSSES=2", self.worker)
         self.assertIn("skipRemaining=SKIP_BEATS_AFTER_TWO_LOSSES", self.source)
         self.assertIn("state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
         self.assertIn("BỎ 2 NHỊP KẾ TIẾP", self.worker)
+        self.assertIn("waitAfterSkips=true", self.source)
+        self.assertIn("if(skipRemaining===0&&waitAfterSkips)", self.source)
         self.assertIn('status:shadowWin?"WAIT_WIN":"WAIT_LOSS"', self.source)
         self.assertIn('d.textContent="C✓"', self.source)
         self.assertIn('d.textContent="C×"', self.source)
