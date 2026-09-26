@@ -28,13 +28,12 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertNotIn("4 nhóm × 4 mẫu", self.source)
         self.assertNotIn("16 mô hình 5 nến", self.source)
 
-    def test_prepare_alert_happens_twice_for_three_seconds(self):
-        self.assertIn("remain<=60&&remain>30", self.source)
+    def test_prepare_alert_fires_once_at_30_seconds_for_next_frame(self):
+        self.assertNotIn("remain<=60&&remain>30", self.source)
         self.assertIn("remain<=30&&remain>0", self.source)
-        self.assertIn("CHUẨN BỊ VÀO LỆNH", self.source)
-        self.assertIn("CÒN 30 GIÂY", self.source)
+        self.assertIn("CÒN 30 GIÂY • PHIÊN SAU", self.source)
+        self.assertIn("phiên sau dự kiến MUA", self.source)
         self.assertIn("threeSecondAlert", self.source)
-        self.assertIn("prepare_60_start", self.source)
         self.assertIn("prepare_30_start", self.source)
 
     def test_final_signal_uses_closed_live_round(self):
@@ -85,7 +84,7 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("navigator.vibrate", self.source)
 
     def test_ios_requires_manual_audio_activation(self):
-        self.assertIn("CHẠM ĐỂ KÍCH HOẠT", self.source)
+        self.assertIn("BẬT CẢNH BÁO", self.source)
         self.assertIn("AudioContext", self.source)
 
 
