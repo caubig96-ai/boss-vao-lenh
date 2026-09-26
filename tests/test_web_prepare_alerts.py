@@ -51,7 +51,7 @@ class WebTimeStrategyTests(unittest.TestCase):
 
     def test_first_loss_continues_and_two_losses_wait_for_shadow_win(self):
         self.assertIn("waitForWin:false", self.worker)
-        self.assertIn("One real loss alone does not pause or wait", self.worker)
+        self.assertIn("Continue normally until the selected mode reaches its loss cap", self.worker)
         self.assertIn("Normal mode waits after 2 consecutive real losses", self.worker)
         self.assertIn("state.waitForWin=true", self.worker)
         self.assertIn("advanceWaitForWin", self.worker)
@@ -99,8 +99,8 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("function historicalMoneySettings", self.source)
         self.assertIn("function nextHistoricalStep", self.source)
         self.assertIn("Number(step)===1&&win?2:1", self.source)
-        self.assertIn("const amount=step===2?moneySettings.bet2:moneySettings.bet1", self.source)
-        self.assertIn("const delta=win?amount*moneySettings.payout:-amount", self.source)
+        self.assertIn("const plan=historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode)", self.source)
+        self.assertIn("const delta=win?plan.amount*moneySettings.payout:-plan.amount", self.source)
         self.assertIn('id="calendar24GrossWin"', self.source)
         self.assertIn('id="calendar24GrossLoss"', self.source)
         self.assertIn('id="calendar24Net"', self.source)
