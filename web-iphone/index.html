@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0e1217">
+<meta name="theme-color" content="#0e1217">\n<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Boss 5 Nến — iPhone</title>
+<title>Boss 12 Mẫu — iPhone</title>
 <style>
 :root{color-scheme:dark;--bg:#0e1217;--panel:#171d24;--line:#29323d;--txt:#f4f7f9;--muted:#96a3b0;--g:#09c878;--r:#ff4b4b;--b:#4ca5ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
@@ -29,7 +29,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss 5 Nến</h1><div class="sub">Boss Cloud • dữ liệu lịch sử tự đồng bộ kể cả khi iPhone khóa màn hình</div></div>
+  <div><h1>Boss 12 Mẫu</h1><div class="sub">BẢN 12 MẪU MỚI • 26/09 11:21 • lịch 24h • Boss Cloud</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -193,7 +193,7 @@ const PATTERN_GROUPS=[
   {name:"Nhóm 2",items:[["RGRRR","R"],["GRGGR","R"],["RRGRR","R"],["GGRGR","R"]]},
   {name:"Nhóm 3",items:[["RGRRG","G"],["GRGGG","G"],["RRGRG","G"],["GGRGG","G"]]}
 ];
-const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));
+const PATTERNS=Object.fromEntries(PATTERN_GROUPS.flatMap(group=>group.items));\nconst PATTERN_VERSION="image-12-v1";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
