@@ -75,7 +75,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('status="WAIT"', self.source)
         self.assertIn('d.textContent="B"', self.source)
         self.assertNotIn('d.textContent="·"', self.source)
-        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB', self.source)
+        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB', self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
