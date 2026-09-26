@@ -46,6 +46,7 @@ function freshTradeState(day){
     wins:0,
     losses:0,
     pending:null,
+    completed:[],
     updatedAt:new Date().toISOString()
   };
 }
@@ -59,6 +60,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
+  if(!Array.isArray(state.completed))state.completed=[];
   if(!state.day)state.day=dayTextFromSeconds(nowSec);
   return state;
 }
@@ -456,6 +458,21 @@ async function maybeSettleOrder(env,payload,nowSec){
 
   pending.resultSent=true;
   pending.resultSentAt=new Date().toISOString();
+
+  state.completed.push({
+    id:pending.id,
+    targetStart:Number(pending.targetStart),
+    pattern:pending.pattern,
+    direction:pending.direction,
+    actual:s.actual,
+    step:Number(pending.step),
+    amount:Number(pending.amount),
+    win:!!s.win,
+    delta:Number(s.delta),
+    pnlAfter:Number(s.pnlAfter),
+    settledAt:s.settledAt
+  });
+  state.completed=state.completed.slice(-200);
   state.pending=null;
 
   const currentDay=dayTextFromSeconds(nowSec);
@@ -641,12 +658,24 @@ export default {
       return json(await readHistory(env));
     }
 
+    if(u.pathname==="/trade-state"){
+      const state=await readTradeState(env);
+      const settings=tradeSettings(env);
+      return json({
+        ...state,
+        settings,
+        balance:settings.startBalance+Number(state.pnl||0),
+        total:Number(state.wins||0)+Number(state.losses||0)
+      });
+    }
+
+
     if(u.pathname==="/sync"){
       try{return json(await sync(env))}
       catch(e){return json({ok:false,error:String(e.message||e)},500)}
     }
 
-    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/sync"]});
+    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/sync"]});
   },
 
   async scheduled(controller,env,ctx){
