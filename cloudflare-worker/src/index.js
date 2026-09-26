@@ -5,7 +5,7 @@ const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-con
 const SOURCE_STEP=600;       // 00,10,20,30,40,50
 const ENTRY_DELAY=600;       // order candle starts 10 minutes after source and closes at +15
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-entry10-close15-v2";
+const STRATEGY_VERSION="even-10m-2loss-skip2-waitwin-v3";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -463,23 +463,24 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     state.lossStreak=Number(state.lossStreak||0)+1;
 
     if(state.lossStreak>=2){
-      // Two consecutive REAL entered losses: skip exactly two order beats,
-      // then resume with the next eligible real order.
+      // First real loss continues normally.
+      // Only two consecutive REAL losses trigger recovery:
+      // skip 2 order beats, then wait for one hypothetical win,
+      // then enter the following real order.
       state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES;
       state.lossStreak=0;
-      state.waitForWin=false;
-      state.waitAfterTarget=0;
-      state.waitLastCheckedTarget=0;
-      state.waitWinTarget=0;
-      skipTriggered=true;
-    }else{
-      // After the first real loss, do not enter another real order yet.
-      // Watch hypothetical signals until one wins, then enter the following signal.
       state.waitForWin=true;
       state.waitAfterTarget=Number(pending.targetStart);
       state.waitLastCheckedTarget=Number(pending.targetStart);
       state.waitWinTarget=0;
+      skipTriggered=true;
       waitTriggered=true;
+    }else{
+      // One real loss alone does not pause or wait.
+      state.waitForWin=false;
+      state.waitAfterTarget=0;
+      state.waitLastCheckedTarget=0;
+      state.waitWinTarget=0;
     }
   }
 
@@ -561,12 +562,19 @@ async function maybePrepare(env,payload,nowSec){
     if(Number(state.lastSkippedTarget||0)!==targetStart){
       state.skipSignals=Math.max(0,Number(state.skipSignals||0)-1);
       state.lastSkippedTarget=targetStart;
+
+      // The fixed 2 skipped beats are pause-only beats.
+      // Start the hypothetical win check AFTER both skipped beats.
+      if(state.waitForWin){
+        state.waitAfterTarget=targetStart;
+        state.waitLastCheckedTarget=targetStart;
+      }
       await writeTradeState(env,state);
     }
     return;
   }
 
-  // After one real loss, watch skipped/hypothetical signals.
+  // After the fixed 2-beat pause, watch hypothetical signals.
   // The first hypothetical win unlocks the NEXT order opportunity.
   let resumedFromWaitTarget=0;
   if(state.waitForWin){
@@ -653,7 +661,7 @@ function resultMessagePart(result,settings){
     ?"\n⏸ <b>THUA 2 LỆNH LIÊN TIẾP • BỎ 2 NHỊP KẾ TIẾP</b>"
     :"";
   const waitLine=result.waitTriggered
-    ?"\n⏳ <b>THUA 1 LỆNH • CHỜ MỘT NHỊP GIẢ LẬP THẮNG</b> rồi mới vào lệnh kế tiếp."
+    ?"\n⏳ Sau 2 nhịp nghỉ, <b>CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại."
     :"";
 
   return (
@@ -725,7 +733,7 @@ export default {
         strategyVersion:STRATEGY_VERSION,
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
-        waitForWinAfterOneLoss:true,
+        waitForWinAfterTwoLossesAndSkip2:true,
         skipBeatsAfterTwoLosses:SKIP_BEATS_AFTER_TWO_LOSSES,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
