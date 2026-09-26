@@ -431,7 +431,7 @@ async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
   const remain=liveStart+INTERVAL-nowSec;
-  if(remain>36||remain<=5)return;
+  if(remain>70||remain<=45)return;
 
   const rounds=internalRounds(payload);
   const byTime=new Map(rounds.map(x=>[x.t,x]));
@@ -504,7 +504,7 @@ async function maybePrepare(env,payload,nowSec){
     :"";
 
   await sendTelegram(env,
-    "🚨 <b>CÒN ~30 GIÂY • VÀO LỆNH PHIÊN SAU</b>\n"+
+    "🚨 <b>CÒN ~1 PHÚT • VÀO LỆNH PHIÊN SAU</b>\n"+
     "4 nến nhận dạng: <b>"+candleIcons(pending.pattern)+"</b>\n"+
     buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
@@ -522,17 +522,14 @@ function sleep(ms){
   return new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
 }
 
-async function schedulePrepareAt30(env,payload){
+async function schedulePrepareAt60(env,payload){
   const nowSec=Math.floor(Date.now()/1000);
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
   const remain=liveStart+INTERVAL-nowSec;
 
-  // The minute cron normally reaches this branch with about 60 seconds left.
-  // Keep the invocation alive until roughly 30 seconds remain.
-  if(remain>70||remain<=5)return;
-  const waitSeconds=Math.max(0,remain-30);
-  if(waitSeconds>0)await sleep(waitSeconds*1000);
-  await maybePrepare(env,payload,Math.floor(Date.now()/1000));
+  // Cron runs every minute; send once when the active 5-minute frame has about 60 seconds left.
+  if(remain>70||remain<=45)return;
+  await maybePrepare(env,payload,nowSec);
 }
 
 function resultMessagePart(result,settings){
@@ -588,7 +585,7 @@ async function scheduledTick(env){
 
   await sendReadyOnce(env).catch(()=>{});
   await maybeSendSettlement(env,payload,nowSec).catch(()=>{});
-  await schedulePrepareAt30(env,payload).catch(()=>{});
+  await schedulePrepareAt60(env,payload).catch(()=>{});
 }
 
 export default {
