@@ -9,6 +9,74 @@ const PATTERNS={
   RGRRG:"R",GRGGG:"R",RRGRG:"R",GGRGG:"G"
 };
 
+function numericEnv(value,fallback){
+  const n=Number(value);
+  return Number.isFinite(n)?n:fallback;
+}
+
+function tradeSettings(env){
+  const bet1=Math.max(0,numericEnv(env.CLOUD_BET1,1));
+  const bet2=Math.max(0,numericEnv(env.CLOUD_BET2,2));
+  const payoutPct=Math.max(0,numericEnv(env.CLOUD_PAYOUT_PERCENT,80));
+  const startBalance=numericEnv(env.CLOUD_START_BALANCE,0);
+  return {bet1,bet2,payout:payoutPct/100,payoutPct,startBalance};
+}
+
+function money(value){
+  const n=Number(value)||0;
+  return (n>=0?"+":"")+n.toFixed(2)+" USDT";
+}
+
+function amountText(value){
+  return Number(value||0).toFixed(2)+" USDT";
+}
+
+function dayTextFromSeconds(ts){
+  return new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Ho_Chi_Minh",
+    year:"numeric",month:"2-digit",day:"2-digit"
+  }).format(new Date(ts*1000));
+}
+
+function freshTradeState(day){
+  return {
+    day,
+    step:1,
+    pnl:0,
+    wins:0,
+    losses:0,
+    pending:null,
+    updatedAt:new Date().toISOString()
+  };
+}
+
+async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
+  const raw=await env.BOSS_KV.get("telegram:trade_state");
+  let state=null;
+  try{state=raw?JSON.parse(raw):null}catch(_){}
+  if(!state||typeof state!=="object")state=freshTradeState(dayTextFromSeconds(nowSec));
+  if(!Number.isFinite(Number(state.step)))state.step=1;
+  if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
+  if(!Number.isFinite(Number(state.wins)))state.wins=0;
+  if(!Number.isFinite(Number(state.losses)))state.losses=0;
+  if(!state.day)state.day=dayTextFromSeconds(nowSec);
+  return state;
+}
+
+async function writeTradeState(env,state){
+  state.updatedAt=new Date().toISOString();
+  await env.BOSS_KV.put("telegram:trade_state",JSON.stringify(state));
+  return state;
+}
+
+function nextStepAfter(step,win){
+  return Number(step)===1&&win?2:1;
+}
+
+function amountForStep(settings,step){
+  return Number(step)===2?settings.bet2:settings.bet1;
+}
+
 function json(data,status=200){
   return new Response(JSON.stringify(data),{status,headers:JSON_HEADERS});
 }
@@ -310,6 +378,78 @@ async function sendReadyOnce(env){
   await env.BOSS_KV.put(key,new Date().toISOString());
 }
 
+
+async function maybeSettleOrder(env,payload,nowSec){
+  if(!telegramConfigured(env))return;
+
+  const state=await readTradeState(env,nowSec);
+  const pending=state.pending;
+  if(!pending)return;
+
+  const rounds=internalRounds(payload);
+  const actual=rounds.find(x=>x.t===Number(pending.targetStart))?.c||null;
+  if(!actual&&!pending.settlement)return;
+
+  const settings=tradeSettings(env);
+
+  if(!pending.settlement){
+    const win=String(pending.direction)===actual;
+    const amount=Number(pending.amount)||0;
+    const payout=Number(pending.payoutRate);
+    const effectivePayout=Number.isFinite(payout)?payout:settings.payout;
+    const delta=win?amount*effectivePayout:-amount;
+
+    state.pnl=Number(state.pnl||0)+delta;
+    if(win)state.wins=Number(state.wins||0)+1;
+    else state.losses=Number(state.losses||0)+1;
+
+    const nextStep=nextStepAfter(pending.step,win);
+    state.step=nextStep;
+    pending.settlement={
+      win,
+      actual,
+      delta,
+      pnlAfter:state.pnl,
+      winsAfter:state.wins,
+      lossesAfter:state.losses,
+      nextStep,
+      settledAt:new Date().toISOString()
+    };
+    await writeTradeState(env,state);
+  }
+
+  const s=pending.settlement;
+  if(pending.resultSent)return;
+
+  const resultTitle=s.win?"✅ <b>THẮNG LỆNH</b>":"❌ <b>THUA LỆNH</b>";
+  const actualText=s.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const nextAmount=amountForStep(settings,s.nextStep);
+  const balance=settings.startBalance+Number(s.pnlAfter||0);
+
+  await sendTelegram(env,
+    resultTitle+"\n"+
+    "<b>Lệnh "+Number(pending.step)+"</b> • "+amountText(pending.amount)+"\n"+
+    "Đã vào: "+(pending.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" • Kết quả: "+actualText+"\n"+
+    "Lãi/lỗ lệnh: <b>"+money(s.delta)+"</b>\n"+
+    "Lãi/lỗ hôm nay: <b>"+money(s.pnlAfter)+"</b>\n"+
+    "Thắng/Thua hôm nay: <b>"+Number(s.winsAfter)+"/"+Number(s.lossesAfter)+"</b>\n"+
+    "Số dư theo dõi: <b>"+money(balance)+"</b>\n"+
+    "Lệnh tiếp theo: <b>Lệnh "+Number(s.nextStep)+" • "+amountText(nextAmount)+"</b>"
+  );
+
+  pending.resultSent=true;
+  pending.resultSentAt=new Date().toISOString();
+  state.pending=null;
+
+  const currentDay=dayTextFromSeconds(nowSec);
+  if(state.day!==currentDay){
+    const cleared=freshTradeState(currentDay);
+    await writeTradeState(env,cleared);
+  }else{
+    await writeTradeState(env,state);
+  }
+}
+
 async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
@@ -356,8 +496,8 @@ async function maybeFinal(env,payload,nowSec){
 
   let five=null;
   for(let end=rounds.length-1;end>=4;end--){
-    const w=rounds.slice(end-4,end+1);
-    if(contiguous(w)){five=w;break}
+    const w5=rounds.slice(end-4,end+1);
+    if(contiguous(w5)){five=w5;break}
   }
   if(!five)return;
 
@@ -371,17 +511,53 @@ async function maybeFinal(env,payload,nowSec){
   const d=decisionFor(code,rounds);
   if(!d.allow||!d.direction)return;
 
-  const marker=await env.BOSS_KV.get("telegram:last_final");
-  if(String(marker||"")===String(targetStart))return;
+  const currentDay=dayTextFromSeconds(targetStart);
+  let state=await readTradeState(env,nowSec);
 
-  const buy=d.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
+  if(state.day!==currentDay&&!state.pending){
+    state=freshTradeState(currentDay);
+  }
+
+  if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
+
+  const settings=tradeSettings(env);
+
+  if(!state.pending){
+    const step=Number(state.step)===2?2:1;
+    const amount=amountForStep(settings,step);
+    state.pending={
+      id:String(targetStart)+"-"+code,
+      day:currentDay,
+      targetStart,
+      pattern:code,
+      direction:d.direction,
+      mode:d.mode,
+      rate:Number(d.rate||0),
+      step,
+      amount,
+      payoutRate:settings.payout,
+      entrySent:false,
+      createdAt:new Date().toISOString()
+    };
+    await writeTradeState(env,state);
+  }
+
+  const pending=state.pending;
+  if(pending.entrySent)return;
+
+  const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   await sendTelegram(env,
     "🚨 <b>BOSS 5 NẾN</b>\n"+
     buy+"\n"+
-    "Mẫu: <b>"+code+"</b> • "+modeText(d.mode)+"\n"+
-    "Chỉ số: <b>"+Number(d.rate||0).toFixed(1)+"%</b>\n"+
-    "Vòng: <b>"+frameText(targetStart)+"</b>"
+    "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
+    "Mẫu: <b>"+pending.pattern+"</b> • "+modeText(pending.mode)+"\n"+
+    "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>\n"+
+    "Vòng: <b>"+frameText(pending.targetStart)+"</b>"
   );
+
+  pending.entrySent=true;
+  pending.entrySentAt=new Date().toISOString();
+  await writeTradeState(env,state);
   await env.BOSS_KV.put("telegram:last_final",String(targetStart));
 }
 
@@ -400,6 +576,7 @@ async function scheduledTick(env){
   }
 
   await sendReadyOnce(env).catch(()=>{});
+  await maybeSettleOrder(env,payload,nowSec).catch(()=>{});
   await maybePrepare(env,payload,nowSec).catch(()=>{});
   await maybeFinal(env,payload,nowSec).catch(()=>{});
 }
@@ -422,6 +599,7 @@ export default {
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
+        moneySettings:tradeSettings(env),
         time:new Date().toISOString()
       });
     }
