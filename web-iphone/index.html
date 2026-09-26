@@ -73,11 +73,12 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   </div>
   <div class="row" style="margin-top:9px;background:#10161c;border-radius:12px;padding:11px">
     <div>
-      <b>Đảo màu sau khi Lệnh 2 thua</b>
-      <div class="label">Lệnh 1–2 luôn đúng công thức màu đã cài • chỉ khi Lệnh 2 thua mới kích hoạt: lệnh trước thua → đảo màu, gặp lệnh thắng → quay về công thức màu gốc</div>
+      <b>AUTO STRATEGY 24H</b>
+      <div class="label">Quét 24 giờ nến đã đóng • 18 giờ tạo công thức • 6 giờ kiểm tra • tự chọn công thức có tỷ lệ thắng kiểm tra cao nhất</div>
     </div>
-    <button id="reverseColorModeBtn" class="secondary" onclick="toggleReverseColorMode()">ĐANG TẢI</button>
+    <button id="autoStrategyModeBtn" class="secondary" onclick="toggleAutoStrategyMode()">ĐANG TẢI</button>
   </div>
+  <div id="autoStrategyInfo" class="note" style="margin-top:7px">Đang phân tích công thức...</div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -143,7 +144,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. Với chuỗi vốn $1 → $1 → $2 → $4, Lệnh 1 và Lệnh 2 luôn theo đúng công thức màu đã cài. Chỉ khi Lệnh 2 thua mới kích hoạt chế độ đặc biệt: lệnh trước thua thì lệnh sau đảo màu; hễ có lệnh thắng thì quay về công thức màu gốc.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. AUTO STRATEGY thử nhiều cách chọn màu trên 24 giờ gần nhất; “đảo sau Lệnh 2 thua” chỉ là một ứng viên, không còn là luật bắt buộc.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -181,6 +182,7 @@ let finalizingStart=0;
 let historyLoading=false;
 let cloudTradeState=null;
 let cloudMoneySettings=null;
+let autoStrategySnapshot=null;
 
 async function enableAlerts(){
   try{
@@ -254,13 +256,13 @@ function firePrepareAlert(liveStart,remain,stage){
 
   const sourceColor=roundColorAt(sourceStart);
   if(!sourceColor)return;
-  const reverseColorMode=!!cloudTradeState?.reverseColorMode;
-  const reverseThisOrder=
-    reverseColorMode &&
-    !!cloudTradeState?.reverseAfterSecondLossActive &&
-    cloudTradeState?.lastResultWin===false;
-  const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
+  const autoMode=cloudTradeState?.autoStrategyMode!==false;
+  const samePending=pending&&Number(pending.targetStart)===targetStart?pending:null;
+  const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===targetStart?autoStrategySnapshot:null;
+  if(autoMode&&!samePending&&!sameAuto)return;
+  const direction=samePending?.direction||(autoMode?sameAuto?.direction:sourceColor);
   if(!direction)return;
+  const strategyName=samePending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
 
   prepare60Start=targetStart;
   sessionStorage.setItem("prepare_60_start",String(targetStart));
@@ -270,7 +272,7 @@ function firePrepareAlert(liveStart,remain,stage){
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
     "Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ")+
-    (reverseThisOrder?" • SAU LỆNH 2 THUA • LỆNH TRƯỚC THUA → ĐẢO MÀU":"")+
+    (autoMode?" • AUTO: "+strategyName:"")+
     " • MUA "+buyText+" • phiên "+fmtFrame(targetStart)
   );
   threeSecondAlert("prepare");
@@ -418,6 +420,22 @@ async function fetchTradeState(){
   }
 }
 
+async function fetchAutoStrategy(){
+  try{
+    const targetStart=upcomingTargetStart();
+    if(targetStart===null)return null;
+    const r=await fetch(CLOUD+"/auto-strategy?target="+targetStart,{cache:"no-store"});
+    if(!r.ok)throw new Error("Boss Cloud auto-strategy HTTP "+r.status);
+    const j=await r.json();
+    if(j?.ok===false)throw new Error(j.error||"AUTO STRATEGY lỗi");
+    autoStrategySnapshot=j;
+    render();
+    return j;
+  }catch(e){
+    return null;
+  }
+}
+
 async function toggleLossCapitalMode(){
   const btn=$("lossCapitalModeBtn");
   const current=!!cloudTradeState?.lossCapitalMode;
@@ -440,24 +458,24 @@ async function toggleLossCapitalMode(){
     if(btn)btn.disabled=false;
   }
 }
-async function toggleReverseColorMode(){
-  const btn=$("reverseColorModeBtn");
-  const current=!!cloudTradeState?.reverseColorMode;
+async function toggleAutoStrategyMode(){
+  const btn=$("autoStrategyModeBtn");
+  const current=cloudTradeState?.autoStrategyMode!==false;
   if(btn){btn.disabled=true;btn.textContent="ĐANG LƯU...";}
   try{
     const r=await fetch(CLOUD+"/trade-mode",{
       method:"POST",
       cache:"no-store",
       headers:{"content-type":"application/json"},
-      body:JSON.stringify({reverseColorMode:!current})
+      body:JSON.stringify({autoStrategyMode:!current})
     });
     const j=await r.json().catch(()=>({}));
     if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
-    await fetchTradeState();
+    await Promise.allSettled([fetchTradeState(),fetchAutoStrategy()]);
     render();
-    setStatus(j.message||"Đã cập nhật chế độ tự đảo sau thua.","ok");
+    setStatus(j.message||"Đã cập nhật AUTO STRATEGY.","ok");
   }catch(e){
-    setStatus("Lỗi đổi chế độ tự đảo sau thua: "+String(e.message||e),"err");
+    setStatus("Lỗi đổi AUTO STRATEGY: "+String(e.message||e),"err");
   }finally{
     if(btn)btn.disabled=false;
   }
@@ -544,6 +562,7 @@ async function refreshHistory(){
   try{
     progress(0,1,"Đang đồng bộ lịch sử Boss Cloud...");
     const cloud=await fetchCloudHistory(true);
+    await fetchAutoStrategy();
     render();
     progress(1,1,"Đã tải "+cloud.cloudCount+" nến đã đóng.");
     setStatus("Đã cập nhật lịch sử mốc chẵn từ Boss Cloud.","ok");
@@ -573,6 +592,7 @@ async function refreshHistory(){
 async function autoStart(){
   startPolling();
   await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),fetchTradeState()]);
+  await fetchAutoStrategy();
   render();
 }
 
@@ -605,12 +625,13 @@ function startPolling(){
   if(liveTimer)clearInterval(liveTimer);
   if(countdownTimer)clearInterval(countdownTimer);
   if(calendarSyncTimer)clearInterval(calendarSyncTimer);
-  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState()}},20000);
+  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState();fetchAutoStrategy()}},20000);
   liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
   calendarSyncTimer=setInterval(async()=>{
     if(document.visibilityState!=="visible")return;
     try{
       await fetchCloudHistory(false);
+      await fetchAutoStrategy();
       render();
     }catch(_){}
   },INTERVAL*1000);
@@ -632,6 +653,62 @@ function tradeDirectionFromSource(sourceColor,reverseColorMode=false){
 }
 function roundColorAt(ts){
   return rounds.find(x=>Number(x.t)===Number(ts))?.c||null;
+}
+
+function autoMajorityColorAt(byTime,sourceStart,count){
+  const colors=[];
+  for(let i=count-1;i>=0;i--){
+    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
+    if(c!=="G"&&c!=="R")return null;
+    colors.push(c);
+  }
+  const g=colors.filter(c=>c==="G").length;
+  const r=colors.length-g;
+  return g===r?colors[colors.length-1]:(g>r?"G":"R");
+}
+function autoPatternKeyAt(byTime,sourceStart,count){
+  const out=[];
+  for(let i=count-1;i>=0;i--){
+    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
+    if(c!=="G"&&c!=="R")return null;
+    out.push(c);
+  }
+  return out.join("");
+}
+function autoPatternMapForCalendar(signals,byTime,count){
+  if(!signals.length)return new Map();
+  const latest=signals[signals.length-1].targetT;
+  const splitAt=latest-6*3600+INTERVAL;
+  const stats=new Map();
+  for(const s of signals){
+    if(s.targetT>=splitAt||!s.actual)continue;
+    const key=autoPatternKeyAt(byTime,s.sourceT,count);
+    if(!key)continue;
+    const row=stats.get(key)||{G:0,R:0,total:0};
+    row[s.actual]++;row.total++;stats.set(key,row);
+  }
+  const map=new Map();
+  for(const [key,row] of stats){
+    if(row.total>=3&&row.G!==row.R)map.set(key,row.G>row.R?"G":"R");
+  }
+  return map;
+}
+function autoDirectionForCalendar(id,s,byTime,patternMaps){
+  const source=s.direction;
+  const opposite=x=>x==="G"?"R":x==="R"?"G":null;
+  if(id==="opposite_source")return opposite(source);
+  if(id==="prev5")return byTime.get(s.sourceT-INTERVAL)||source;
+  if(id==="opposite_prev5")return opposite(byTime.get(s.sourceT-INTERVAL)||source);
+  if(id==="majority3")return autoMajorityColorAt(byTime,s.sourceT,3)||source;
+  if(id==="opposite_majority3")return opposite(autoMajorityColorAt(byTime,s.sourceT,3)||source);
+  if(id==="majority5")return autoMajorityColorAt(byTime,s.sourceT,5)||source;
+  if(id==="opposite_majority5")return opposite(autoMajorityColorAt(byTime,s.sourceT,5)||source);
+  const m=String(id||"").match(/^pattern([234])$/);
+  if(m){
+    const key=autoPatternKeyAt(byTime,s.sourceT,Number(m[1]));
+    return (key&&patternMaps?.[id]?.get(key))||source;
+  }
+  return source;
 }
 function upcomingTargetStart(nowSec=Date.now()/1000){
   const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
@@ -715,18 +792,26 @@ function buildTimedHistory(){
   const out=[];
   const moneySettings=historicalMoneySettings();
   const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
-  const reverseColorMode=!!cloudTradeState?.reverseColorMode;
+  const autoMode=cloudTradeState?.autoStrategyMode!==false;
+  const selectedId=autoMode?(autoStrategySnapshot?.id||"source"):"source";
+  const byTime=new Map(rounds.map(x=>[Number(x.t),x.c]));
+  const patternMaps={
+    pattern2:autoPatternMapForCalendar(signals,byTime,2),
+    pattern3:autoPatternMapForCalendar(signals,byTime,3),
+    pattern4:autoPatternMapForCalendar(signals,byTime,4)
+  };
+  let autoReverseActive=false;
+  let autoConsecutiveLosses=0;
   let lossStreak=0;
-  let previousWin=null;
-  let reverseAfterSecondLossActive=false;
   let step=1;
 
   for(const s of signals){
-    const reverseThisOrder=
-      reverseColorMode &&
-      reverseAfterSecondLossActive &&
-      previousWin===false;
-    const direction=tradeDirectionFromSource(s.direction,reverseThisOrder);
+    let direction;
+    if(selectedId==="reverse_after_order2_loss"){
+      direction=autoReverseActive?tradeDirectionFromSource(s.direction,true):s.direction;
+    }else{
+      direction=autoDirectionForCalendar(selectedId,s,byTime,patternMaps);
+    }
     if(!direction||!s.actual){
       out.push({...s,direction,status:"WAIT"});
       continue;
@@ -738,7 +823,8 @@ function buildTimedHistory(){
     out.push({
       ...s,
       direction,
-      reverseColorMode:reverseThisOrder,
+      autoStrategyId:selectedId,
+      autoStrategyName:autoStrategySnapshot?.name||"Theo màu mốc",
       status:win?"WIN":"LOSS",
       win,
       step:plan.step,
@@ -748,18 +834,22 @@ function buildTimedHistory(){
       lossCapitalMode
     });
 
-    previousWin=win;
+    if(selectedId==="reverse_after_order2_loss"){
+      if(win){
+        autoConsecutiveLosses=0;
+        autoReverseActive=false;
+      }else{
+        autoConsecutiveLosses++;
+        if(autoConsecutiveLosses>=2)autoReverseActive=true;
+      }
+    }
+
     if(win){
       lossStreak=0;
-      reverseAfterSecondLossActive=false;
     }else{
-      if(lossCapitalMode&&Number(plan.capitalStage||0)===2){
-        reverseAfterSecondLossActive=true;
-      }
       lossStreak++;
       if(lossCapitalMode&&lossStreak>=4)lossStreak=0;
     }
-
     step=nextHistoricalStep(step,win);
   }
   return out;
@@ -1024,16 +1114,28 @@ function render(){
   const calc=compute();
   const info=nextTimeSignalInfo();
   const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
-  const reverseColorMode=!!cloudTradeState?.reverseColorMode;
+  const autoStrategyMode=cloudTradeState?.autoStrategyMode!==false;
   const modeBtn=$("lossCapitalModeBtn");
   if(modeBtn){
     modeBtn.textContent=lossCapitalMode?"BẬT":"TẮT";
     modeBtn.className=lossCapitalMode?"success":"secondary";
   }
-  const reverseBtn=$("reverseColorModeBtn");
-  if(reverseBtn){
-    reverseBtn.textContent=reverseColorMode?"BẬT":"TẮT";
-    reverseBtn.className=reverseColorMode?"success":"secondary";
+  const autoBtn=$("autoStrategyModeBtn");
+  if(autoBtn){
+    autoBtn.textContent=autoStrategyMode?"BẬT":"TẮT";
+    autoBtn.className=autoStrategyMode?"success":"secondary";
+  }
+  const autoInfo=$("autoStrategyInfo");
+  if(autoInfo){
+    const a=autoStrategySnapshot;
+    const validRate=Number(a?.validateRate);
+    autoInfo.textContent=autoStrategyMode
+      ?(a
+        ?"Đang chọn: "+String(a.name||a.id||"Theo màu mốc")+
+          (Number.isFinite(validRate)?" • Test 6h: "+(validRate*100).toFixed(1)+"% • "+Number(a.validateWins||0)+" thắng / "+Number(a.validateLosses||0)+" thua":"")+
+          " • đã quét "+Number(a.sampleCount||0)+" mẫu"
+        :"Đang tải kết quả AUTO STRATEGY...")
+      :"AUTO STRATEGY đang tắt • dùng màu mốc.";
   }
 
   if(info){
@@ -1045,12 +1147,10 @@ function render(){
     const isWaitingWin=false;
     const isWaitingPrevious=!!info.blockingPending;
     const currentLossStreak=Math.max(0,Number(cloudTradeState?.lossStreak||0));
-    const reverseThisOrder=
-      reverseColorMode &&
-      !!cloudTradeState?.reverseAfterSecondLossActive &&
-      cloudTradeState?.lastResultWin===false;
-    const direction=info.pending?.direction||tradeDirectionFromSource(info.sourceColor,reverseThisOrder);
-    const pendingReversed=info.pending?!!info.pending.reverseColorMode:reverseThisOrder;
+    const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===Number(info.targetStart)?autoStrategySnapshot:null;
+    const direction=info.pending?.direction||(autoStrategyMode?sameAuto?.direction:info.sourceColor);
+    const strategyName=info.pending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
+    const strategyRate=Number(info.pending?.autoValidateRate??sameAuto?.validateRate);
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
     const alertAt=alertStartForTarget(info.targetStart);
 
@@ -1087,12 +1187,14 @@ function render(){
     if(isWaitingPrevious){
       $("freshness").textContent="Tool vẫn theo dõi đúng giờ và màu nến, nhưng chưa vào lệnh mới cho tới khi lệnh trước được xác nhận THẮNG hoặc THUA.";
     }else if(info.sourceColor&&inAlertWindow){
-      $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(info.sourceColor==="G"?"XANH":"ĐỎ")+
-        (pendingReversed?" • Lệnh 2 đã thua và lệnh trước THUA → ĐẢO → mua ":" • theo công thức màu gốc → mua ")+(direction==="G"?"XANH":"ĐỎ")+" • phiên "+fmtFrame(info.targetStart)+".";
+      $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • AUTO: "+strategyName+
+        (Number.isFinite(strategyRate)?" • test 6h "+(strategyRate*100).toFixed(1)+"%":"")+
+        " • MUA "+(direction==="G"?"XANH":direction==="R"?"ĐỎ":"CHỜ")+" • phiên "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
-      $("freshness").textContent="Mốc "+shortClock(info.sourceStart)+" màu "+(info.sourceColor==="G"?"XANH":"ĐỎ")+
-        (pendingReversed?" • chế độ sau Lệnh 2 thua đang hoạt động, nên đảo thành mua ":" • theo công thức màu gốc nên mua ")+(direction==="G"?"XANH":"ĐỎ")+
-        ". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh cho phiên "+fmtFrame(info.targetStart)+".";
+      $("freshness").textContent="AUTO đang chọn "+strategyName+
+        (Number.isFinite(strategyRate)?" • test 6h "+(strategyRate*100).toFixed(1)+"%":"")+
+        " • dự kiến "+(direction==="G"?"MUA XANH":direction==="R"?"MUA ĐỎ":"đang chờ dữ liệu")+
+        ". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh.";
     }else{
       $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
     }
@@ -1112,7 +1214,7 @@ function render(){
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"){
     if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState()
+    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState();fetchAutoStrategy()
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
