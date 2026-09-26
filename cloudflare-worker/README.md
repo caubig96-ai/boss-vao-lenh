@@ -13,8 +13,8 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 ## Chiến lược hiện tại
 
 - Mốc lấy màu: phút 00, 10, 20, 30, 40, 50.
-- Sau 15 phút, lệnh mua dùng đúng màu của nến tại mốc lấy màu.
-- Ví dụ: mốc 14:00 đỏ → phiên 14:15 mua đỏ; mốc 14:10 xanh → phiên 14:25 mua xanh.
+- Lệnh bắt đầu sau 10 phút và dùng cùng màu với nến ở mốc tham chiếu.
+- Ví dụ: mốc 17:00 đỏ → khoảng 17:09 báo mua đỏ → phiên đặt lệnh 17:10–17:15 → 17:15 xác nhận kết quả.
 - Telegram phát cảnh báo khoảng 1 phút trước phiên đặt lệnh.
 - Khi lệnh kết thúc, Telegram báo thắng/thua, lãi/lỗ lệnh, tổng lãi/lỗ sau reset và số dư theo dõi.
 - Nếu có 2 lệnh thực tế thua liên tiếp, hệ thống bỏ 2 nhịp đặt lệnh kế tiếp rồi tự hoạt động lại.
