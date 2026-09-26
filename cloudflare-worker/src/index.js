@@ -368,7 +368,11 @@ async function advanceWaitForWin(env,payload,state,currentTarget){
   if(!cursor)return {state,unlocked:false,winTarget:0};
 
   for(let target=cursor+SOURCE_STEP;target<Number(currentTarget);target+=SOURCE_STEP){
-    const shadow=await shadowSignalAt(env,payload,target,!!state.reverseColorMode);
+    // Khi chuỗi đã chạm giới hạn thua, lossStreak được reset về 0.
+    // Nhịp giả lập chờ thắng vì thế luôn kiểm tra theo màu nến gốc,
+    // đúng với cách một chuỗi mới sẽ bắt đầu ở lệnh 1.
+    const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0;
+    const shadow=await shadowSignalAt(env,payload,target,reverseThisOrder);
     if(!shadow)break;
 
     state.waitLastCheckedTarget=target;
@@ -606,7 +610,13 @@ async function maybePrepare(env,payload,nowSec){
 
   const sourceColor=await resolvedColorAt(env,payload,sourceStart);
   if(!sourceColor)return;
-  const direction=tradeDirectionFromSource(sourceColor,!!state.reverseColorMode);
+
+  // Chế độ tự đảo sau thua:
+  // - Lệnh đầu của chuỗi / sau một lệnh thắng: đi đúng màu nến mốc.
+  // - Sau mỗi lệnh thua: lệnh kế tiếp đảo màu nến mốc.
+  // lossStreak được cập nhật khi lệnh trước đã đóng, nên không dùng dữ liệu tương lai.
+  const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0;
+  const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
   if(!direction)return;
 
   const settings=tradeSettings(env);
@@ -620,7 +630,8 @@ async function maybePrepare(env,payload,nowSec){
       targetStart,
       direction,
       strategy:"EVEN_10M_ENTRY10_CLOSE15",
-      reverseColorMode:!!state.reverseColorMode,
+      reverseColorMode:reverseThisOrder,
+      autoReverseAfterLossMode:!!state.reverseColorMode,
       step:plan.step,
       capitalStage:plan.capitalStage,
       planLabel:plan.label,
@@ -641,7 +652,7 @@ async function maybePrepare(env,payload,nowSec){
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
   const reverseLine=pending.reverseColorMode
-    ?"🔄 Đảo màu: <b>BẬT</b> • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
+    ?"🔄 Tự đảo sau lệnh thua: <b>ÁP DỤNG CHO LỆNH NÀY</b> • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
     :"";
   const resumeLine=Number(pending.resumeFromWaitTarget||0)>0
     ?"✅ Nhịp chờ <b>"+frameText(Number(pending.resumeFromWaitTarget))+"</b> vừa THẮNG → mở lại lệnh.\n"
@@ -829,8 +840,8 @@ export default {
       }
       if(hasReverseColor){
         message=state.reverseColorMode
-          ?"Đã bật đảo màu: nến đỏ mua xanh, nến xanh mua đỏ."
-          :"Đã tắt đảo màu: mua cùng màu nến mốc.";
+          ?"Đã bật tự đảo sau lệnh thua: lệnh đầu đi đúng màu; sau mỗi lệnh thua, lệnh kế tiếp tự đảo màu."
+          :"Đã tắt tự đảo sau lệnh thua: mọi lệnh đi đúng màu nến mốc.";
       }
 
       return json({
