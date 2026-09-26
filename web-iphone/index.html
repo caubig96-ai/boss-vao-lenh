@@ -30,7 +30,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss Mốc Chẵn</h1><div class="sub">00/10/20/30/40/50 • lấy màu mốc • +15 phút đặt cùng màu</div></div>
+  <div><h1>Boss Mốc Chẵn</h1><div class="sub">mốc 10 phút • báo trước 1 phút • lệnh 5 phút kế tiếp</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -63,7 +63,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau đúng 15 phút mới đặt lệnh cùng màu; tín hiệu chỉ hiện khoảng 1 phút trước giờ đặt. Ví dụ 17:00 đỏ → khoảng 17:14 mới báo mua đỏ cho phiên 17:15.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau khi nến mốc đóng, chờ đến khoảng phút thứ 9 để báo lệnh cho phiên bắt đầu sau 10 phút. Ví dụ 17:00 đỏ → khoảng 17:09 báo mua đỏ cho phiên 17:10–17:15; 17:15 đóng nến để xác nhận thắng/thua.</div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -114,8 +114,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Lịch 24 giờ theo mốc chẵn +15 phút</b>
-      <div class="label">24 hàng giờ • mỗi hàng chỉ hiện 6 ô đặt lệnh: 05/15/25/35/45/55</div>
+      <b>Lịch 24 giờ theo phiên đặt lệnh</b>
+      <div class="label">24 hàng giờ • mỗi hàng chỉ hiện 6 ô đặt lệnh: 00/10/20/30/40/50</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -126,7 +126,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Bỏ nhịp</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • B = nhịp bị bỏ sau 2 lệnh thua liên tiếp • … = ô lệnh đang chờ dữ liệu hoặc chưa tới. Các ô mốc lấy màu 00/10/20/30/40/50 không hiển thị.</div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • B = nhịp bị bỏ sau 2 lệnh thua liên tiếp • … = ô lệnh đang chờ dữ liệu hoặc chưa tới. Mỗi ô là phiên đặt lệnh 5 phút; ví dụ ô 10 tương ứng phiên 17:10–17:15.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -141,9 +141,9 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </main>
 <script>
 const SOURCE_STEP=600;
-const ENTRY_DELAY=900;
+const ENTRY_DELAY=600;
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-plus15-v1";
+const STRATEGY_VERSION="even-10m-entry10-close15-v2";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -740,7 +740,7 @@ function buildCalendar24h(){
   const now=Math.floor(Date.now()/1000);
   const currentHour=Math.floor(now/3600)*3600;
   const first=currentHour-23*3600;
-  const last=currentHour+55*60;
+  const last=currentHour+50*60;
 
   const timed=buildTimedHistory();
   const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
@@ -749,7 +749,7 @@ function buildCalendar24h(){
 
   for(let hour=0;hour<24;hour++){
     const hourStart=first+hour*3600;
-    for(const minute of [5,15,25,35,45,55]){
+    for(const minute of [0,10,20,30,40,50]){
       const t=hourStart+minute*60;
       const sourceT=sourceStartForTarget(t);
       const signal=signalMap.get(t)||null;
@@ -795,7 +795,7 @@ function renderCalendar24h(){
   headHour.textContent="Giờ";
   root.appendChild(headHour);
 
-  for(const minute of [5,15,25,35,45,55]){
+  for(const minute of [0,10,20,30,40,50]){
     const d=document.createElement("div");
     d.className="calHead";
     d.textContent=String(minute).padStart(2,"0");
@@ -837,7 +837,7 @@ function renderCalendar24h(){
         detail+="ô đặt lệnh • chưa tới";
       }else if(slot.status==="WIN"||slot.status==="LOSS"){
         detail+="mốc "+shortClock(s.sourceT)+" • "+
-          (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +15 phút mua cùng màu • kết quả "+
+          (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +10 phút vào lệnh • kết quả đóng ở +15 phút • "+
           (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA");
       }else if(slot.status==="SKIP"){
         detail+="ô đặt lệnh • bỏ nhịp sau chuỗi 2 lệnh thua";
@@ -907,7 +907,7 @@ function render(){
     }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(direction==="G"?"XANH":"ĐỎ")+" → đặt ở "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
-      $("freshness").textContent="Mốc "+shortClock(info.sourceStart)+" đã có màu "+(direction==="G"?"XANH":"ĐỎ")+", nhưng chưa báo lệnh. Chờ đến khoảng "+shortClock(alertAt)+" để vào phiên "+fmtFrame(info.targetStart)+".";
+      $("freshness").textContent="Mốc "+shortClock(info.sourceStart)+" đã có màu "+(direction==="G"?"XANH":"ĐỎ")+". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh cho phiên "+fmtFrame(info.targetStart)+".";
     }else{
       $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
     }
