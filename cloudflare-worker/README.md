@@ -6,13 +6,13 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 
 - Mốc lấy màu: phút 00, 10, 20, 30, 40, 50.
 - Lệnh bắt đầu sau 10 phút và dùng cùng màu với nến ở mốc tham chiếu.
-- Ví dụ: mốc 17:00 đỏ → khoảng 17:09 báo mua đỏ → phiên 17:10–17:15 → 17:15 xác nhận kết quả.
-- Thua 1 lệnh thực tế: vẫn vào lệnh kế tiếp bình thường.
-- Hai lệnh thực tế thua liên tiếp: Worker dừng vào tiền ngay.
-- Không còn bỏ cố định 2 nhịp.
-- Các nhịp tiếp theo chỉ được theo dõi giả lập cho tới khi gặp 1 nhịp thắng.
-- Nhịp giả lập thắng chỉ mở khóa; lệnh thực tế kế tiếp mới được gửi.
-- Khi lệnh thực tế kết thúc, Telegram báo thắng/thua, lãi/lỗ lệnh, tổng lãi/lỗ sau reset và số dư theo dõi.
+- Chế độ thường: 2 lệnh thực tế thua liên tiếp thì dừng vào tiền và chờ 1 nhịp giả lập thắng.
+- Web có thể bật/tắt **Chế độ vốn thua 4 lệnh** qua `/trade-mode`.
+- Khi bật, chuỗi vốn thua là $1 → $1 → $2 → $4.
+- Sau lệnh thua thực tế thứ 4 liên tiếp, Worker dừng vào tiền và chờ 1 nhịp giả lập thắng; lệnh kế tiếp mới được gửi.
+- Quy tắc thắng x2 vẫn giữ nguyên: lệnh 1 thắng thì lệnh tiếp theo dùng mức lệnh 2; sau đó quay về lệnh 1.
+- Telegram ghi rõ mức vốn/4 khi chế độ này đang bật.
+- Reset thống kê không tự tắt chế độ vốn đã chọn.
 
 ## Cấu hình
 
