@@ -56,14 +56,14 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <button id="connectBtn" style="width:100%" onclick="refreshHistory()">ĐỒNG BỘ BOSS CLOUD</button>
   <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="refreshHistory()">↻ CẬP NHẬT LỊCH SỬ</button>
   <button id="resetBtn" class="danger" style="width:100%;margin-top:8px" onclick="resetTradeStateAndHistory()">RESET LÃI/LỖ + SỐ DƯ + LỆNH</button>
-  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, đồng thời xoá trạng thái chờ thắng.</div>
+  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, đồng thời xoá kết quả tham chiếu của lệnh trước.</div>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
 </section>
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Chế độ thường dừng sau 2 lệnh thua liên tiếp. Khi bật chế độ vốn thua 4 lệnh, chuỗi vốn là $1 → $1 → $2 → $4; tối đa 4 lệnh thua liên tiếp rồi mới chuyển sang chờ một nhịp giả lập thắng.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau mỗi lệnh, tool chờ kết quả được xác nhận rồi mới xét lệnh ở khung giờ kế tiếp. Khi bật chế độ vốn thua 4 lệnh, chuỗi vốn là $1 → $1 → $2 → $4 rồi quay lại lệnh 1; màu lệnh mới luôn dựa vào kết quả của lệnh thực tế liền trước.</div>
   <div class="row" style="margin-top:12px;background:#10161c;border-radius:12px;padding:11px">
     <div>
       <b>Chế độ vốn thua 4 lệnh</b>
