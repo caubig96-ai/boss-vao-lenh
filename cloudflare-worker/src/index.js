@@ -46,6 +46,7 @@ function freshTradeState(day){
     lossStreak:0,
     lossCapitalMode:false,
     reverseColorMode:false,
+    lastResultWin:null,
     waitForWin:false,
     waitAfterTarget:0,
     waitLastCheckedTarget:0,
@@ -80,6 +81,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
   if(typeof state.lossCapitalMode!=="boolean")state.lossCapitalMode=false;
   if(typeof state.reverseColorMode!=="boolean")state.reverseColorMode=false;
+  if(typeof state.lastResultWin!=="boolean")state.lastResultWin=null;
   if(typeof state.waitForWin!=="boolean")state.waitForWin=false;
   if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
   if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
@@ -491,34 +493,26 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(win)state.wins=Number(state.wins||0)+1;
   else state.losses=Number(state.losses||0)+1;
 
-  let waitTriggered=false;
+  // Chỉ dùng kết quả của LỆNH THỰC TẾ LIỀN TRƯỚC để chọn màu cho lệnh kế tiếp.
+  // Thắng => lệnh sau đi đúng màu nến mốc. Thua => lệnh sau đảo màu nến mốc.
+  state.lastResultWin=win;
+
   if(win){
     state.lossStreak=0;
-    state.waitForWin=false;
-    state.waitAfterTarget=0;
-    state.waitLastCheckedTarget=0;
-    state.waitWinTarget=0;
   }else{
     state.lossStreak=Number(state.lossStreak||0)+1;
-
-    const maxLosses=state.lossCapitalMode?4:2;
-    if(state.lossStreak>=maxLosses){
-      // Normal mode waits after 2 consecutive real losses.
-      // Loss-capital mode allows at most 4 consecutive real losses.
-      state.lossStreak=0;
-      state.waitForWin=true;
-      state.waitAfterTarget=Number(pending.targetStart);
-      state.waitLastCheckedTarget=Number(pending.targetStart);
-      state.waitWinTarget=0;
-      waitTriggered=true;
-    }else{
-      // Continue normally until the selected mode reaches its loss cap.
-      state.waitForWin=false;
-      state.waitAfterTarget=0;
-      state.waitLastCheckedTarget=0;
-      state.waitWinTarget=0;
-    }
+    // Chuỗi vốn 1 → 1 → 2 → 4 hoàn tất sau lệnh vốn 4.
+    // Sau đó vốn quay về lệnh 1, nhưng màu của lệnh kế tiếp vẫn dựa vào
+    // kết quả lệnh 4 vừa xong thông qua lastResultWin.
+    if(state.lossCapitalMode&&state.lossStreak>=4)state.lossStreak=0;
   }
+
+  // Không còn chờ nhịp giả lập thắng. Tool tiếp tục chạy đúng các mốc giờ.
+  state.waitForWin=false;
+  state.waitAfterTarget=0;
+  state.waitLastCheckedTarget=0;
+  state.waitWinTarget=0;
+  const waitTriggered=false;
 
   const nextStep=nextStepAfter(pending.step,win);
   state.step=nextStep;
@@ -545,7 +539,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     reverseColorMode:!!pending.reverseColorMode,
     lossStreakAfter:Number(state.lossStreak||0),
     waitTriggered,
-    waitForWinAfter:!!state.waitForWin,
+    lastResultWinAfter:state.lastResultWin,
+    waitForWinAfter:false,
     settledAt:new Date().toISOString(),
     sent:false
   };
@@ -580,7 +575,8 @@ async function maybePrepare(env,payload,nowSec){
     const carriedLossStreak=Number(state.lossStreak||0);
     const carriedLossCapitalMode=!!state.lossCapitalMode;
     const carriedReverseColorMode=!!state.reverseColorMode;
-    const carriedWaitForWin=!!state.waitForWin;
+    const carriedLastResultWin=typeof state.lastResultWin==="boolean"?state.lastResultWin:null;
+    const carriedWaitForWin=false;
     const carriedWaitAfterTarget=Number(state.waitAfterTarget||0);
     const carriedWaitLastCheckedTarget=Number(state.waitLastCheckedTarget||0);
     const carriedWaitWinTarget=Number(state.waitWinTarget||0);
@@ -588,34 +584,26 @@ async function maybePrepare(env,payload,nowSec){
     state.lossStreak=carriedLossStreak;
     state.lossCapitalMode=carriedLossCapitalMode;
     state.reverseColorMode=carriedReverseColorMode;
-    state.waitForWin=carriedWaitForWin;
+    state.lastResultWin=carriedLastResultWin;
+    state.waitForWin=false;
     state.waitAfterTarget=carriedWaitAfterTarget;
     state.waitLastCheckedTarget=carriedWaitLastCheckedTarget;
     state.waitWinTarget=carriedWaitWinTarget;
   }
 
-  // After two consecutive real losses, watch hypothetical signals immediately.
-  // The first hypothetical win unlocks the NEXT real order opportunity.
-  let resumedFromWaitTarget=0;
-  if(state.waitForWin){
-    const advanced=await advanceWaitForWin(env,payload,state,targetStart);
-    state=advanced.state;
-    if(!advanced.unlocked)return;
-    resumedFromWaitTarget=Number(advanced.winTarget||0);
-  }else if(Number(state.waitWinTarget||0)>0){
-    resumedFromWaitTarget=Number(state.waitWinTarget||0);
-  }
-
+  // Không tạo lệnh kế tiếp khi lệnh trước vẫn chưa có kết quả.
+  // Khi pending đã được settle và xóa, tool mới xét khung giờ hợp lệ tiếp theo.
+  const resumedFromWaitTarget=0;
   if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
 
   const sourceColor=await resolvedColorAt(env,payload,sourceStart);
   if(!sourceColor)return;
 
-  // Chế độ tự đảo sau thua:
-  // - Lệnh đầu của chuỗi / sau một lệnh thắng: đi đúng màu nến mốc.
-  // - Sau mỗi lệnh thua: lệnh kế tiếp đảo màu nến mốc.
-  // lossStreak được cập nhật khi lệnh trước đã đóng, nên không dùng dữ liệu tương lai.
-  const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0;
+  // Chế độ theo kết quả lệnh liền trước:
+  // - Chưa có lệnh trước hoặc lệnh trước THẮNG: đi đúng màu nến mốc.
+  // - Lệnh trước THUA: đảo màu nến mốc.
+  // Chỉ quyết định sau khi lệnh trước đã được settle.
+  const reverseThisOrder=!!state.reverseColorMode&&state.lastResultWin===false;
   const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
   if(!direction)return;
 
@@ -652,7 +640,7 @@ async function maybePrepare(env,payload,nowSec){
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
   const reverseLine=pending.reverseColorMode
-    ?"🔄 Tự đảo sau lệnh thua: <b>ÁP DỤNG CHO LỆNH NÀY</b> • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
+    ?"🔄 Lệnh trước <b>THUA</b> → đảo màu lệnh này • màu mốc "+sourceText+" → mua "+(pending.direction==="G"?"XANH":"ĐỎ")+"\n"
     :"";
   const resumeLine=Number(pending.resumeFromWaitTarget||0)>0
     ?"✅ Nhịp chờ <b>"+frameText(Number(pending.resumeFromWaitTarget))+"</b> vừa THẮNG → mở lại lệnh.\n"
@@ -829,6 +817,7 @@ export default {
       state.waitAfterTarget=0;
       state.waitLastCheckedTarget=0;
       state.waitWinTarget=0;
+      state.lastResultWin=null;
       state.step=1;
       await writeTradeState(env,state);
 
@@ -840,8 +829,8 @@ export default {
       }
       if(hasReverseColor){
         message=state.reverseColorMode
-          ?"Đã bật tự đảo sau lệnh thua: lệnh đầu đi đúng màu; sau mỗi lệnh thua, lệnh kế tiếp tự đảo màu."
-          :"Đã tắt tự đảo sau lệnh thua: mọi lệnh đi đúng màu nến mốc.";
+          ?"Đã bật chế độ theo kết quả lệnh trước: thắng giữ màu nến, thua đảo màu ở lệnh kế tiếp."
+          :"Đã tắt chế độ theo kết quả lệnh trước: mọi lệnh đi đúng màu nến mốc.";
       }
 
       return json({
