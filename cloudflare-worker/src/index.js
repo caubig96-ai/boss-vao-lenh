@@ -1,5 +1,5 @@
 const API="https://api.predict.fun";
-const INTERVAL=300;
+const INTERVAL=300;\nconst PATTERN_VERSION="image-12-v1";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const PATTERNS={
@@ -638,7 +638,7 @@ export default {
     if(u.pathname==="/health"){
       return json({
         ok:true,
-        service:"Boss 5 Nen Cloud",
+        service:"Boss 12 Mau Cloud",\n        patternVersion:PATTERN_VERSION,\n        patternCount:Object.keys(PATTERNS).length,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
