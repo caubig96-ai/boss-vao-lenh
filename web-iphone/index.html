@@ -39,8 +39,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Cảnh báo 1 phút</b>
-      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp</div>
+      <b>Cảnh báo 30 giây</b>
+      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp ở 30 giây cuối</div>
     </div>
     <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
   </div>
@@ -218,7 +218,6 @@ let audioContext=null;
 let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
 let alertsEnabled=false;
 let wakeLock=null;
-let prepare60Start=Number(sessionStorage.getItem("prepare_60_start")||0);
 let prepare30Start=Number(sessionStorage.getItem("prepare_30_start")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
@@ -679,105 +678,6 @@ function buildSignals(){
     out.push({sourceT:w[3].t,targetT,pattern:p,pred,actual:actual?.c||null});
   }
   return out
-}
-function decisionFromLast100(code,settled){
-  const recent=settled.slice(-100);
-  for(let i=recent.length-1;i>=0;i--){
-    const item=recent[i];
-    if(item.pattern!==code)continue;
-    return {
-      status:item.win===true?"WIN":"LOSS",
-      found:true,
-      item
-    };
-  }
-  return {status:"NEW",found:false,item:null};
-}
-function oppositeColor(color){return color==="G"?"R":"G"}
-function statRates(row){
-  if(!row||!row.settled)return {winRate:null,lossRate:null};
-  const winRate=row.wins/row.settled*100;
-  return {winRate,lossRate:100-winRate};
-}
-function strongestRawSideFromRows(rows){
-  let bestWin=null,bestLoss=null;
-  for(const row of rows){
-    const rates=statRates(row);
-    if(rates.winRate!==null&&(!bestWin||rates.winRate>bestWin.rate))bestWin={code:row.code,rate:rates.winRate,side:"WIN"};
-    if(rates.lossRate!==null&&(!bestLoss||rates.lossRate>bestLoss.rate))bestLoss={code:row.code,rate:rates.lossRate,side:"LOSS"};
-  }
-  if(!bestWin&&!bestLoss)return null;
-  if(!bestLoss)return bestWin;
-  if(!bestWin)return bestLoss;
-  return bestWin.rate>=bestLoss.rate?bestWin:bestLoss;
-}
-function adaptiveDecisionFromRows(code,settled,rows){
-  const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,mode:"NONE",direction:null,rate:null,reason:"Không thuộc 8 nhóm"};
-
-  const MIN_SAMPLES=3;
-  const THRESHOLD=60;
-  const row=rows.find(item=>item.code===code);
-
-  if(!row||row.settled<MIN_SAMPLES){
-    return {
-      allow:false,
-      mode:"LOW_SAMPLE",
-      direction:null,
-      rate:null,
-      reason:"Chưa đủ "+MIN_SAMPLES+" lần xuất hiện",
-      wins:row?.wins||0,
-      losses:row?.losses||0,
-      settled:row?.settled||0
-    };
-  }
-
-  const winRate=row.wins/row.settled*100;
-  const lossRate=row.losses/row.settled*100;
-
-  if(winRate>lossRate&&winRate>=THRESHOLD){
-    return {
-      allow:true,
-      mode:"FOLLOW_RATE",
-      direction:pred,
-      rate:winRate,
-      reason:"Tỷ lệ thắng "+winRate.toFixed(1)+"% cao hơn tỷ lệ thua "+lossRate.toFixed(1)+"%",
-      wins:row.wins,
-      losses:row.losses,
-      settled:row.settled
-    };
-  }
-
-  if(lossRate>winRate&&lossRate>=THRESHOLD){
-    return {
-      allow:true,
-      mode:"REVERSE_RATE",
-      direction:oppositeColor(pred),
-      rate:lossRate,
-      reason:"Tỷ lệ thua "+lossRate.toFixed(1)+"% cao hơn tỷ lệ thắng "+winRate.toFixed(1)+"% → đảo màu",
-      wins:row.wins,
-      losses:row.losses,
-      settled:row.settled
-    };
-  }
-
-  return {
-    allow:false,
-    mode:"NO_EDGE",
-    direction:null,
-    rate:Math.max(winRate,lossRate),
-    reason:"Không bên nào đạt ưu thế tối thiểu "+THRESHOLD+"%",
-    wins:row.wins,
-    losses:row.losses,
-    settled:row.settled
-  };
-}
-
-function rawRowsFromStats(rawStats){
-  return allPatternCodes().map(code=>{
-    const rs=rawStats[code]||{wins:0,losses:0,settled:0};
-    return {code,pred:PATTERNS[code],wins:rs.wins,losses:rs.losses,settled:rs.settled};
-  });
 }
 function rawPatternSettled(){
   return buildSignals()
