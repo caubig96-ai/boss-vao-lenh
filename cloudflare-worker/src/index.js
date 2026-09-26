@@ -3,9 +3,9 @@ const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const SOURCE_STEP=600;       // 00,10,20,30,40,50
-const ENTRY_DELAY=900;       // buy 15 minutes after the source candle start
+const ENTRY_DELAY=600;       // order candle starts 10 minutes after source and closes at +15
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-plus15-v1";
+const STRATEGY_VERSION="even-10m-entry10-close15-v2";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -461,7 +461,7 @@ async function maybePrepare(env,payload,nowSec){
   if(sourceStart===null)return;
 
   // Only send when the real order frame is about 1 minute away.
-  // Example: source 17:00 -> order 17:15 -> alert around 17:14, never 17:09.
+  // Example: source 17:00 -> order frame 17:10-17:15 -> alert around 17:09.
   const secondsToTarget=targetStart-nowSec;
   if(secondsToTarget>70||secondsToTarget<=45)return;
 
@@ -504,7 +504,7 @@ async function maybePrepare(env,payload,nowSec){
       sourceColor,
       targetStart,
       direction:sourceColor,
-      strategy:"EVEN_10M_PLUS15",
+      strategy:"EVEN_10M_ENTRY10_CLOSE15",
       step,
       amount,
       payoutRate:settings.payout,
@@ -523,7 +523,7 @@ async function maybePrepare(env,payload,nowSec){
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
     "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
-    "Quy tắc: <b>sau 15 phút mua cùng màu</b>\n"+
+    "Quy tắc: <b>vào phiên +10 phút, chốt màu ở +15 phút</b>\n"+
     "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
