@@ -43,6 +43,18 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("schedulePrepareAt60", self.worker)
         self.assertIn("if(remain>70||remain<=45)return", self.worker)
 
+    def test_latest_two_results_control_follow_or_reverse(self):
+        self.assertIn("const recent100=settledSignals(rounds).slice(-100)", self.worker)
+        self.assertIn("sameGroup.slice(-2).reverse()", self.worker)
+        self.assertIn('pair==="V-V"', self.worker)
+        self.assertIn('pair==="X-X"', self.worker)
+        self.assertIn('pair==="V-X"', self.worker)
+        self.assertIn('"REVERSE_XV"', self.worker)
+        self.assertIn("function recentTwoDecision", self.source)
+        self.assertIn("rawPatternSettled().slice(-100)", self.source)
+        self.assertIn("sameGroup.slice(-2).reverse()", self.source)
+        self.assertIn("2 kết quả gần nhất", self.source)
+
     def test_two_losses_pause_signals_for_15_minutes(self):
         self.assertIn("lossStreak", self.worker)
         self.assertIn("state.pauseUntil=nowSec+15*60", self.worker)
