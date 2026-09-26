@@ -57,6 +57,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div style="display:none"><input id="apiKey" type="password"><input id="rememberKey" type="checkbox"></div>
   <button id="connectBtn" style="width:100%" onclick="forceHistory100()">ĐỒNG BỘ BOSS CLOUD</button>
   <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="forceHistory100()">↻ CẬP NHẬT 100 LỆNH</button>
+  <button id="resetBtn" class="danger" style="width:100%;margin-top:8px" onclick="resetTradeStateAndHistory()">RESET LÃI/LỖ + SỐ DƯ + LỆNH</button>
+  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, huỷ trạng thái tạm dừng; sau đó nạp lại 100 lệnh lịch sử của 8 nhóm.</div>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
 </section>
@@ -96,20 +98,6 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row" style="margin-bottom:10px">
-    <div><b>Kết quả lệnh thực tế hôm nay</b><div class="label">Đồng bộ trực tiếp từ các lệnh Boss Cloud đã gửi về Telegram</div></div>
-    <span id="todayToolCountTop" class="label">0 lệnh</span>
-  </div>
-  <div class="stats">
-    <div class="stat"><span class="label">Thắng hôm nay</span><b class="green" id="wins">0</b></div>
-    <div class="stat"><span class="label">Thua hôm nay</span><b class="red" id="losses">0</b></div>
-    <div class="stat"><span class="label">Lãi/lỗ lệnh tool</span><b id="pnl">--</b></div>
-    <div class="stat"><span class="label">Số dư theo lệnh tool</span><b id="balance">--</b></div>
-  </div>
-  <div class="note" style="margin-top:8px">Tiền chỉ được tính sau khi tool phát lệnh MUA. Lịch sử 8 nhóm phía dưới không cộng vào lãi/lỗ.</div>
-</section>
-
-<section class="card">
   <details>
     <summary>Cài đặt tiền lệnh</summary>
     <div class="grid2" style="margin-top:12px">
@@ -123,15 +111,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="row">
-    <div><b>Lệnh Telegram hôm nay</b><div class="label">Lệnh Boss Cloud đã gửi • V = thắng • X = thua • … = đang chờ kết quả</div></div>
-    <span id="todayToolCount" class="label">0 lệnh</span>
-  </div>
-  <div class="history" id="todayToolHistory" style="margin-top:12px"></div>
-</section>
-
-<section class="card">
-  <div class="row"><div><b>100 lệnh gần nhất của 8 nhóm màu</b><div class="label">Cửa sổ trượt 100 lệnh • chỉ dùng để xem lịch sử thắng/thua của 8 nhóm mới</div></div><span id="count" class="label">0/100</span></div>
+  <div class="row"><div><b>100 kết quả lịch sử gần nhất của 8 nhóm</b><div class="label">Cửa sổ trượt 100 kết quả • dùng để lấy 2 kết quả gần nhất và quyết định theo màu gốc hoặc đảo màu</div></div><span id="count" class="label">0/100</span></div>
   <div class="history" id="history" style="margin-top:12px"></div>
 </section>
 
@@ -449,6 +429,62 @@ async function fetchTradeState(){
     return j;
   }catch(e){
     return null;
+  }
+}
+
+async function resetTradeStateAndHistory(){
+  const btn=$("resetBtn");
+  const ok=confirm("Reset toàn bộ lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và thời gian tạm dừng về 0? 100 lệnh lịch sử 8 nhóm sẽ được tải lại.");
+  if(!ok)return;
+
+  if(btn){
+    btn.disabled=true;
+    btn.classList.add("working");
+    btn.textContent="⏳ ĐANG RESET...";
+  }
+
+  try{
+    const r=await fetch(CLOUD+"/trade-reset",{
+      method:"POST",
+      cache:"no-store",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({confirm:"RESET"})
+    });
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
+
+    cloudTradeState=null;
+    rounds=[];
+    localStorage.removeItem("boss_rounds");
+    sessionStorage.removeItem("prepare_60_start");
+    prepare60Start=0;
+
+    await fetchTradeState();
+    await fetchCloudHistory(true);
+    await ensureHistory100(true);
+    render();
+    setStatus("Đã reset về 0 và cập nhật lại 100 lệnh lịch sử của 8 nhóm.","ok");
+
+    if(btn){
+      btn.classList.remove("working","fail");
+      btn.classList.add("success");
+      btn.textContent="✓ ĐÃ RESET VÀ CẬP NHẬT 100 LỆNH";
+    }
+  }catch(e){
+    setStatus("Reset lỗi: "+String(e.message||e),"err");
+    if(btn){
+      btn.classList.remove("working","success");
+      btn.classList.add("fail");
+      btn.textContent="✕ RESET LỖI";
+    }
+  }finally{
+    if(btn){
+      btn.disabled=false;
+      setTimeout(()=>{
+        btn.classList.remove("working","success","fail");
+        btn.textContent="RESET LÃI/LỖ + SỐ DƯ + LỆNH";
+      },3500);
+    }
   }
 }
 
@@ -928,21 +964,6 @@ function render(){
   }else{
     $("freshness").textContent="Đang chờ đủ 3 nến đã đóng và màu nến live.";
   }
-
-  $("wins").textContent=calc.wins;
-  $("losses").textContent=calc.losses;
-  $("todayToolCount").textContent=calc.orders.length+" lệnh";
-  $("todayToolCountTop").textContent=calc.orders.length+" lệnh";
-  $("pnl").textContent=calc.hasOrders?((calc.pnl>=0?"+":"")+calc.pnl.toFixed(2)+" USDT"):"--";
-  $("pnl").className=calc.hasOrders?(calc.pnl>0?"green":calc.pnl<0?"red":""):"";
-  $("balance").textContent=calc.hasOrders?(calc.start+calc.pnl).toFixed(2)+" USDT":"--";
-  $("todayToolHistory").innerHTML="";
-  calc.orders.forEach(o=>{
-    const d=document.createElement("div");
-    if(o.win===null){d.className="cell pending";d.textContent="…"}
-    else{d.className="cell "+(o.win?"v":"x");d.textContent=o.win?"V":"X"}
-    $("todayToolHistory").appendChild(d);
-  });
 
   const hist=rawPatternSettled().slice(-100);
   $("count").textContent=hist.length+"/100"+(historyLoading?" • đang tải":"");
