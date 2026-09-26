@@ -65,9 +65,9 @@ class WebPrepareAlertsTests(unittest.TestCase):
     def test_result_message_reports_win_loss_and_money(self):
         self.assertIn("THẮNG LỆNH", self.worker)
         self.assertIn("THUA LỆNH", self.worker)
-        self.assertIn("Lãi/lỗ lệnh", self.worker)
-        self.assertIn("Lãi/lỗ hôm nay", self.worker)
-        self.assertIn("Thắng/Thua hôm nay", self.worker)
+        self.assertIn("Lãi/lỗ lệnh này", self.worker)
+        self.assertIn("Tổng lãi/lỗ sau reset", self.worker)
+        self.assertIn("Số dư theo dõi", self.worker)
         self.assertIn("maybeSendSettlement", self.worker)
 
     def test_pattern_history_uses_four_candles_then_next_result(self):
@@ -85,13 +85,15 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("renderCalendar24h", self.source)
         self.assertIn("INTERVAL*1000", self.source)
 
-    def test_cloud_is_authoritative_for_real_telegram_orders(self):
+    def test_cloud_reset_and_history_refresh(self):
         self.assertIn("function rawPatternSettled", self.source)
-        self.assertNotIn("function recordToolOrder", self.source)
-        self.assertIn('localStorage.removeItem("boss_tool_orders")', self.source)
-        self.assertIn("Lệnh Telegram hôm nay", self.source)
-        self.assertIn("todayToolHistory", self.source)
-        self.assertIn('fetch(CLOUD+"/trade-state"', self.source)
+        self.assertIn("resetTradeStateAndHistory", self.source)
+        self.assertIn('fetch(CLOUD+"/trade-reset"', self.source)
+        self.assertIn('body:JSON.stringify({confirm:"RESET"})', self.source)
+        self.assertNotIn("Kết quả lệnh thực tế hôm nay", self.source)
+        self.assertNotIn("Lệnh Telegram hôm nay", self.source)
+        self.assertNotIn("todayToolHistory", self.source)
+        self.assertIn('u.pathname==="/trade-reset"', self.worker)
 
     def test_auto_start_loads_cloud_history(self):
         self.assertIn("async function autoStart", self.source)
