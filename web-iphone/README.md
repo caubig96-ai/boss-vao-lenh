@@ -1,12 +1,15 @@
-# Boss 8 Nhóm — Web iPhone
+# Boss Mốc Chẵn — Web iPhone
 
-Web tool hiện dùng Boss Cloud làm nguồn dữ liệu chính.
+Web tool dùng Boss Cloud làm nguồn dữ liệu chính.
 
-- 8 nhóm màu mới, mỗi nhóm gồm 3 nến đã đóng + 1 nến live.
-- Tín hiệu mua gửi khi phiên hiện tại còn khoảng 1 phút.
-- Kết quả lệnh lấy từ Boss Cloud và hiển thị thắng/thua, lãi/lỗ.
-- Sau 2 lệnh thua liên tiếp, Telegram tạm dừng báo lệnh 15 phút rồi tự chạy lại.
-- Lịch 24 giờ có 288 ô, mỗi ô tương ứng 5 phút.
-- API key và Telegram token chỉ nằm trong Cloudflare runtime secrets; web không lưu các khóa này.
+## Chiến lược hiện tại
 
-GitHub Pages chỉ phục vụ giao diện. Việc theo dõi và Telegram chạy tại Cloudflare Worker.
+- Mốc lấy màu: phút 00, 10, 20, 30, 40, 50.
+- Màu của nến bắt đầu tại mốc đó là màu tham chiếu.
+- Sau 15 phút, đặt lệnh cùng màu.
+- Ví dụ: nến 14:00 đỏ → lệnh tại 14:15 mua đỏ; nến 14:10 xanh → lệnh tại 14:25 mua xanh.
+- Telegram báo lệnh khoảng 1 phút trước phiên đặt lệnh.
+- Sau 2 lệnh thực tế thua liên tiếp, bỏ đúng 2 nhịp đặt lệnh kế tiếp rồi tự chạy lại.
+- Lịch 24 giờ có 24 hàng, mỗi hàng 12 ô 5 phút.
+
+API key và Telegram token chỉ nằm trong Cloudflare runtime secrets; web không lưu các khóa này.
