@@ -45,6 +45,7 @@ function freshTradeState(day){
     wins:0,
     losses:0,
     pending:null,
+    unsentResult:null,
     completed:[],
     updatedAt:new Date().toISOString()
   };
@@ -60,6 +61,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Array.isArray(state.completed))state.completed=[];
+  if(state.unsentResult===undefined)state.unsentResult=null;
   if(!state.day)state.day=dayTextFromSeconds(nowSec);
   return state;
 }
@@ -401,97 +403,62 @@ async function sendReadyOnce(env){
 }
 
 
-async function maybeSettleOrder(env,payload,nowSec){
-  if(!telegramConfigured(env))return;
-
-  const state=await readTradeState(env,nowSec);
+async function settlePreviousOrder(env,payload,nowSec,state){
   const pending=state.pending;
-  if(!pending)return;
+  if(!pending)return {state,result:null};
+
+  const currentStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
+  if(Number(pending.targetStart)>=currentStart)return {state,result:null};
 
   const rounds=internalRounds(payload);
   const actual=rounds.find(x=>x.t===Number(pending.targetStart))?.c||null;
-  if(!actual&&!pending.settlement)return;
+  if(!actual)return {state,result:null};
 
   const settings=tradeSettings(env);
+  const win=String(pending.direction)===actual;
+  const amount=Number(pending.amount)||0;
+  const payout=Number(pending.payoutRate);
+  const effectivePayout=Number.isFinite(payout)?payout:settings.payout;
+  const delta=win?amount*effectivePayout:-amount;
 
-  if(!pending.settlement){
-    const win=String(pending.direction)===actual;
-    const amount=Number(pending.amount)||0;
-    const payout=Number(pending.payoutRate);
-    const effectivePayout=Number.isFinite(payout)?payout:settings.payout;
-    const delta=win?amount*effectivePayout:-amount;
+  state.pnl=Number(state.pnl||0)+delta;
+  if(win)state.wins=Number(state.wins||0)+1;
+  else state.losses=Number(state.losses||0)+1;
 
-    state.pnl=Number(state.pnl||0)+delta;
-    if(win)state.wins=Number(state.wins||0)+1;
-    else state.losses=Number(state.losses||0)+1;
+  const nextStep=nextStepAfter(pending.step,win);
+  state.step=nextStep;
 
-    const nextStep=nextStepAfter(pending.step,win);
-    state.step=nextStep;
-    pending.settlement={
-      win,
-      actual,
-      delta,
-      pnlAfter:state.pnl,
-      winsAfter:state.wins,
-      lossesAfter:state.losses,
-      nextStep,
-      settledAt:new Date().toISOString()
-    };
-    await writeTradeState(env,state);
-  }
-
-  const s=pending.settlement;
-  if(pending.resultSent)return;
-
-  const resultTitle=s.win?"✅ <b>THẮNG LỆNH</b>":"❌ <b>THUA LỆNH</b>";
-  const actualText=s.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const nextAmount=amountForStep(settings,s.nextStep);
-  const balance=settings.startBalance+Number(s.pnlAfter||0);
-
-  await sendTelegram(env,
-    resultTitle+"\n"+
-    "<b>Lệnh "+Number(pending.step)+"</b> • "+amountText(pending.amount)+"\n"+
-    "Đã vào: "+(pending.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" • Kết quả: "+actualText+"\n"+
-    "Lãi/lỗ lệnh: <b>"+money(s.delta)+"</b>\n"+
-    "Lãi/lỗ hôm nay: <b>"+money(s.pnlAfter)+"</b>\n"+
-    "Thắng/Thua hôm nay: <b>"+Number(s.winsAfter)+"/"+Number(s.lossesAfter)+"</b>\n"+
-    "Số dư theo dõi: <b>"+money(balance)+"</b>\n"+
-    "Lệnh tiếp theo: <b>Lệnh "+Number(s.nextStep)+" • "+amountText(nextAmount)+"</b>"
-  );
-
-  pending.resultSent=true;
-  pending.resultSentAt=new Date().toISOString();
-
-  state.completed.push({
+  const result={
     id:pending.id,
     targetStart:Number(pending.targetStart),
     pattern:pending.pattern,
     direction:pending.direction,
-    actual:s.actual,
+    actual,
     step:Number(pending.step),
-    amount:Number(pending.amount),
-    win:!!s.win,
-    delta:Number(s.delta),
-    pnlAfter:Number(s.pnlAfter),
-    settledAt:s.settledAt
-  });
-  state.completed=state.completed.slice(-200);
-  state.pending=null;
+    amount,
+    win,
+    delta,
+    pnlAfter:Number(state.pnl||0),
+    winsAfter:Number(state.wins||0),
+    lossesAfter:Number(state.losses||0),
+    nextStep,
+    settledAt:new Date().toISOString(),
+    sent:false
+  };
 
-  const currentDay=dayTextFromSeconds(nowSec);
-  if(state.day!==currentDay){
-    const cleared=freshTradeState(currentDay);
-    await writeTradeState(env,cleared);
-  }else{
-    await writeTradeState(env,state);
-  }
+  state.completed.push({...result});
+  state.completed=state.completed.slice(-200);
+  state.unsentResult=result;
+  state.pending=null;
+  await writeTradeState(env,state);
+  return {state,result};
 }
 
 async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
   const remain=liveStart+INTERVAL-nowSec;
-  if(remain>75||remain<=5)return;
+  if(remain>36||remain<=5)return;
 
   const rounds=internalRounds(payload);
   const byTime=new Map(rounds.map(x=>[x.t,x]));
@@ -509,99 +476,164 @@ async function maybePrepare(env,payload,nowSec){
   if(!liveColor)return;
 
   const code=closed4.map(x=>x.c).join("")+liveColor;
+  if(!PATTERNS[code])return;
+
   const d=decisionFor(code,rounds);
   if(!d.allow||!d.direction)return;
 
   const marker=await env.BOSS_KV.get("telegram:last_prepare");
   if(String(marker||"")===String(liveStart))return;
 
-  const buy=d.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ";
+  const chance=d.direction==="G"?"🟢 <b>KHẢ NĂNG MUA XANH</b>":"🔴 <b>KHẢ NĂNG MUA ĐỎ</b>";
   await sendTelegram(env,
-    "⚠️ <b>CHUẨN BỊ VÀO LỆNH</b>\n"+
-    buy+"\n"+
+    "⚠️ <b>CÒN ~30 GIÂY • CHUẨN BỊ PHIÊN SAU</b>\n"+
+    "5 màu tạm thời: <b>"+candleIcons(code)+"</b>\n"+
+    chance+"\n"+
     "Mẫu: <b>"+code+"</b> • "+modeText(d.mode)+"\n"+
     "Thống kê mẫu: <b>"+Number(d.wins||0)+" thắng / "+Number(d.losses||0)+" thua</b>\n"+
     "Chỉ số: <b>"+Number(d.rate||0).toFixed(1)+"%</b>\n"+
-    "Nếu màu giữ đến lúc đóng, áp dụng vòng "+frameText(liveStart+INTERVAL)
+    "Phiên hiện tại: <b>"+frameText(liveStart)+"</b>\n"+
+    "Phiên dự kiến mua: <b>"+frameText(liveStart+INTERVAL)+"</b>\n"+
+    "<i>Chỉ chốt lệnh nếu màu live giữ đến lúc phiên hiện tại đóng.</i>"
   );
   await env.BOSS_KV.put("telegram:last_prepare",String(liveStart));
 }
 
-async function maybeFinal(env,payload,nowSec){
-  if(!telegramConfigured(env))return;
-  const rounds=internalRounds(payload);
-  if(rounds.length<5)return;
+function sleep(ms){
+  return new Promise(resolve=>setTimeout(resolve,Math.max(0,ms)));
+}
 
-  let five=null;
-  for(let end=rounds.length-1;end>=4;end--){
-    const w5=rounds.slice(end-4,end+1);
-    if(contiguous(w5)){five=w5;break}
-  }
-  if(!five)return;
+async function schedulePrepareAt30(env,payload){
+  const nowSec=Math.floor(Date.now()/1000);
+  const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
+  const remain=liveStart+INTERVAL-nowSec;
 
-  const code=five.map(x=>x.c).join("");
-  if(!PATTERNS[code])return;
+  // The minute cron normally reaches this branch with about 60 seconds left.
+  // Keep the invocation alive until roughly 30 seconds remain.
+  if(remain>70||remain<=5)return;
+  const waitSeconds=Math.max(0,remain-30);
+  if(waitSeconds>0)await sleep(waitSeconds*1000);
+  await maybePrepare(env,payload,Math.floor(Date.now()/1000));
+}
 
-  const targetStart=five[4].t+INTERVAL;
-  const currentStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
-  if(targetStart!==currentStart)return;
+function resultMessagePart(result,settings){
+  if(!result)return "";
+  const title=result.win?"✅ <b>THẮNG LỆNH PHIÊN TRƯỚC</b>":"❌ <b>THUA LỆNH PHIÊN TRƯỚC</b>";
+  const actualText=result.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const entered=result.direction==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const balance=settings.startBalance+Number(result.pnlAfter||0);
 
-  const d=decisionFor(code,rounds);
-  if(!d.allow||!d.direction)return;
+  return (
+    title+"\n"+
+    "Phiên: <b>"+frameText(result.targetStart)+"</b>\n"+
+    "<b>Lệnh "+Number(result.step)+" • "+amountText(result.amount)+"</b>\n"+
+    "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
+    "Lãi/lỗ lệnh: <b>"+money(result.delta)+"</b>\n"+
+    "Lãi/lỗ hôm nay: <b>"+money(result.pnlAfter)+"</b>\n"+
+    "Thắng/Thua hôm nay: <b>"+Number(result.winsAfter)+"/"+Number(result.lossesAfter)+"</b>\n"+
+    "Số dư theo dõi: <b>"+money(balance)+"</b>"
+  );
+}
 
-  const currentDay=dayTextFromSeconds(targetStart);
-  let state=await readTradeState(env,nowSec);
-
-  if(state.day!==currentDay&&!state.pending){
-    state=freshTradeState(currentDay);
-  }
-
-  if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
-
-  const settings=tradeSettings(env);
-
-  if(!state.pending){
-    const step=Number(state.step)===2?2:1;
-    const amount=amountForStep(settings,step);
-    state.pending={
-      id:String(targetStart)+"-"+code,
-      day:currentDay,
-      targetStart,
-      pattern:code,
-      direction:d.direction,
-      mode:d.mode,
-      rate:Number(d.rate||0),
-      wins:Number(d.wins||0),
-      losses:Number(d.losses||0),
-      settled:Number(d.settled||0),
-      step,
-      amount,
-      payoutRate:settings.payout,
-      entrySent:false,
-      createdAt:new Date().toISOString()
-    };
-    await writeTradeState(env,state);
-  }
-
-  const pending=state.pending;
-  if(pending.entrySent)return;
-
+function entryMessagePart(pending){
+  if(!pending)return "";
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
-  await sendTelegram(env,
-    "🚨 <b>BOSS 5 NẾN</b>\n"+
+  return (
+    "🚨 <b>PHIÊN MỚI • VÀO LỆNH NGAY</b>\n"+
+    "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>\n"+
     buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "5 nến trước: <b>"+candleIcons(pending.pattern)+"</b>\n"+
     "Mẫu: <b>"+pending.pattern+"</b> • "+modeText(pending.mode)+"\n"+
     "Thống kê mẫu: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n"+
-    "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>\n"+
-    "Vòng: <b>"+frameText(pending.targetStart)+"</b>"
+    "Chỉ số: <b>"+Number(pending.rate||0).toFixed(1)+"%</b>"
   );
+}
 
-  pending.entrySent=true;
-  pending.entrySentAt=new Date().toISOString();
+async function maybeBoundaryCombined(env,payload,nowSec){
+  if(!telegramConfigured(env))return;
+
+  const currentStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
+  const currentDay=dayTextFromSeconds(currentStart);
+  const settings=tradeSettings(env);
+  const rounds=internalRounds(payload);
+  let state=await readTradeState(env,nowSec);
+
+  // 1) Settle the order from the frame that just closed, but do not send a separate Telegram message.
+  const settled=await settlePreviousOrder(env,payload,nowSec,state);
+  state=settled.state;
+
+  // Carry an unsent result over midnight, then start the new day's counters.
+  if(state.day!==currentDay&&!state.pending){
+    const carry=state.unsentResult||null;
+    state=freshTradeState(currentDay);
+    state.unsentResult=carry;
+    await writeTradeState(env,state);
+  }
+
+  // 2) During only the opening seconds of the new frame, derive the confirmed buy from the 5 closed candles.
+  const elapsed=nowSec-currentStart;
+  if(elapsed<=45&&!state.pending){
+    const byTime=new Map(rounds.map(x=>[x.t,x]));
+    const five=[
+      currentStart-5*INTERVAL,
+      currentStart-4*INTERVAL,
+      currentStart-3*INTERVAL,
+      currentStart-2*INTERVAL,
+      currentStart-INTERVAL
+    ].map(t=>byTime.get(t));
+
+    if(five.every(Boolean)&&contiguous(five)){
+      const code=five.map(x=>x.c).join("");
+      const d=PATTERNS[code]?decisionFor(code,rounds):null;
+
+      if(d?.allow&&d.direction){
+        const step=Number(state.step)===2?2:1;
+        const amount=amountForStep(settings,step);
+        state.pending={
+          id:String(currentStart)+"-"+code,
+          day:currentDay,
+          targetStart:currentStart,
+          pattern:code,
+          direction:d.direction,
+          mode:d.mode,
+          rate:Number(d.rate||0),
+          wins:Number(d.wins||0),
+          losses:Number(d.losses||0),
+          settled:Number(d.settled||0),
+          step,
+          amount,
+          payoutRate:settings.payout,
+          entrySent:false,
+          createdAt:new Date().toISOString()
+        };
+        await writeTradeState(env,state);
+      }
+    }
+  }
+
+  const result=state.unsentResult&&!state.unsentResult.sent?state.unsentResult:null;
+  const entry=state.pending&&Number(state.pending.targetStart)===currentStart&&!state.pending.entrySent
+    ?state.pending
+    :null;
+
+  // No prior result and no confirmed buy for the new frame: no boundary message.
+  if(!result&&!entry)return;
+
+  // If there is no new buy, the message contains only the previous win/loss, exactly as requested.
+  const parts=[];
+  if(result)parts.push(resultMessagePart(result,settings));
+  if(entry)parts.push(entryMessagePart(entry));
+
+  await sendTelegram(env,parts.join("\n\n━━━━━━━━━━━━\n\n"));
+
+  if(result)state.unsentResult=null;
+  if(entry){
+    entry.entrySent=true;
+    entry.entrySentAt=new Date().toISOString();
+  }
   await writeTradeState(env,state);
-  await env.BOSS_KV.put("telegram:last_final",String(targetStart));
+  await env.BOSS_KV.put("telegram:last_boundary",String(currentStart));
 }
 
 async function scheduledTick(env){
@@ -619,9 +651,14 @@ async function scheduledTick(env){
   }
 
   await sendReadyOnce(env).catch(()=>{});
-  await maybeSettleOrder(env,payload,nowSec).catch(()=>{});
-  await maybePrepare(env,payload,nowSec).catch(()=>{});
-  await maybeFinal(env,payload,nowSec).catch(()=>{});
+
+  // At the new 5-minute frame: one Telegram message contains prior result + current buy.
+  // If there is no current buy, only the prior result is sent.
+  await maybeBoundaryCombined(env,payload,nowSec).catch(()=>{});
+
+  // In the final minute of the active frame, wait until roughly 30 seconds remain,
+  // then send one preview for the NEXT frame.
+  await schedulePrepareAt30(env,payload).catch(()=>{});
 }
 
 export default {
