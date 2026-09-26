@@ -675,7 +675,9 @@ export default {
     if(u.pathname==="/health"){
       return json({
         ok:true,
-        service:"Boss 12 Mau Cloud",\n        patternVersion:PATTERN_VERSION,\n        patternCount:Object.keys(PATTERNS).length,
+        service:"Boss 12 Mau Cloud",
+        patternVersion:PATTERN_VERSION,
+        patternCount:Object.keys(PATTERNS).length,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
