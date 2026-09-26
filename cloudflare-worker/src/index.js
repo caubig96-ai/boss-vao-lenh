@@ -286,8 +286,6 @@ function settledSignals(rounds){
   return out;
 }
 
-function opposite(c){return c==="G"?"R":"G"}
-
 function decisionFor(code,rounds){
   const pred=PATTERNS[code]||null;
   if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",wins:0,losses:0,settled:0,reason:"Không thuộc 8 nhóm"};
@@ -345,10 +343,6 @@ function timeText(ts){
 
 function frameText(ts){
   return timeText(ts)+"–"+timeText(ts+INTERVAL);
-}
-
-function modeText(mode){
-  return mode==="REVERSE_RATE"?"ĐẢO MÀU":"GIỮ MÀU";
 }
 
 function candleIcons(code){
