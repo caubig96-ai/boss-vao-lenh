@@ -74,12 +74,13 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("renderCalendar24h", self.source)
         self.assertIn("INTERVAL*1000", self.source)
 
-    def test_cloud_history_and_daily_tool_orders_are_separate(self):
+    def test_cloud_is_authoritative_for_real_telegram_orders(self):
         self.assertIn("function rawPatternSettled", self.source)
-        self.assertIn("function recordToolOrder", self.source)
-        self.assertIn("boss_tool_orders", self.source)
+        self.assertNotIn("function recordToolOrder", self.source)
+        self.assertIn('localStorage.removeItem("boss_tool_orders")', self.source)
         self.assertIn("Lệnh Telegram hôm nay", self.source)
         self.assertIn("todayToolHistory", self.source)
+        self.assertIn('fetch(CLOUD+"/trade-state"', self.source)
 
     def test_auto_start_loads_cloud_history(self):
         self.assertIn("async function autoStart", self.source)
