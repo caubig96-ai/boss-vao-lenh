@@ -63,7 +63,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau khi nến mốc đóng, chờ đến khoảng phút thứ 9 để báo lệnh cho phiên bắt đầu sau 10 phút. Ví dụ 17:00 đỏ → khoảng 17:09 báo mua đỏ cho phiên 17:10–17:15; 17:15 đóng nến để xác nhận thắng/thua.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau 1 lệnh thực tế thua, tool tạm không vào lệnh và theo dõi các nhịp giả lập cho tới khi gặp 1 nhịp thắng; lệnh kế tiếp mới vào lại. Nếu 2 lệnh thực tế liên tiếp đều thua, tool bỏ đúng 2 nhịp rồi vào lại.</div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -123,10 +123,10 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
     <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
-    <div><span class="label">Bỏ nhịp</span><b id="calendar24NoOrders">0</b></div>
+    <div><span class="label">Chờ/Bỏ</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • B = nhịp bị bỏ sau 2 lệnh thua liên tiếp • … = ô lệnh đang chờ dữ liệu hoặc chưa tới. Mỗi ô là phiên đặt lệnh 5 phút; ví dụ ô 10 tương ứng phiên 17:10–17:15.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • C✓ = nhịp chờ giả lập thắng, mở khóa lệnh kế tiếp • C× = nhịp chờ giả lập thua, tiếp tục chờ • B = bỏ nhịp sau 2 lệnh thực tế thua liên tiếp • … = chưa có dữ liệu/chưa tới.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -234,7 +234,8 @@ function firePrepareAlert(liveStart,remain,stage){
 
   const skipRemaining=Number(cloudTradeState?.skipSignals||0);
   const lastSkipped=Number(cloudTradeState?.lastSkippedTarget||0);
-  if(skipRemaining>0||lastSkipped===targetStart)return;
+  const waitForWin=!!cloudTradeState?.waitForWin;
+  if(skipRemaining>0||lastSkipped===targetStart||waitForWin)return;
 
   const sourceColor=roundColorAt(sourceStart);
   if(!sourceColor)return;
@@ -603,6 +604,7 @@ function buildTimedHistory(){
   const out=[];
   let lossStreak=0;
   let skipRemaining=0;
+  let waitForWin=false;
 
   for(const s of signals){
     if(skipRemaining>0){
@@ -616,6 +618,13 @@ function buildTimedHistory(){
       continue;
     }
 
+    if(waitForWin){
+      const shadowWin=s.direction===s.actual;
+      out.push({...s,status:shadowWin?"WAIT_WIN":"WAIT_LOSS",shadowWin});
+      if(shadowWin)waitForWin=false;
+      continue;
+    }
+
     const win=s.direction===s.actual;
     out.push({...s,status:win?"WIN":"LOSS",win});
 
@@ -626,6 +635,9 @@ function buildTimedHistory(){
       if(lossStreak>=2){
         skipRemaining=SKIP_BEATS_AFTER_TWO_LOSSES;
         lossStreak=0;
+        waitForWin=false;
+      }else{
+        waitForWin=true;
       }
     }
   }
@@ -639,6 +651,7 @@ function nextTimeSignalInfo(){
   const pending=cloudTradeState?.pending;
   const skipped=Number(cloudTradeState?.lastSkippedTarget||0)===targetStart;
   const skipRemaining=Number(cloudTradeState?.skipSignals||0);
+  const waitForWin=!!cloudTradeState?.waitForWin;
 
   return{
     sourceStart,
@@ -646,6 +659,7 @@ function nextTimeSignalInfo(){
     targetStart,
     skipped,
     skipRemaining,
+    waitForWin,
     pending:pending&&Number(pending.targetStart)===targetStart?pending:null
   };
 }
@@ -745,7 +759,7 @@ function buildCalendar24h(){
   const timed=buildTimedHistory();
   const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
   const slots=[];
-  let wins=0,losses=0,signals=0,skips=0,future=0,waiting=0;
+  let wins=0,losses=0,signals=0,skips=0,waitChecks=0,future=0,waiting=0;
 
   for(let hour=0;hour<24;hour++){
     const hourStart=first+hour*3600;
@@ -764,6 +778,10 @@ function buildCalendar24h(){
         status="LOSS";losses++;signals++;
       }else if(signal?.status==="SKIP"){
         status="SKIP";skips++;
+      }else if(signal?.status==="WAIT_WIN"){
+        status="WAIT_WIN";waitChecks++;
+      }else if(signal?.status==="WAIT_LOSS"){
+        status="WAIT_LOSS";waitChecks++;
       }else{
         status="WAIT";
         waiting++;
@@ -775,7 +793,7 @@ function buildCalendar24h(){
 
   const settled=wins+losses;
   return{
-    first,last,slots,wins,losses,signals,skips,future,waiting,
+    first,last,slots,wins,losses,signals,skips,waitChecks,future,waiting,
     rate:settled?wins/settled*100:null
   };
 }
@@ -814,7 +832,7 @@ function renderCalendar24h(){
     label.textContent=String(new Date(rowSlots[0].t*1000).getHours()).padStart(2,"0")+":00";
     root.appendChild(label);
 
-    let rowW=0,rowL=0,rowB=0,rowWait=0,rowF=0;
+    let rowW=0,rowL=0,rowB=0,rowCW=0,rowCL=0,rowWait=0,rowF=0;
     rowSlots.forEach(slot=>{
       const d=document.createElement("div");
       d.className="calCell signal";
@@ -825,6 +843,10 @@ function renderCalendar24h(){
         rowL++;d.classList.add("loss");d.textContent="X";
       }else if(slot.status==="SKIP"){
         rowB++;d.classList.add("skip");d.textContent="B";
+      }else if(slot.status==="WAIT_WIN"){
+        rowCW++;d.classList.add("wait");d.textContent="C✓";
+      }else if(slot.status==="WAIT_LOSS"){
+        rowCL++;d.classList.add("wait");d.textContent="C×";
       }else if(slot.status==="FUTURE"){
         rowF++;d.classList.add("future");d.textContent="…";
       }else{
@@ -840,7 +862,11 @@ function renderCalendar24h(){
           (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +10 phút vào lệnh • kết quả đóng ở +15 phút • "+
           (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA");
       }else if(slot.status==="SKIP"){
-        detail+="ô đặt lệnh • bỏ nhịp sau chuỗi 2 lệnh thua";
+        detail+="ô đặt lệnh • bỏ nhịp sau chuỗi 2 lệnh thực tế thua";
+      }else if(slot.status==="WAIT_WIN"){
+        detail+="nhịp chờ giả lập THẮNG • mở khóa lệnh kế tiếp";
+      }else if(slot.status==="WAIT_LOSS"){
+        detail+="nhịp chờ giả lập THUA • tiếp tục chờ";
       }else{
         detail+="ô đặt lệnh • đang chờ đủ dữ liệu mốc "+shortClock(slot.sourceT)+" và kết quả";
       }
@@ -852,14 +878,14 @@ function renderCalendar24h(){
 
     const sum=document.createElement("div");
     sum.className="calHourSum";
-    sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
+    sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+" • B "+rowB+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
     root.appendChild(sum);
   }
 
   $("calendar24Signals").textContent=String(cal.signals);
   $("calendar24Wins").textContent=String(cal.wins);
   $("calendar24Losses").textContent=String(cal.losses);
-  $("calendar24NoOrders").textContent=String(cal.skips);
+  $("calendar24NoOrders").textContent=String(cal.skips+cal.waitChecks);
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
   $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
@@ -876,34 +902,41 @@ function render(){
     $("targetFrame").textContent=fmtFrame(info.targetStart);
 
     const isSkipped=info.skipped||info.skipRemaining>0;
+    const isWaitingWin=info.waitForWin;
     const direction=info.pending?.direction||info.sourceColor;
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
     const alertAt=alertStartForTarget(info.targetStart);
 
     $("buy").textContent=isSkipped
       ?"BỎ NHỊP"
-      :!inAlertWindow
-        ?"CHỜ "+shortClock(alertAt)
-        :direction==="G"
-          ?"MUA XANH"
-          :direction==="R"
-            ?"MUA ĐỎ"
-            :"CHỜ MÀU MỐC";
-    $("buy").className=inAlertWindow&&direction==="G"&&!isSkipped
+      :isWaitingWin
+        ?"CHỜ NHỊP THẮNG"
+        :!inAlertWindow
+          ?"CHỜ "+shortClock(alertAt)
+          :direction==="G"
+            ?"MUA XANH"
+            :direction==="R"
+              ?"MUA ĐỎ"
+              :"CHỜ MÀU MỐC";
+    $("buy").className=inAlertWindow&&direction==="G"&&!isSkipped&&!isWaitingWin
       ?"green"
-      :inAlertWindow&&direction==="R"&&!isSkipped
+      :inAlertWindow&&direction==="R"&&!isSkipped&&!isWaitingWin
         ?"red"
         :"";
 
     const nextAmount=calc.step===2?calc.bet2:calc.bet1;
     $("bet").textContent=isSkipped
-      ?"Sau 2 lệnh thua liên tiếp • đang bỏ nhịp kế tiếp"
-      :inAlertWindow
-        ?"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT"
-        :"Chưa báo lệnh • sẽ báo khoảng "+shortClock(alertAt);
+      ?"Sau 2 lệnh thực tế thua liên tiếp • đang bỏ nhịp kế tiếp"
+      :isWaitingWin
+        ?"Sau 1 lệnh thực tế thua • đang chờ một nhịp giả lập thắng"
+        :inAlertWindow
+          ?"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT"
+          :"Chưa báo lệnh • sẽ báo khoảng "+shortClock(alertAt);
 
     if(isSkipped){
       $("freshness").textContent="Nhịp "+fmtFrame(info.targetStart)+" không phát lệnh. Còn "+Math.max(info.skipRemaining,info.skipped?1:0)+" nhịp trong bộ đếm nghỉ.";
+    }else if(isWaitingWin){
+      $("freshness").textContent="Đang tạm ngừng vào lệnh sau 1 lệnh thực tế thua. Tool chỉ theo dõi giả lập; gặp 1 nhịp thắng thì lệnh kế tiếp mới hoạt động lại.";
     }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(direction==="G"?"XANH":"ĐỎ")+" → đặt ở "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
