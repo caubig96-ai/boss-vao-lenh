@@ -3,18 +3,10 @@ const INTERVAL=300;
 const PATTERN_VERSION="image-8-prefix3-v2";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
-const PATTERN_VARIANTS={
-  RGRR:"R",RGRG:"R",
-  GRGR:"G",GRGG:"G",
-  RRGR:"R",RRGG:"R",
-  GGRR:"G",GGRG:"G"
-};
-const PATTERNS={
-  RGR:"R",
-  GRG:"G",
-  RRG:"R",
-  GGR:"G"
-};
+const SOURCE_STEP=600;       // 00,10,20,30,40,50
+const ENTRY_DELAY=900;       // buy 15 minutes after the source candle start
+const SKIP_BEATS_AFTER_TWO_LOSSES=2;
+const STRATEGY_VERSION="even-10m-plus15-v1";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -53,7 +45,8 @@ function freshTradeState(day){
     wins:0,
     losses:0,
     lossStreak:0,
-    pauseUntil:0,
+    skipSignals:0,
+    lastSkippedTarget:0,
     balanceBase:null,
     pending:null,
     unsentResult:null,
@@ -72,7 +65,8 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
-  if(!Number.isFinite(Number(state.pauseUntil)))state.pauseUntil=0;
+  if(!Number.isFinite(Number(state.skipSignals)))state.skipSignals=0;
+  if(!Number.isFinite(Number(state.lastSkippedTarget)))state.lastSkippedTarget=0;
   if(state.balanceBase!==null&&!Number.isFinite(Number(state.balanceBase)))state.balanceBase=null;
   if(!Array.isArray(state.completed))state.completed=[];
   if(state.unsentResult===undefined)state.unsentResult=null;
@@ -271,90 +265,29 @@ function internalRounds(payload){
     .sort((a,b)=>a.t-b.t);
 }
 
-function contiguous(arr){
-  return arr.slice(1).every((x,i)=>x.t-arr[i].t===INTERVAL);
+function isSourceStart(ts){
+  return Number.isFinite(Number(ts))&&Math.floor(Number(ts))%SOURCE_STEP===0;
 }
 
-function settledSignals(rounds){
-  const byTime=new Map(rounds.map(x=>[x.t,x]));
-  const out=[];
-  for(let i=2;i<rounds.length;i++){
-    const w=rounds.slice(i-2,i+1);
-    if(!contiguous(w))continue;
-    const code=w.map(x=>x.c).join("");
-    const pred=PATTERNS[code];
-    if(!pred)continue;
-
-    // Candle 4 is the live/current frame and is intentionally ignored for color selection.
-    const live=byTime.get(w[2].t+INTERVAL)||null;
-    const actual=byTime.get(w[2].t+2*INTERVAL)?.c||null;
-    if(live&&actual){
-      out.push({
-        pattern:code,
-        pred,
-        actual,
-        win:pred===actual,
-        sourceT:live.t,
-        targetT:live.t+INTERVAL
-      });
-    }
-  }
-  return out;
+function sourceStartForTarget(targetStart){
+  const source=Number(targetStart)-ENTRY_DELAY;
+  return isSourceStart(source)?source:null;
 }
 
-function decisionFor(code,rounds){
-  const pred=PATTERNS[code]||null;
-  if(!pred)return {allow:false,direction:null,rate:null,mode:"NONE",wins:0,losses:0,settled:0,pair:"",reason:"Không thuộc 8 nhóm"};
+async function resolvedColorAt(env,payload,ts){
+  const rounds=internalRounds(payload);
+  const cached=rounds.find(x=>x.t===Number(ts))?.c||null;
+  if(cached)return cached;
 
-  const recent100=settledSignals(rounds).slice(-100);
-  const sameGroup=recent100.filter(s=>s.pattern===code);
-  let wins=0,losses=0;
-  for(const s of sameGroup){
-    if(s.win)wins++;
-    else losses++;
+  try{
+    const raw=await apiCategory(Number(ts),env.PREDICT_API_KEY);
+    const normalized=normalizeCategory(raw);
+    let color=normalized?.color==="V"?"G":normalized?.color==="X"?"R":null;
+    if(!color)color=liveColorFromCategory(raw);
+    return color||null;
+  }catch(_){
+    return null;
   }
-
-  // Two nearest results are stored newest first to match the requested reading:
-  // V-V => follow; X-X => reverse; V-X => follow; X-V => reverse.
-  const two=sameGroup.slice(-2).reverse();
-  if(two.length<2){
-    return {
-      allow:false,
-      direction:null,
-      rate:sameGroup.length?wins/sameGroup.length*100:null,
-      mode:"NEED_2",
-      wins,
-      losses,
-      settled:sameGroup.length,
-      pair:two.map(x=>x.win?"V":"X").join("-"),
-      reason:"Chưa đủ 2 kết quả gần nhất của nhóm này trong 100 lệnh"
-    };
-  }
-
-  const pair=two.map(x=>x.win?"V":"X").join("-");
-  const latestWon=two[0].win===true;
-  const direction=latestWon?pred:(pred==="G"?"R":"G");
-  const mode=pair==="V-V"
-    ?"FOLLOW_VV"
-    :pair==="X-X"
-      ?"REVERSE_XX"
-      :pair==="V-X"
-        ?"FOLLOW_VX"
-        :"REVERSE_XV";
-
-  return {
-    allow:true,
-    direction,
-    rate:wins/(wins+losses)*100,
-    mode,
-    wins,
-    losses,
-    settled:sameGroup.length,
-    pair,
-    reason:latestWon
-      ?"Kết quả gần nhất thắng → đánh theo màu gốc của nhóm"
-      :"Kết quả gần nhất thua → đảo màu lệnh"
-  };
 }
 
 function tgToken(env){return String(env.CLOUD_TELEGRAM_BOT_TOKEN||env.TELEGRAM_BOT_TOKEN||"").trim()}
@@ -389,10 +322,6 @@ function timeText(ts){
 
 function frameText(ts){
   return timeText(ts)+"–"+timeText(ts+INTERVAL);
-}
-
-function candleIcons(code){
-  return String(code||"").split("").map(c=>c==="G"?"🟢":c==="R"?"🔴":"⚪").join(" ");
 }
 
 async function sendReadyOnce(env){
@@ -464,15 +393,15 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(win)state.wins=Number(state.wins||0)+1;
   else state.losses=Number(state.losses||0)+1;
 
-  let pauseTriggered=false;
+  let skipTriggered=false;
   if(win){
     state.lossStreak=0;
   }else{
     state.lossStreak=Number(state.lossStreak||0)+1;
     if(state.lossStreak>=2){
-      state.pauseUntil=nowSec+15*60;
+      state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES;
       state.lossStreak=0;
-      pauseTriggered=true;
+      skipTriggered=true;
     }
   }
 
@@ -483,7 +412,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   const result={
     id:pending.id,
     targetStart:Number(pending.targetStart),
-    pattern:pending.pattern,
+    sourceStart:Number(pending.sourceStart),
+    sourceColor:pending.sourceColor,
     direction:pending.direction,
     actual,
     step:Number(pending.step),
@@ -496,8 +426,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     lossesAfter:Number(state.losses||0),
     nextStep,
     lossStreakAfter:Number(state.lossStreak||0),
-    pauseTriggered,
-    pauseUntilAfter:Number(state.pauseUntil||0),
+    skipTriggered,
+    skipSignalsAfter:Number(state.skipSignals||0),
     settledAt:new Date().toISOString(),
     sent:false
   };
@@ -512,60 +442,56 @@ async function settlePreviousOrder(env,payload,nowSec,state){
 
 async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
+
   const liveStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
   const remain=liveStart+INTERVAL-nowSec;
   if(remain>70||remain<=45)return;
 
-  const rounds=internalRounds(payload);
-  const byTime=new Map(rounds.map(x=>[x.t,x]));
-  const closed3=[
-    liveStart-3*INTERVAL,
-    liveStart-2*INTERVAL,
-    liveStart-INTERVAL
-  ].map(t=>byTime.get(t));
-  if(closed3.some(x=>!x)||!contiguous(closed3))return;
-
-  // Only the 3 closed candles decide the base color. The current live candle is ignored.
-  const code=closed3.map(x=>x.c).join("");
-  const d=decisionFor(code,rounds);
-  if(!d.allow||!d.direction)return;
-
+  // The next 5-minute frame is the possible order frame.
   const targetStart=liveStart+INTERVAL;
-  const currentDay=dayTextFromSeconds(targetStart);
+  const sourceStart=sourceStartForTarget(targetStart);
+  if(sourceStart===null)return;
+
   let state=await readTradeState(env,nowSec);
+  const currentDay=dayTextFromSeconds(targetStart);
 
   if(state.day!==currentDay&&!state.pending){
-    const carriedPause=Number(state.pauseUntil||0);
     const carriedLossStreak=Number(state.lossStreak||0);
+    const carriedSkip=Number(state.skipSignals||0);
+    const carriedSkippedTarget=Number(state.lastSkippedTarget||0);
     state=freshTradeState(currentDay);
-    state.pauseUntil=carriedPause;
     state.lossStreak=carriedLossStreak;
+    state.skipSignals=carriedSkip;
+    state.lastSkippedTarget=carriedSkippedTarget;
   }
 
-  if(Number(state.pauseUntil||0)>nowSec)return;
-  if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil||0)<=nowSec){
-    state.pauseUntil=0;
-    await writeTradeState(env,state);
+  // After two consecutive real losses, skip exactly the next two eligible order beats.
+  if(Number(state.skipSignals||0)>0){
+    if(Number(state.lastSkippedTarget||0)!==targetStart){
+      state.skipSignals=Math.max(0,Number(state.skipSignals||0)-1);
+      state.lastSkippedTarget=targetStart;
+      await writeTradeState(env,state);
+    }
+    return;
   }
 
   if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
+
+  const sourceColor=await resolvedColorAt(env,payload,sourceStart);
+  if(!sourceColor)return;
 
   const settings=tradeSettings(env);
   if(!state.pending){
     const step=Number(state.step)===2?2:1;
     const amount=amountForStep(settings,step);
     state.pending={
-      id:String(targetStart)+"-"+code,
+      id:String(targetStart)+"-"+String(sourceStart),
       day:currentDay,
+      sourceStart,
+      sourceColor,
       targetStart,
-      pattern:code,
-      direction:d.direction,
-      mode:d.mode,
-      recentPair:d.pair||"",
-      rate:Number(d.rate||0),
-      wins:Number(d.wins||0),
-      losses:Number(d.losses||0),
-      settled:Number(d.settled||0),
+      direction:sourceColor,
+      strategy:"EVEN_10M_PLUS15",
       step,
       amount,
       payoutRate:settings.payout,
@@ -579,14 +505,12 @@ async function maybePrepare(env,payload,nowSec){
   if(pending.entrySent)return;
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
-  const modeText=String(pending.mode||"").startsWith("REVERSE")?"ĐẢO MÀU":"ĐÁNH THEO MÀU GỐC";
-  const statsLine="2 kết quả gần nhất: <b>"+String(pending.recentPair||"--")+"</b> • <b>"+modeText+"</b>\n"+
-    "Trong 100 lệnh: <b>"+Number(pending.wins||0)+" thắng / "+Number(pending.losses||0)+" thua</b>\n";
+  const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
-    "3 nến quyết định: <b>"+candleIcons(pending.pattern)+"</b>\n"+
-    statsLine+
+    "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
+    "Quy tắc: <b>sau 15 phút mua cùng màu</b>\n"+
     "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
@@ -616,18 +540,19 @@ function resultMessagePart(result,settings){
   const balance=Number.isFinite(Number(result.balanceAfter))
     ?Number(result.balanceAfter)
     :settings.startBalance+Number(result.pnlAfter||0);
-  const pauseLine=result.pauseTriggered
-    ?"\n⏸ <b>TẠM DỪNG BÁO LỆNH 15 PHÚT</b> • chạy lại sau "+timeText(result.pauseUntilAfter)
+  const skipLine=result.skipTriggered
+    ?"\n⏸ <b>THUA 2 LỆNH LIÊN TIẾP • BỎ 2 NHỊP KẾ TIẾP</b>"
     :"";
 
   return (
     title+"\n"+
+    (Number.isFinite(Number(result.sourceStart))?"Mốc lấy màu: <b>"+timeText(result.sourceStart)+"</b>\n":"")+
     "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
-    pauseLine
+    skipLine
   );
 }
 
@@ -683,9 +608,11 @@ export default {
     if(u.pathname==="/health"){
       return json({
         ok:true,
-        service:"Boss 8 Nhom Cloud",
-        patternVersion:PATTERN_VERSION,
-        patternCount:Object.keys(PATTERN_VARIANTS).length,
+        service:"Boss Moc Chan Cloud",
+        strategyVersion:STRATEGY_VERSION,
+        sourceStepMinutes:SOURCE_STEP/60,
+        entryDelayMinutes:ENTRY_DELAY/60,
+        skipBeatsAfterTwoLosses:SKIP_BEATS_AFTER_TWO_LOSSES,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -734,7 +661,7 @@ export default {
 
       return json({
         ok:true,
-        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và thời gian tạm dừng về 0.",
+        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và bộ đếm bỏ nhịp về 0.",
         state
       });
     }
