@@ -73,8 +73,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   </div>
   <div class="row" style="margin-top:9px;background:#10161c;border-radius:12px;padding:11px">
     <div>
-      <b>Màu theo kết quả lệnh trước</b>
-      <div class="label">BẬT: lệnh trước thắng → giữ màu nến hiện tại • lệnh trước thua → đảo màu nến hiện tại • chỉ xét sau khi lệnh trước đã có kết quả</div>
+      <b>Đảo màu sau khi Lệnh 2 thua</b>
+      <div class="label">Lệnh 1–2 luôn đúng công thức màu đã cài • chỉ khi Lệnh 2 thua mới kích hoạt: lệnh trước thua → đảo màu, gặp lệnh thắng → quay về công thức màu gốc</div>
     </div>
     <button id="reverseColorModeBtn" class="secondary" onclick="toggleReverseColorMode()">ĐANG TẢI</button>
   </div>
@@ -143,7 +143,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. Khi bật vốn thua 4 lệnh, bảng 24h tự tính theo $1 → $1 → $2 → $4. Chế độ màu chỉ nhìn kết quả của lệnh thực tế liền trước: thắng thì lệnh kế tiếp đi đúng màu nến mốc, thua thì lệnh kế tiếp đảo màu nến mốc. Không còn chờ nhịp giả lập thắng.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. Với chuỗi vốn $1 → $1 → $2 → $4, Lệnh 1 và Lệnh 2 luôn theo đúng công thức màu đã cài. Chỉ khi Lệnh 2 thua mới kích hoạt chế độ đặc biệt: lệnh trước thua thì lệnh sau đảo màu; hễ có lệnh thắng thì quay về công thức màu gốc.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -255,7 +255,10 @@ function firePrepareAlert(liveStart,remain,stage){
   const sourceColor=roundColorAt(sourceStart);
   if(!sourceColor)return;
   const reverseColorMode=!!cloudTradeState?.reverseColorMode;
-  const reverseThisOrder=reverseColorMode&&cloudTradeState?.lastResultWin===false;
+  const reverseThisOrder=
+    reverseColorMode &&
+    !!cloudTradeState?.reverseAfterSecondLossActive &&
+    cloudTradeState?.lastResultWin===false;
   const direction=tradeDirectionFromSource(sourceColor,reverseThisOrder);
   if(!direction)return;
 
@@ -267,7 +270,7 @@ function firePrepareAlert(liveStart,remain,stage){
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
     "Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ")+
-    (reverseThisOrder?" • LỆNH TRƯỚC THUA → ĐẢO MÀU":"")+
+    (reverseThisOrder?" • SAU LỆNH 2 THUA • LỆNH TRƯỚC THUA → ĐẢO MÀU":"")+
     " • MUA "+buyText+" • phiên "+fmtFrame(targetStart)
   );
   threeSecondAlert("prepare");
@@ -715,10 +718,14 @@ function buildTimedHistory(){
   const reverseColorMode=!!cloudTradeState?.reverseColorMode;
   let lossStreak=0;
   let previousWin=null;
+  let reverseAfterSecondLossActive=false;
   let step=1;
 
   for(const s of signals){
-    const reverseThisOrder=reverseColorMode&&previousWin===false;
+    const reverseThisOrder=
+      reverseColorMode &&
+      reverseAfterSecondLossActive &&
+      previousWin===false;
     const direction=tradeDirectionFromSource(s.direction,reverseThisOrder);
     if(!direction||!s.actual){
       out.push({...s,direction,status:"WAIT"});
@@ -744,7 +751,11 @@ function buildTimedHistory(){
     previousWin=win;
     if(win){
       lossStreak=0;
+      reverseAfterSecondLossActive=false;
     }else{
+      if(lossCapitalMode&&Number(plan.capitalStage||0)===2){
+        reverseAfterSecondLossActive=true;
+      }
       lossStreak++;
       if(lossCapitalMode&&lossStreak>=4)lossStreak=0;
     }
@@ -1034,7 +1045,10 @@ function render(){
     const isWaitingWin=false;
     const isWaitingPrevious=!!info.blockingPending;
     const currentLossStreak=Math.max(0,Number(cloudTradeState?.lossStreak||0));
-    const reverseThisOrder=reverseColorMode&&cloudTradeState?.lastResultWin===false;
+    const reverseThisOrder=
+      reverseColorMode &&
+      !!cloudTradeState?.reverseAfterSecondLossActive &&
+      cloudTradeState?.lastResultWin===false;
     const direction=info.pending?.direction||tradeDirectionFromSource(info.sourceColor,reverseThisOrder);
     const pendingReversed=info.pending?!!info.pending.reverseColorMode:reverseThisOrder;
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
@@ -1074,10 +1088,10 @@ function render(){
       $("freshness").textContent="Tool vẫn theo dõi đúng giờ và màu nến, nhưng chưa vào lệnh mới cho tới khi lệnh trước được xác nhận THẮNG hoặc THUA.";
     }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(info.sourceColor==="G"?"XANH":"ĐỎ")+
-        (pendingReversed?" • lệnh trước THUA → ĐẢO → mua ":" • lệnh trước THẮNG/CHƯA CÓ → giữ màu → mua ")+(direction==="G"?"XANH":"ĐỎ")+" • phiên "+fmtFrame(info.targetStart)+".";
+        (pendingReversed?" • Lệnh 2 đã thua và lệnh trước THUA → ĐẢO → mua ":" • theo công thức màu gốc → mua ")+(direction==="G"?"XANH":"ĐỎ")+" • phiên "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
       $("freshness").textContent="Mốc "+shortClock(info.sourceStart)+" màu "+(info.sourceColor==="G"?"XANH":"ĐỎ")+
-        (pendingReversed?" • lệnh trước thua nên đảo thành mua ":" • giữ màu nên mua ")+(direction==="G"?"XANH":"ĐỎ")+
+        (pendingReversed?" • chế độ sau Lệnh 2 thua đang hoạt động, nên đảo thành mua ":" • theo công thức màu gốc nên mua ")+(direction==="G"?"XANH":"ĐỎ")+
         ". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh cho phiên "+fmtFrame(info.targetStart)+".";
     }else{
       $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
