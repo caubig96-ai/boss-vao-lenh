@@ -248,8 +248,9 @@ function firePrepareAlert(liveStart,remain,stage){
   if(sourceStart===null||prepare60Start===targetStart)return;
   if(!isEntryAlertWindow(targetStart))return;
 
-  const waitForWin=!!cloudTradeState?.waitForWin;
-  if(waitForWin)return;
+  const waitForWin=false;
+  const pending=cloudTradeState?.pending;
+  if(pending&&Number(pending.targetStart)!==targetStart)return;
 
   const sourceColor=roundColorAt(sourceStart);
   if(!sourceColor)return;
@@ -759,12 +760,14 @@ function nextTimeSignalInfo(){
   const sourceColor=roundColorAt(sourceStart);
   const pending=cloudTradeState?.pending;
   const waitForWin=false;
+  const blockingPending=pending&&Number(pending.targetStart)!==targetStart?pending:null;
 
   return{
     sourceStart,
     sourceColor,
     targetStart,
     waitForWin,
+    blockingPending,
     pending:pending&&Number(pending.targetStart)===targetStart?pending:null
   };
 }
@@ -1029,6 +1032,7 @@ function render(){
     $("targetFrame").textContent=fmtFrame(info.targetStart);
 
     const isWaitingWin=false;
+    const isWaitingPrevious=!!info.blockingPending;
     const currentLossStreak=Math.max(0,Number(cloudTradeState?.lossStreak||0));
     const reverseThisOrder=reverseColorMode&&cloudTradeState?.lastResultWin===false;
     const direction=info.pending?.direction||tradeDirectionFromSource(info.sourceColor,reverseThisOrder);
@@ -1036,16 +1040,18 @@ function render(){
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
     const alertAt=alertStartForTarget(info.targetStart);
 
-    $("buy").textContent=!inAlertWindow
-      ?"CHỜ "+shortClock(alertAt)
-      :direction==="G"
-        ?"MUA XANH"
-        :direction==="R"
-          ?"MUA ĐỎ"
-          :"CHỜ MÀU MỐC";
-    $("buy").className=inAlertWindow&&direction==="G"
+    $("buy").textContent=isWaitingPrevious
+      ?"CHỜ KẾT QUẢ LỆNH TRƯỚC"
+      :!inAlertWindow
+        ?"CHỜ "+shortClock(alertAt)
+        :direction==="G"
+          ?"MUA XANH"
+          :direction==="R"
+            ?"MUA ĐỎ"
+            :"CHỜ MÀU MỐC";
+    $("buy").className=!isWaitingPrevious&&inAlertWindow&&direction==="G"
       ?"green"
-      :inAlertWindow&&direction==="R"
+      :!isWaitingPrevious&&inAlertWindow&&direction==="R"
         ?"red"
         :"";
 
@@ -1058,11 +1064,15 @@ function render(){
         :calc.step===2?"Lệnh thắng x2":"Vốn thua 1/4")
       :"Lệnh "+calc.step;
 
-    $("bet").textContent=inAlertWindow
-      ?planText+" • "+nextAmount.toFixed(2)+" USDT"
-      :"Chưa báo lệnh • "+planText+" • "+nextAmount.toFixed(2)+" USDT • sẽ báo khoảng "+shortClock(alertAt);
+    $("bet").textContent=isWaitingPrevious
+      ?"Đang chờ lệnh "+fmtFrame(Number(info.blockingPending.targetStart))+" có kết quả rồi mới xét lệnh kế tiếp"
+      :inAlertWindow
+        ?planText+" • "+nextAmount.toFixed(2)+" USDT"
+        :"Chưa báo lệnh • "+planText+" • "+nextAmount.toFixed(2)+" USDT • sẽ báo khoảng "+shortClock(alertAt);
 
-    if(info.sourceColor&&inAlertWindow){
+    if(isWaitingPrevious){
+      $("freshness").textContent="Tool vẫn theo dõi đúng giờ và màu nến, nhưng chưa vào lệnh mới cho tới khi lệnh trước được xác nhận THẮNG hoặc THUA.";
+    }else if(info.sourceColor&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(info.sourceColor==="G"?"XANH":"ĐỎ")+
         (pendingReversed?" • lệnh trước THUA → ĐẢO → mua ":" • lệnh trước THẮNG/CHƯA CÓ → giữ màu → mua ")+(direction==="G"?"XANH":"ĐỎ")+" • phiên "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
