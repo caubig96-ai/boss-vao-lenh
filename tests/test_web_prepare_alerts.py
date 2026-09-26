@@ -27,14 +27,13 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("const ENTRY_DELAY=600", self.worker)
         self.assertIn('STRATEGY_VERSION="even-10m-2loss-waitwin-v4"', self.worker)
 
-    def test_source_color_is_used_15_minutes_later(self):
+    def test_source_color_timing_is_preserved_before_auto_strategy_decision(self):
         self.assertIn("sourceStartForTarget", self.source)
         self.assertIn("sourceStartForTarget(t)", self.source)
         self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("!!state.reverseAfterSecondLossActive", self.worker)
-        self.assertIn("state.lastResultWin===false", self.worker)
-        self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
+        self.assertIn("autoStrategyAnalysis(payload,targetStart)", self.worker)
+        self.assertIn("const direction=auto.direction||sourceColor", self.worker)
 
     def test_one_minute_telegram_alert(self):
         self.assertIn("remain<=60&&remain>30", self.source)
@@ -86,35 +85,26 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("function historicalTradePlan", self.source)
         self.assertIn("if(lossCapitalMode&&lossStreak>=4)lossStreak=0", self.source)
 
-    def test_reverse_color_mode_activates_only_after_order_two_loses(self):
-        self.assertIn("reverseColorMode:false", self.worker)
-        self.assertIn("lastResultWin:null", self.worker)
-        self.assertIn("reverseAfterSecondLossActive:false", self.worker)
-        self.assertIn("function tradeDirectionFromSource", self.worker)
-        self.assertIn('return sourceColor==="G"?"R":"G"', self.worker)
-        self.assertIn("state.lastResultWin=win", self.worker)
-        self.assertIn("Number(pending.capitalStage||0)===2", self.worker)
-        self.assertIn("state.reverseAfterSecondLossActive=true", self.worker)
-        self.assertIn("state.reverseAfterSecondLossActive=false", self.worker)
-        self.assertIn("!!state.reverseAfterSecondLossActive", self.worker)
-        self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
-        self.assertIn("reverseColorMode:reverseThisOrder", self.worker)
-        self.assertIn('id="reverseColorModeBtn"', self.source)
-        self.assertIn("toggleReverseColorMode", self.source)
-        self.assertIn("!!cloudTradeState?.reverseAfterSecondLossActive", self.source)
-        self.assertIn("tradeDirectionFromSource(info.sourceColor,reverseThisOrder)", self.source)
+    def test_auto_strategy_replaces_fixed_reverse_rule(self):
+        self.assertIn("autoStrategyMode:true", self.worker)
+        self.assertIn("function autoStrategyAnalysis", self.worker)
+        self.assertIn('"reverse_after_order2_loss"', self.worker)
+        self.assertIn('"pattern2","pattern3","pattern4","reverse_after_order2_loss"', self.worker)
+        self.assertIn("AUTO_VALIDATE_SECONDS=6*3600", self.worker)
+        self.assertIn("AUTO_WINDOW_SECONDS=24*3600", self.worker)
+        self.assertIn('u.pathname==="/auto-strategy"', self.worker)
+        self.assertIn('id="autoStrategyModeBtn"', self.source)
+        self.assertIn("toggleAutoStrategyMode", self.source)
+        self.assertNotIn('id="reverseColorModeBtn"', self.source)
+        self.assertNotIn("toggleReverseColorMode", self.source)
 
-    def test_24h_results_activate_reverse_only_after_second_capital_loss(self):
-        self.assertIn("const reverseColorMode=!!cloudTradeState?.reverseColorMode", self.source)
-        self.assertIn("let previousWin=null", self.source)
-        self.assertIn("let reverseAfterSecondLossActive=false", self.source)
-        self.assertIn("reverseAfterSecondLossActive &&", self.source)
-        self.assertIn("const direction=tradeDirectionFromSource(s.direction,reverseThisOrder)", self.source)
-        self.assertIn("const win=direction===s.actual", self.source)
-        self.assertIn("if(lossCapitalMode&&Number(plan.capitalStage||0)===2)", self.source)
-        self.assertIn("reverseAfterSecondLossActive=true", self.source)
-        self.assertIn("reverseAfterSecondLossActive=false", self.source)
-        self.assertIn("previousWin=win", self.source)
+    def test_24h_calendar_uses_auto_selected_candidate(self):
+        self.assertIn("const selectedId=autoMode?(autoStrategySnapshot?.id||\"source\"):\"source\"", self.source)
+        self.assertIn("autoPatternMapForCalendar", self.source)
+        self.assertIn("autoDirectionForCalendar", self.source)
+        self.assertIn('selectedId==="reverse_after_order2_loss"', self.source)
+        self.assertIn("autoConsecutiveLosses>=2", self.source)
+        self.assertIn("autoStrategySnapshot?.name", self.source)
 
     def test_loss_capital_mode_preserves_win_double_rule(self):
         self.assertIn("Number(step)===1&&win?2:1", self.worker)
