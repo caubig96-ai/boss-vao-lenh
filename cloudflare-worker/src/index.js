@@ -4,8 +4,7 @@ const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-con
 
 const SOURCE_STEP=600;       // 00,10,20,30,40,50
 const ENTRY_DELAY=600;       // order candle starts 10 minutes after source and closes at +15
-const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-2loss-skip2-waitwin-v3";
+const STRATEGY_VERSION="even-10m-2loss-waitwin-v4";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -49,8 +48,6 @@ function freshTradeState(day){
     waitAfterTarget:0,
     waitLastCheckedTarget:0,
     waitWinTarget:0,
-    skipSignals:0,
-    lastSkippedTarget:0,
     balanceBase:null,
     pending:null,
     unsentResult:null,
@@ -83,8 +80,6 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
   if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
   if(!Number.isFinite(Number(state.waitWinTarget)))state.waitWinTarget=0;
-  if(!Number.isFinite(Number(state.skipSignals)))state.skipSignals=0;
-  if(!Number.isFinite(Number(state.lastSkippedTarget)))state.lastSkippedTarget=0;
   if(state.balanceBase!==null&&!Number.isFinite(Number(state.balanceBase)))state.balanceBase=null;
   if(!Array.isArray(state.completed))state.completed=[];
   if(state.unsentResult===undefined)state.unsentResult=null;
@@ -451,7 +446,6 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   if(win)state.wins=Number(state.wins||0)+1;
   else state.losses=Number(state.losses||0)+1;
 
-  let skipTriggered=false;
   let waitTriggered=false;
   if(win){
     state.lossStreak=0;
@@ -464,16 +458,13 @@ async function settlePreviousOrder(env,payload,nowSec,state){
 
     if(state.lossStreak>=2){
       // First real loss continues normally.
-      // Only two consecutive REAL losses trigger recovery:
-      // skip 2 order beats, then wait for one hypothetical win,
-      // then enter the following real order.
-      state.skipSignals=SKIP_BEATS_AFTER_TWO_LOSSES;
+      // After two consecutive REAL losses, stop real entries immediately.
+      // Watch hypothetical signals until one wins, then enter the following real order.
       state.lossStreak=0;
       state.waitForWin=true;
       state.waitAfterTarget=Number(pending.targetStart);
       state.waitLastCheckedTarget=Number(pending.targetStart);
       state.waitWinTarget=0;
-      skipTriggered=true;
       waitTriggered=true;
     }else{
       // One real loss alone does not pause or wait.
@@ -505,10 +496,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     lossesAfter:Number(state.losses||0),
     nextStep,
     lossStreakAfter:Number(state.lossStreak||0),
-    skipTriggered,
     waitTriggered,
     waitForWinAfter:!!state.waitForWin,
-    skipSignalsAfter:Number(state.skipSignals||0),
     settledAt:new Date().toISOString(),
     sent:false
   };
@@ -545,37 +534,16 @@ async function maybePrepare(env,payload,nowSec){
     const carriedWaitAfterTarget=Number(state.waitAfterTarget||0);
     const carriedWaitLastCheckedTarget=Number(state.waitLastCheckedTarget||0);
     const carriedWaitWinTarget=Number(state.waitWinTarget||0);
-    const carriedSkip=Number(state.skipSignals||0);
-    const carriedSkippedTarget=Number(state.lastSkippedTarget||0);
     state=freshTradeState(currentDay);
     state.lossStreak=carriedLossStreak;
     state.waitForWin=carriedWaitForWin;
     state.waitAfterTarget=carriedWaitAfterTarget;
     state.waitLastCheckedTarget=carriedWaitLastCheckedTarget;
     state.waitWinTarget=carriedWaitWinTarget;
-    state.skipSignals=carriedSkip;
-    state.lastSkippedTarget=carriedSkippedTarget;
   }
 
-  // After two consecutive real losses, skip exactly the next two eligible order beats.
-  if(Number(state.skipSignals||0)>0){
-    if(Number(state.lastSkippedTarget||0)!==targetStart){
-      state.skipSignals=Math.max(0,Number(state.skipSignals||0)-1);
-      state.lastSkippedTarget=targetStart;
-
-      // The fixed 2 skipped beats are pause-only beats.
-      // Start the hypothetical win check AFTER both skipped beats.
-      if(state.waitForWin){
-        state.waitAfterTarget=targetStart;
-        state.waitLastCheckedTarget=targetStart;
-      }
-      await writeTradeState(env,state);
-    }
-    return;
-  }
-
-  // After the fixed 2-beat pause, watch hypothetical signals.
-  // The first hypothetical win unlocks the NEXT order opportunity.
+  // After two consecutive real losses, watch hypothetical signals immediately.
+  // The first hypothetical win unlocks the NEXT real order opportunity.
   let resumedFromWaitTarget=0;
   if(state.waitForWin){
     const advanced=await advanceWaitForWin(env,payload,state,targetStart);
@@ -657,11 +625,8 @@ function resultMessagePart(result,settings){
   const balance=Number.isFinite(Number(result.balanceAfter))
     ?Number(result.balanceAfter)
     :settings.startBalance+Number(result.pnlAfter||0);
-  const skipLine=result.skipTriggered
-    ?"\n⏸ <b>THUA 2 LỆNH LIÊN TIẾP • BỎ 2 NHỊP KẾ TIẾP</b>"
-    :"";
   const waitLine=result.waitTriggered
-    ?"\n⏳ Sau 2 nhịp nghỉ, <b>CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại."
+    ?"\n⏳ <b>THUA 2 LỆNH LIÊN TIẾP • CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại."
     :"";
 
   return (
@@ -672,7 +637,6 @@ function resultMessagePart(result,settings){
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
-    skipLine+
     waitLine
   );
 }
@@ -733,8 +697,7 @@ export default {
         strategyVersion:STRATEGY_VERSION,
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
-        waitForWinAfterTwoLossesAndSkip2:true,
-        skipBeatsAfterTwoLosses:SKIP_BEATS_AFTER_TWO_LOSSES,
+        waitForWinAfterTwoLosses:true,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -783,7 +746,7 @@ export default {
 
       return json({
         ok:true,
-        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và bộ đếm bỏ nhịp về 0.",
+        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và trạng thái chờ thắng về 0.",
         state
       });
     }
