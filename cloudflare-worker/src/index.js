@@ -875,7 +875,9 @@ async function maybePrepare(env,payload,nowSec){
       autoStrategyMode:!!state.autoStrategyMode,
       autoStrategyId:auto.id,
       autoStrategyName:auto.name,
-      autoValidateRate:Number.isFinite(Number(auto.validateRate))?Number(auto.validateRate):null,
+      autoValidateRate:auto.validateRate===null||auto.validateRate===undefined
+        ?null
+        :(Number.isFinite(Number(auto.validateRate))?Number(auto.validateRate):null),
       autoValidateWins:Number(auto.validateWins||0),
       autoValidateLosses:Number(auto.validateLosses||0),
       step:plan.step,
@@ -1019,7 +1021,8 @@ export default {
         autoStrategyValidateHours:6,
         lossCapitalModeSupported:true,
         lossCapitalSequence:[1,1,2,4],
-        reverseColorModeSupported:true,
+        reverseColorModeSupported:false,
+        reverseColorRuleIncludedAsCandidate:true,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -1150,7 +1153,7 @@ export default {
       catch(e){return json({ok:false,error:String(e.message||e)},500)}
     }
 
-    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/trade-mode","/trade-reset","/sync"]});
+    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/auto-strategy","/trade-mode","/trade-reset","/sync"]});
   },
 
   async scheduled(controller,env,ctx){
