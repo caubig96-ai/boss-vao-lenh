@@ -35,13 +35,14 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("for(let i=0;i<4;i++)", self.source)
         self.assertIn("3 nến đã đóng + nến live hiện tại", self.source)
 
-    def test_entry_alert_fires_once_at_30_seconds_for_next_frame(self):
-        self.assertNotIn("remain<=60&&remain>30", self.source)
-        self.assertIn("remain<=30&&remain>0", self.source)
-        self.assertIn("CÒN 30 GIÂY • VÀO LỆNH PHIÊN SAU", self.source)
-        self.assertIn("prepare_30_start", self.source)
-        self.assertIn("CÒN ~30 GIÂY • VÀO LỆNH PHIÊN SAU", self.worker)
-        self.assertIn("schedulePrepareAt30", self.worker)
+    def test_entry_alert_fires_once_at_one_minute_for_next_frame(self):
+        self.assertIn("remain<=60&&remain>30", self.source)
+        self.assertNotIn("remain<=30&&remain>0", self.source)
+        self.assertIn("CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU", self.source)
+        self.assertIn("prepare_60_start", self.source)
+        self.assertIn("CÒN ~1 PHÚT • VÀO LỆNH PHIÊN SAU", self.worker)
+        self.assertIn("schedulePrepareAt60", self.worker)
+        self.assertIn("if(remain>70||remain<=45)return", self.worker)
 
     def test_two_losses_pause_signals_for_15_minutes(self):
         self.assertIn("lossStreak", self.worker)
