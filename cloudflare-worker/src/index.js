@@ -4,8 +4,9 @@ const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-con
 
 const SOURCE_STEP=600;       // 00,10,20,30,40,50
 const ENTRY_DELAY=900;       // buy 15 minutes after the source candle start
+const FILTER_PATTERNS=new Set(["GRG","RGR","GRR","RGG"]); // XĐX, ĐXĐ, XĐĐ, ĐXX
 const SKIP_BEATS_AFTER_TWO_LOSSES=2;
-const STRATEGY_VERSION="even-10m-plus15-v1";
+const STRATEGY_VERSION="even-10m-3c-filter-v2";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -300,6 +301,22 @@ async function resolvedColorAt(env,payload,ts){
   }
 }
 
+async function sourcePatternAt(env,payload,sourceStart){
+  const colors=[];
+  for(const ts of [sourceStart,sourceStart+INTERVAL,sourceStart+2*INTERVAL]){
+    const color=await resolvedColorAt(env,payload,ts);
+    if(!color)return null;
+    colors.push(color);
+  }
+  const pattern=colors.join("");
+  return {
+    pattern,
+    allowed:FILTER_PATTERNS.has(pattern),
+    direction:colors[0],
+    colors
+  };
+}
+
 function tgToken(env){return String(env.CLOUD_TELEGRAM_BOT_TOKEN||env.TELEGRAM_BOT_TOKEN||"").trim()}
 function tgChat(env){return String(env.CLOUD_TELEGRAM_CHAT_ID||env.TELEGRAM_CHAT_ID||"").trim()}
 function telegramConfigured(env){return !!(tgToken(env)&&tgChat(env))}
@@ -424,6 +441,7 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     targetStart:Number(pending.targetStart),
     sourceStart:Number(pending.sourceStart),
     sourceColor:pending.sourceColor,
+    sourcePattern:pending.sourcePattern||"",
     direction:pending.direction,
     actual,
     step:Number(pending.step),
@@ -487,8 +505,8 @@ async function maybePrepare(env,payload,nowSec){
 
   if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
 
-  const sourceColor=await resolvedColorAt(env,payload,sourceStart);
-  if(!sourceColor)return;
+  const sourcePattern=await sourcePatternAt(env,payload,sourceStart);
+  if(!sourcePattern||!sourcePattern.allowed)return;
 
   const settings=tradeSettings(env);
   if(!state.pending){
@@ -498,10 +516,11 @@ async function maybePrepare(env,payload,nowSec){
       id:String(targetStart)+"-"+String(sourceStart),
       day:currentDay,
       sourceStart,
-      sourceColor,
+      sourceColor:sourcePattern.direction,
+      sourcePattern:sourcePattern.pattern,
       targetStart,
-      direction:sourceColor,
-      strategy:"EVEN_10M_PLUS15",
+      direction:sourcePattern.direction,
+      strategy:"EVEN_10M_3C_FILTER",
       step,
       amount,
       payoutRate:settings.payout,
@@ -516,11 +535,16 @@ async function maybePrepare(env,payload,nowSec){
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
+  const patternText=String(pending.sourcePattern||"")
+    .split("").map(c=>c==="G"?"X":c==="R"?"Đ":"?").join("");
 
   await sendTelegram(env,
     "🚨 <b>CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU</b>\n"+
-    "Mốc lấy màu: <b>"+timeText(pending.sourceStart)+"</b> • "+sourceText+"\n"+
-    "Quy tắc: <b>sau 15 phút mua cùng màu</b>\n"+
+    "3 nến: <b>"+patternText+"</b> • "+timeText(pending.sourceStart)+" / "+
+      timeText(Number(pending.sourceStart)+INTERVAL)+" / "+
+      timeText(Number(pending.sourceStart)+2*INTERVAL)+"\n"+
+    "Màu mốc đầu: <b>"+sourceText+"</b>\n"+
+    "Điều kiện hợp lệ: <b>XĐX / ĐXĐ / XĐĐ / ĐXX</b>\n"+
     "➡️ "+buy+"\n"+
     "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
     "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
@@ -556,7 +580,12 @@ function resultMessagePart(result,settings){
 
   return (
     title+"\n"+
-    (Number.isFinite(Number(result.sourceStart))?"Mốc lấy màu: <b>"+timeText(result.sourceStart)+"</b>\n":"")+
+    (Number.isFinite(Number(result.sourceStart))
+      ?"Mốc 3 nến: <b>"+timeText(result.sourceStart)+" / "+timeText(Number(result.sourceStart)+INTERVAL)+" / "+timeText(Number(result.sourceStart)+2*INTERVAL)+"</b>\n"
+      :"")+
+    (result.sourcePattern
+      ?"Mẫu: <b>"+String(result.sourcePattern).split("").map(c=>c==="G"?"X":c==="R"?"Đ":"?").join("")+"</b>\n"
+      :"")+
     "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
@@ -622,6 +651,7 @@ export default {
         strategyVersion:STRATEGY_VERSION,
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
+        filterPatterns:["XĐX","ĐXĐ","XĐĐ","ĐXX"],
         skipBeatsAfterTwoLosses:SKIP_BEATS_AFTER_TWO_LOSSES,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
