@@ -39,7 +39,7 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertNotIn("remain<=30&&remain>0", self.source)
         self.assertIn("CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU", self.source)
         self.assertIn("prepare_60_start", self.source)
-        self.assertIn("CÒN ~1 PHÚT • VÀO LỆNH PHIÊN SAU", self.worker)
+        self.assertIn("CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU", self.worker)
         self.assertIn("schedulePrepareAt60", self.worker)
         self.assertIn("if(remain>70||remain<=45)return", self.worker)
 
