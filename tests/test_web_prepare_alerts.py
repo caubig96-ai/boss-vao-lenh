@@ -52,7 +52,7 @@ class WebTimeStrategyTests(unittest.TestCase):
     def test_first_loss_continues_and_two_losses_wait_for_shadow_win(self):
         self.assertIn("waitForWin:false", self.worker)
         self.assertIn("One real loss alone does not pause or wait", self.worker)
-        self.assertIn("After two consecutive REAL losses, stop real entries immediately", self.worker)
+        self.assertIn("Normal mode waits after 2 consecutive real losses", self.worker)
         self.assertIn("state.waitForWin=true", self.worker)
         self.assertIn("advanceWaitForWin", self.worker)
         self.assertIn("shadowSignalAt", self.worker)
@@ -77,6 +77,23 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertNotIn('d.textContent="B"', self.source)
         self.assertNotIn('d.textContent="·"', self.source)
         self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL', self.source)
+
+    def test_loss_capital_mode_has_toggle_endpoint_and_1_1_2_4_plan(self):
+        self.assertIn("lossCapitalMode:false", self.worker)
+        self.assertIn('u.pathname==="/trade-mode"', self.worker)
+        self.assertIn("function tradePlan", self.worker)
+        self.assertIn("capitalStage===2?1:capitalStage===3?2:4", self.worker)
+        self.assertIn("const maxLosses=state.lossCapitalMode?4:2", self.worker)
+        self.assertIn('id="lossCapitalModeBtn"', self.source)
+        self.assertIn("toggleLossCapitalMode", self.source)
+        self.assertIn("function historicalTradePlan", self.source)
+        self.assertIn("const maxLosses=lossCapitalMode?4:2", self.source)
+
+    def test_loss_capital_mode_preserves_win_double_rule(self):
+        self.assertIn("Number(step)===1&&win?2:1", self.worker)
+        self.assertIn("Number(step)===1&&win?2:1", self.source)
+        self.assertIn('label:"Lệnh thắng x2"', self.worker)
+        self.assertIn("step=nextHistoricalStep(step,win)", self.source)
 
     def test_24h_money_uses_double_step_after_step1_win(self):
         self.assertIn("function historicalMoneySettings", self.source)
