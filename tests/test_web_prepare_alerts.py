@@ -70,6 +70,15 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertIn("Số dư theo dõi", self.worker)
         self.assertIn("maybeSendSettlement", self.worker)
 
+    def test_settlement_fetches_exact_target_and_runs_before_sync(self):
+        self.assertIn("apiCategory(Number(pending.targetStart)", self.worker)
+        self.assertIn("if(!actual)actual=liveColorFromCategory(raw)", self.worker)
+        tick=self.worker.index("async function scheduledTick")
+        settle=self.worker.index("await maybeSendSettlement", tick)
+        sync=self.worker.index("?await sync(env)", tick)
+        self.assertGreater(settle, tick)
+        self.assertGreater(sync, settle)
+
     def test_pattern_history_uses_three_candles_skips_live_then_scores_next(self):
         self.assertIn("for(let i=2;i<rounds.length;i++)", self.source)
         self.assertIn("const w=rounds.slice(i-2,i+1)", self.source)
