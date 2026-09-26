@@ -19,7 +19,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
 .g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.calendarSummary{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:720px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
+.calendarSummary{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:520px;display:grid;grid-template-columns:48px repeat(6,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -115,7 +115,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="row">
     <div>
       <b>Lịch 24 giờ theo mốc chẵn +15 phút</b>
-      <div class="label">24 hàng giờ • mỗi hàng 12 ô × 5 phút • ô 00/10/20/30/40/50 là mốc lấy màu; ô 05/15/25/35/45/55 là ô xác nhận lệnh</div>
+      <div class="label">24 hàng giờ • mỗi hàng chỉ hiện 6 ô đặt lệnh: 05/15/25/35/45/55</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -123,10 +123,10 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
     <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
-    <div><span class="label">Không lệnh</span><b id="calendar24NoOrders">0</b></div>
+    <div><span class="label">Bỏ nhịp</span><b id="calendar24NoOrders">0</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • B = nhịp bị bỏ sau 2 lệnh thua liên tiếp • · = ô mốc chẵn không đặt lệnh • … = ô lệnh đang chờ dữ liệu hoặc chưa tới.</div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • B = nhịp bị bỏ sau 2 lệnh thua liên tiếp • … = ô lệnh đang chờ dữ liệu hoặc chưa tới. Các ô mốc lấy màu 00/10/20/30/40/50 không hiển thị.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -731,44 +731,42 @@ function buildCalendar24h(){
   const now=Math.floor(Date.now()/1000);
   const currentHour=Math.floor(now/3600)*3600;
   const first=currentHour-23*3600;
-  const last=first+24*3600-INTERVAL;
+  const last=currentHour+55*60;
 
   const timed=buildTimedHistory();
   const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
   const slots=[];
-  let wins=0,losses=0,signals=0,noOrders=0,skips=0,future=0,waiting=0;
+  let wins=0,losses=0,signals=0,skips=0,future=0,waiting=0;
 
-  for(let i=0;i<288;i++){
-    const t=first+i*INTERVAL;
-    const sourceT=sourceStartForTarget(t);
-    const eligible=sourceT!==null;
-    const signal=eligible?(signalMap.get(t)||null):null;
-    let status="SOURCE";
+  for(let hour=0;hour<24;hour++){
+    const hourStart=first+hour*3600;
+    for(const minute of [5,15,25,35,45,55]){
+      const t=hourStart+minute*60;
+      const sourceT=sourceStartForTarget(t);
+      const signal=signalMap.get(t)||null;
+      let status="WAIT";
 
-    if(!eligible){
-      status="SOURCE";
-      if(t<=now)noOrders++;
-    }else if(t>now){
-      status="FUTURE";
-      future++;
-    }else if(signal?.status==="WIN"){
-      status="WIN";wins++;signals++;
-    }else if(signal?.status==="LOSS"){
-      status="LOSS";losses++;signals++;
-    }else if(signal?.status==="SKIP"){
-      status="SKIP";skips++;
-    }else{
-      // Eligible order slot, but source/result data is not complete yet.
-      status="WAIT";
-      waiting++;
+      if(t>now){
+        status="FUTURE";
+        future++;
+      }else if(signal?.status==="WIN"){
+        status="WIN";wins++;signals++;
+      }else if(signal?.status==="LOSS"){
+        status="LOSS";losses++;signals++;
+      }else if(signal?.status==="SKIP"){
+        status="SKIP";skips++;
+      }else{
+        status="WAIT";
+        waiting++;
+      }
+
+      slots.push({t,status,signal,sourceT});
     }
-
-    slots.push({t,status,signal,sourceT,eligible});
   }
 
   const settled=wins+losses;
   return{
-    first,last,slots,wins,losses,signals,noOrders,skips,future,waiting,
+    first,last,slots,wins,losses,signals,skips,future,waiting,
     rate:settled?wins/settled*100:null
   };
 }
@@ -787,59 +785,57 @@ function renderCalendar24h(){
   headHour.className="calHead";
   headHour.textContent="Giờ";
   root.appendChild(headHour);
-  for(let m=0;m<60;m+=5){
+
+  for(const minute of [5,15,25,35,45,55]){
     const d=document.createElement("div");
     d.className="calHead";
-    d.textContent=String(m).padStart(2,"0");
+    d.textContent=String(minute).padStart(2,"0");
     root.appendChild(d);
   }
+
   const headSum=document.createElement("div");
   headSum.className="calHead";
   headSum.textContent="Tổng 1 giờ";
   root.appendChild(headSum);
 
   for(let row=0;row<24;row++){
-    const rowSlots=cal.slots.slice(row*12,row*12+12);
+    const rowSlots=cal.slots.slice(row*6,row*6+6);
     const label=document.createElement("div");
     label.className="calTime";
     label.textContent=String(new Date(rowSlots[0].t*1000).getHours()).padStart(2,"0")+":00";
     root.appendChild(label);
 
-    let rowW=0,rowL=0,rowB=0,rowN=0,rowWait=0,rowF=0;
+    let rowW=0,rowL=0,rowB=0,rowWait=0,rowF=0;
     rowSlots.forEach(slot=>{
       const d=document.createElement("div");
-      d.className="calCell";
+      d.className="calCell signal";
 
       if(slot.status==="WIN"){
-        rowW++;d.classList.add("win","signal");d.textContent="V";
+        rowW++;d.classList.add("win");d.textContent="V";
       }else if(slot.status==="LOSS"){
-        rowL++;d.classList.add("loss","signal");d.textContent="X";
+        rowL++;d.classList.add("loss");d.textContent="X";
       }else if(slot.status==="SKIP"){
-        rowB++;d.classList.add("skip","signal");d.textContent="B";
-      }else if(slot.status==="WAIT"){
-        rowWait++;d.classList.add("wait","signal");d.textContent="…";
+        rowB++;d.classList.add("skip");d.textContent="B";
       }else if(slot.status==="FUTURE"){
-        rowF++;d.classList.add("future","signal");d.textContent="…";
+        rowF++;d.classList.add("future");d.textContent="…";
       }else{
-        // Only source-time cells 00/10/20/30/40/50 use the dot.
-        rowN++;d.textContent="·";
+        rowWait++;d.classList.add("wait");d.textContent="…";
       }
 
       const s=slot.signal;
       let detail=shortClock(slot.t)+" • ";
-      if(slot.status==="SOURCE"){
-        detail+="mốc lấy màu • không đặt lệnh";
-      }else if(slot.status==="FUTURE"){
-        detail+="ô lệnh kế tiếp • chưa tới";
+      if(slot.status==="FUTURE"){
+        detail+="ô đặt lệnh • chưa tới";
       }else if(slot.status==="WIN"||slot.status==="LOSS"){
         detail+="mốc "+shortClock(s.sourceT)+" • "+
           (s.direction==="G"?"🟢 XANH":"🔴 ĐỎ")+" → +15 phút mua cùng màu • kết quả "+
           (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA");
       }else if(slot.status==="SKIP"){
-        detail+="ô lệnh • bỏ nhịp sau chuỗi 2 lệnh thua";
+        detail+="ô đặt lệnh • bỏ nhịp sau chuỗi 2 lệnh thua";
       }else{
-        detail+="ô lệnh • đang chờ đủ dữ liệu mốc "+shortClock(slot.sourceT)+" và kết quả";
+        detail+="ô đặt lệnh • đang chờ đủ dữ liệu mốc "+shortClock(slot.sourceT)+" và kết quả";
       }
+
       d.title=detail;
       d.setAttribute("aria-label",detail);
       root.appendChild(d);
@@ -847,14 +843,14 @@ function renderCalendar24h(){
 
     const sum=document.createElement("div");
     sum.className="calHourSum";
-    sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB+" • · "+rowN+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
+    sum.textContent="V "+rowW+" • X "+rowL+" • B "+rowB+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
     root.appendChild(sum);
   }
 
   $("calendar24Signals").textContent=String(cal.signals);
   $("calendar24Wins").textContent=String(cal.wins);
   $("calendar24Losses").textContent=String(cal.losses);
-  $("calendar24NoOrders").textContent=String(cal.noOrders);
+  $("calendar24NoOrders").textContent=String(cal.skips);
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
   $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
