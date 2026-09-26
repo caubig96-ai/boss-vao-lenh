@@ -63,7 +63,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 
 <section class="card">
   <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau đúng 15 phút, đặt lệnh cùng màu với nến ở mốc đó.</div>
+  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau đúng 15 phút mới đặt lệnh cùng màu; tín hiệu chỉ hiện khoảng 1 phút trước giờ đặt. Ví dụ 17:00 đỏ → khoảng 17:14 mới báo mua đỏ cho phiên 17:15.</div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
     <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
@@ -230,6 +230,7 @@ function firePrepareAlert(liveStart,remain,stage){
   const targetStart=liveStart+INTERVAL;
   const sourceStart=sourceStartForTarget(targetStart);
   if(sourceStart===null||prepare60Start===targetStart)return;
+  if(!isEntryAlertWindow(targetStart))return;
 
   const skipRemaining=Number(cloudTradeState?.skipSignals||0);
   const lastSkipped=Number(cloudTradeState?.lastSkippedTarget||0);
@@ -565,6 +566,14 @@ function upcomingTargetStart(nowSec=Date.now()/1000){
   }
   return null;
 }
+function alertStartForTarget(targetStart){
+  return Number(targetStart)-60;
+}
+function isEntryAlertWindow(targetStart,nowSec=Date.now()/1000){
+  const remain=Number(targetStart)-Number(nowSec);
+  return remain<=60&&remain>0;
+}
+
 function buildTimeSignals(){
   const byTime=new Map(rounds.map(x=>[Number(x.t),x]));
   const times=[...byTime.keys()].filter(Number.isFinite).sort((a,b)=>a-b);
@@ -868,24 +877,37 @@ function render(){
 
     const isSkipped=info.skipped||info.skipRemaining>0;
     const direction=info.pending?.direction||info.sourceColor;
+    const inAlertWindow=isEntryAlertWindow(info.targetStart);
+    const alertAt=alertStartForTarget(info.targetStart);
+
     $("buy").textContent=isSkipped
       ?"BỎ NHỊP"
-      :direction==="G"
-        ?"MUA XANH"
-        :direction==="R"
-          ?"MUA ĐỎ"
-          :"CHỜ MÀU MỐC";
-    $("buy").className=direction==="G"&&!isSkipped?"green":direction==="R"&&!isSkipped?"red":"";
+      :!inAlertWindow
+        ?"CHỜ "+shortClock(alertAt)
+        :direction==="G"
+          ?"MUA XANH"
+          :direction==="R"
+            ?"MUA ĐỎ"
+            :"CHỜ MÀU MỐC";
+    $("buy").className=inAlertWindow&&direction==="G"&&!isSkipped
+      ?"green"
+      :inAlertWindow&&direction==="R"&&!isSkipped
+        ?"red"
+        :"";
 
     const nextAmount=calc.step===2?calc.bet2:calc.bet1;
     $("bet").textContent=isSkipped
       ?"Sau 2 lệnh thua liên tiếp • đang bỏ nhịp kế tiếp"
-      :"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT";
+      :inAlertWindow
+        ?"Lệnh "+calc.step+" • "+nextAmount.toFixed(2)+" USDT"
+        :"Chưa báo lệnh • sẽ báo khoảng "+shortClock(alertAt);
 
     if(isSkipped){
       $("freshness").textContent="Nhịp "+fmtFrame(info.targetStart)+" không phát lệnh. Còn "+Math.max(info.skipRemaining,info.skipped?1:0)+" nhịp trong bộ đếm nghỉ.";
+    }else if(info.sourceColor&&inAlertWindow){
+      $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • mốc "+shortClock(info.sourceStart)+" màu "+(direction==="G"?"XANH":"ĐỎ")+" → đặt ở "+fmtFrame(info.targetStart)+".";
     }else if(info.sourceColor){
-      $("freshness").textContent="Lấy màu tại "+shortClock(info.sourceStart)+" → chờ 15 phút → đặt cùng màu ở "+fmtFrame(info.targetStart)+".";
+      $("freshness").textContent="Mốc "+shortClock(info.sourceStart)+" đã có màu "+(direction==="G"?"XANH":"ĐỎ")+", nhưng chưa báo lệnh. Chờ đến khoảng "+shortClock(alertAt)+" để vào phiên "+fmtFrame(info.targetStart)+".";
     }else{
       $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
     }
