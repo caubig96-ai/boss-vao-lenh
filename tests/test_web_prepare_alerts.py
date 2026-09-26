@@ -32,7 +32,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("sourceStartForTarget(t)", self.source)
         self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0", self.worker)
+        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&state.lastResultWin===false", self.worker)
         self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
 
     def test_one_minute_telegram_alert(self):
@@ -50,21 +50,16 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
         self.assertIn("17:00 -> order frame 17:10-17:15 -> alert around 17:09", self.worker)
 
-    def test_first_loss_continues_and_two_losses_wait_for_shadow_win(self):
-        self.assertIn("waitForWin:false", self.worker)
-        self.assertIn("Continue normally until the selected mode reaches its loss cap", self.worker)
-        self.assertIn("Normal mode waits after 2 consecutive real losses", self.worker)
-        self.assertIn("state.waitForWin=true", self.worker)
-        self.assertIn("advanceWaitForWin", self.worker)
-        self.assertIn("shadowSignalAt", self.worker)
-        self.assertIn("THUA 2 LỆNH LIÊN TIẾP • CHỜ 1 NHỊP GIẢ LẬP THẮNG", self.worker)
+    def test_previous_order_must_settle_before_next_order(self):
+        self.assertIn("lastResultWin:null", self.worker)
+        self.assertIn("state.lastResultWin=win", self.worker)
+        self.assertIn("if(state.pending&&Number(state.pending.targetStart)!==targetStart)return", self.worker)
+        self.assertIn("if(pending&&Number(pending.targetStart)!==targetStart)return", self.source)
+        self.assertIn("CHỜ KẾT QUẢ LỆNH TRƯỚC", self.source)
+        self.assertIn("Tool vẫn theo dõi đúng giờ và màu nến", self.source)
+        self.assertNotIn("state.waitForWin=true", self.worker)
         self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.source)
         self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
-        self.assertNotIn("skipSignals", self.worker)
-        self.assertNotIn("waitAfterSkips", self.source)
-        self.assertIn('status:shadowWin?"WAIT_WIN":"WAIT_LOSS"', self.source)
-        self.assertIn('d.textContent="C✓"', self.source)
-        self.assertIn('d.textContent="C×"', self.source)
 
     def test_24h_calendar_shows_only_six_order_slots_per_hour_newest_first(self):
         self.assertIn("24 hàng giờ", self.source)
@@ -84,34 +79,33 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('u.pathname==="/trade-mode"', self.worker)
         self.assertIn("function tradePlan", self.worker)
         self.assertIn("capitalStage===2?1:capitalStage===3?2:4", self.worker)
-        self.assertIn("const maxLosses=state.lossCapitalMode?4:2", self.worker)
+        self.assertIn("if(state.lossCapitalMode&&state.lossStreak>=4)state.lossStreak=0", self.worker)
         self.assertIn('id="lossCapitalModeBtn"', self.source)
         self.assertIn("toggleLossCapitalMode", self.source)
         self.assertIn("function historicalTradePlan", self.source)
-        self.assertIn("const maxLosses=lossCapitalMode?4:2", self.source)
+        self.assertIn("if(lossCapitalMode&&lossStreak>=4)lossStreak=0", self.source)
 
-    def test_reverse_color_mode_auto_reverses_only_after_a_loss(self):
+    def test_reverse_color_mode_uses_immediately_previous_order_result(self):
         self.assertIn("reverseColorMode:false", self.worker)
+        self.assertIn("lastResultWin:null", self.worker)
         self.assertIn("function tradeDirectionFromSource", self.worker)
         self.assertIn('return sourceColor==="G"?"R":"G"', self.worker)
-        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0", self.worker)
-        self.assertIn("shadowSignalAt(env,payload,target,reverseThisOrder)", self.worker)
+        self.assertIn("state.lastResultWin=win", self.worker)
+        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&state.lastResultWin===false", self.worker)
         self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
         self.assertIn("reverseColorMode:reverseThisOrder", self.worker)
         self.assertIn('id="reverseColorModeBtn"', self.source)
         self.assertIn("toggleReverseColorMode", self.source)
-        self.assertIn("const reverseThisOrder=reverseColorMode&&currentLossStreak>0", self.source)
+        self.assertIn("const reverseThisOrder=reverseColorMode&&cloudTradeState?.lastResultWin===false", self.source)
         self.assertIn("tradeDirectionFromSource(info.sourceColor,reverseThisOrder)", self.source)
-        self.assertIn("state.lossStreak=0", self.worker)
 
-    def test_reverse_color_mode_recalculates_24h_results_by_loss_streak(self):
+    def test_24h_results_use_previous_win_or_loss_for_next_color(self):
         self.assertIn("const reverseColorMode=!!cloudTradeState?.reverseColorMode", self.source)
-        self.assertIn("const reverseThisOrder=reverseColorMode&&lossStreak>0", self.source)
+        self.assertIn("let previousWin=null", self.source)
+        self.assertIn("const reverseThisOrder=reverseColorMode&&previousWin===false", self.source)
         self.assertIn("const direction=tradeDirectionFromSource(s.direction,reverseThisOrder)", self.source)
-        self.assertIn("const shadowWin=direction===s.actual", self.source)
         self.assertIn("const win=direction===s.actual", self.source)
-        self.assertIn("lossStreak=0", self.source)
-        self.assertIn("lossStreak++", self.source)
+        self.assertIn("previousWin=win", self.source)
 
     def test_loss_capital_mode_preserves_win_double_rule(self):
         self.assertIn("Number(step)===1&&win?2:1", self.worker)
