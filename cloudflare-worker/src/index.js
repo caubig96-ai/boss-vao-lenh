@@ -1,6 +1,5 @@
 const API="https://api.predict.fun";
 const INTERVAL=300;
-const PATTERN_VERSION="image-8-prefix3-v2";
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const SOURCE_STEP=600;       // 00,10,20,30,40,50
