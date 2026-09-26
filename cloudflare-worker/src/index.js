@@ -44,6 +44,7 @@ function freshTradeState(day){
     wins:0,
     losses:0,
     lossStreak:0,
+    lossCapitalMode:false,
     waitForWin:false,
     waitAfterTarget:0,
     waitLastCheckedTarget:0,
@@ -76,6 +77,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
   if(!Number.isFinite(Number(state.lossStreak)))state.lossStreak=0;
+  if(typeof state.lossCapitalMode!=="boolean")state.lossCapitalMode=false;
   if(typeof state.waitForWin!=="boolean")state.waitForWin=false;
   if(!Number.isFinite(Number(state.waitAfterTarget)))state.waitAfterTarget=0;
   if(!Number.isFinite(Number(state.waitLastCheckedTarget)))state.waitLastCheckedTarget=0;
@@ -99,6 +101,34 @@ function nextStepAfter(step,win){
 
 function amountForStep(settings,step){
   return Number(step)===2?settings.bet2:settings.bet1;
+}
+
+function tradePlan(settings,state){
+  const step=Number(state.step)===2?2:1;
+  const lossStreak=Math.max(0,Number(state.lossStreak||0));
+  const mode=!!state.lossCapitalMode;
+
+  if(mode&&lossStreak>0){
+    const capitalStage=Math.min(4,lossStreak+1);
+    const multiplier=capitalStage===2?1:capitalStage===3?2:4;
+    return {
+      step,
+      capitalStage,
+      amount:Number(settings.bet1)*multiplier,
+      label:"Lệnh vốn "+capitalStage+"/4"
+    };
+  }
+
+  if(step===2){
+    return {step:2,capitalStage:0,amount:amountForStep(settings,2),label:"Lệnh thắng x2"};
+  }
+
+  return {
+    step:1,
+    capitalStage:mode?1:0,
+    amount:amountForStep(settings,1),
+    label:mode?"Lệnh vốn 1/4":"Lệnh 1"
+  };
 }
 
 function json(data,status=200){
@@ -456,10 +486,10 @@ async function settlePreviousOrder(env,payload,nowSec,state){
   }else{
     state.lossStreak=Number(state.lossStreak||0)+1;
 
-    if(state.lossStreak>=2){
-      // First real loss continues normally.
-      // After two consecutive REAL losses, stop real entries immediately.
-      // Watch hypothetical signals until one wins, then enter the following real order.
+    const maxLosses=state.lossCapitalMode?4:2;
+    if(state.lossStreak>=maxLosses){
+      // Normal mode waits after 2 consecutive real losses.
+      // Loss-capital mode allows at most 4 consecutive real losses.
       state.lossStreak=0;
       state.waitForWin=true;
       state.waitAfterTarget=Number(pending.targetStart);
@@ -467,7 +497,7 @@ async function settlePreviousOrder(env,payload,nowSec,state){
       state.waitWinTarget=0;
       waitTriggered=true;
     }else{
-      // One real loss alone does not pause or wait.
+      // Continue normally until the selected mode reaches its loss cap.
       state.waitForWin=false;
       state.waitAfterTarget=0;
       state.waitLastCheckedTarget=0;
@@ -495,6 +525,8 @@ async function settlePreviousOrder(env,payload,nowSec,state){
     winsAfter:Number(state.wins||0),
     lossesAfter:Number(state.losses||0),
     nextStep,
+    capitalStage:Number(pending.capitalStage||0),
+    lossCapitalMode:!!pending.lossCapitalMode,
     lossStreakAfter:Number(state.lossStreak||0),
     waitTriggered,
     waitForWinAfter:!!state.waitForWin,
@@ -561,8 +593,7 @@ async function maybePrepare(env,payload,nowSec){
 
   const settings=tradeSettings(env);
   if(!state.pending){
-    const step=Number(state.step)===2?2:1;
-    const amount=amountForStep(settings,step);
+    const plan=tradePlan(settings,state);
     state.pending={
       id:String(targetStart)+"-"+String(sourceStart),
       day:currentDay,
@@ -571,8 +602,11 @@ async function maybePrepare(env,payload,nowSec){
       targetStart,
       direction:sourceColor,
       strategy:"EVEN_10M_ENTRY10_CLOSE15",
-      step,
-      amount,
+      step:plan.step,
+      capitalStage:plan.capitalStage,
+      planLabel:plan.label,
+      lossCapitalMode:!!state.lossCapitalMode,
+      amount:plan.amount,
       payoutRate:settings.payout,
       resumeFromWaitTarget:resumedFromWaitTarget||0,
       entrySent:false,
@@ -597,7 +631,8 @@ async function maybePrepare(env,payload,nowSec){
     "Quy tắc: <b>vào phiên +10 phút, chốt màu ở +15 phút</b>\n"+
     resumeLine+
     "➡️ "+buy+"\n"+
-    "<b>Lệnh "+Number(pending.step)+" • "+amountText(pending.amount)+"</b>\n"+
+    "<b>"+(pending.planLabel||("Lệnh "+Number(pending.step)))+" • "+amountText(pending.amount)+"</b>\n"+
+    (pending.lossCapitalMode?"Chế độ vốn thua 4 lệnh: <b>BẬT</b>\n":"")+
     "Phiên đặt lệnh: <b>"+frameText(pending.targetStart)+"</b>"
   );
 
@@ -626,7 +661,9 @@ function resultMessagePart(result,settings){
     ?Number(result.balanceAfter)
     :settings.startBalance+Number(result.pnlAfter||0);
   const waitLine=result.waitTriggered
-    ?"\n⏳ <b>THUA 2 LỆNH LIÊN TIẾP • CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại."
+    ?(result.lossCapitalMode
+      ?"\n⏳ <b>ĐÃ CHẠM GIỚI HẠN 4 LỆNH THUA • CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại."
+      :"\n⏳ <b>THUA 2 LỆNH LIÊN TIẾP • CHỜ 1 NHỊP GIẢ LẬP THẮNG</b>; lệnh kế tiếp mới vào lại.")
     :"";
 
   return (
@@ -698,6 +735,8 @@ export default {
         sourceStepMinutes:SOURCE_STEP/60,
         entryDelayMinutes:ENTRY_DELAY/60,
         waitForWinAfterTwoLosses:true,
+        lossCapitalModeSupported:true,
+        lossCapitalSequence:[1,1,2,4],
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -733,6 +772,34 @@ export default {
     }
 
 
+    if(u.pathname==="/trade-mode"){
+      if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
+      let body={};
+      try{body=await req.json()}catch(_){}
+      if(typeof body?.lossCapitalMode!=="boolean"){
+        return json({ok:false,error:"Thiếu lossCapitalMode boolean"},400);
+      }
+
+      const nowSec=Math.floor(Date.now()/1000);
+      const state=await readTradeState(env,nowSec);
+      state.lossCapitalMode=body.lossCapitalMode;
+      state.lossStreak=0;
+      state.waitForWin=false;
+      state.waitAfterTarget=0;
+      state.waitLastCheckedTarget=0;
+      state.waitWinTarget=0;
+      state.step=1;
+      await writeTradeState(env,state);
+
+      return json({
+        ok:true,
+        lossCapitalMode:state.lossCapitalMode,
+        message:state.lossCapitalMode
+          ?"Đã bật chế độ vốn thua tối đa 4 lệnh."
+          :"Đã tắt chế độ vốn thua 4 lệnh."
+      });
+    }
+
     if(u.pathname==="/trade-reset"){
       if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
       let body={};
@@ -740,7 +807,9 @@ export default {
       if(body?.confirm!=="RESET")return json({ok:false,error:"Thiếu xác nhận RESET"},400);
 
       const nowSec=Math.floor(Date.now()/1000);
+      const previous=await readTradeState(env,nowSec);
       const state=freshTradeState(dayTextFromSeconds(nowSec));
+      state.lossCapitalMode=!!previous.lossCapitalMode;
       state.balanceBase=0;
       await writeTradeState(env,state);
 
@@ -756,7 +825,7 @@ export default {
       catch(e){return json({ok:false,error:String(e.message||e)},500)}
     }
 
-    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/trade-reset","/sync"]});
+    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/trade-mode","/trade-reset","/sync"]});
   },
 
   async scheduled(controller,env,ctx){
