@@ -1117,7 +1117,7 @@ function render(){
     ?(pred==="G"?"MUA XANH":"MUA ĐỎ")
     :livePattern?.pred&&!tentativeAllowed
       ?"CHỜ / KHÔNG ĐẠT ĐIỀU KIỆN"
-      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 16 MẪU":"CHỜ MÀU LIVE");
+      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 12 MẪU":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
