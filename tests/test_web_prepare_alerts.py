@@ -10,53 +10,60 @@ ROOT = Path(__file__).resolve().parents[1]
 class WebPrepareAlertsTests(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT / "web-iphone" / "index.html").read_text(encoding="utf-8")
+        self.worker = (ROOT / "cloudflare-worker" / "src" / "index.js").read_text(encoding="utf-8")
 
-    def test_exact_12_image_patterns_are_the_only_active_web_rules(self):
-        self.assertIn("Boss 12 Mẫu", self.source)
-        self.assertIn("3 nhóm × 4 mẫu", self.source)
+    def test_exact_8_image_groups_are_active(self):
+        self.assertIn("Boss 8 Nhóm", self.source)
         expected = [
-            '["RGGRR","R"]', '["GGRRR","G"]', '["GRRGG","G"]', '["RRGGG","R"]',
-            '["RGRRR","R"]', '["GRGGR","R"]', '["RRGRR","R"]', '["GGRGR","R"]',
-            '["RGRRG","G"]', '["GRGGG","G"]', '["RRGRG","G"]', '["GGRGG","G"]',
+            '["RGRR","R"]', '["GRGR","G"]', '["RRGR","R"]', '["GGRR","G"]',
+            '["RGRG","R"]', '["GRGG","G"]', '["RRGG","R"]', '["GGRG","G"]',
         ]
         for item in expected:
             self.assertIn(item, self.source)
-        self.assertNotIn('["GRRGR","G"]', self.source)
-        self.assertNotIn('["RGGRG","R"]', self.source)
-        self.assertNotIn('["GGRRG","R"]', self.source)
-        self.assertNotIn('["RRGGR","G"]', self.source)
-        self.assertNotIn("4 nhóm × 4 mẫu", self.source)
-        self.assertNotIn("16 mô hình 5 nến", self.source)
+        self.assertIn('RGRR:"R"', self.worker)
+        self.assertIn('GRGR:"G"', self.worker)
+        self.assertIn('RRGG:"R"', self.worker)
+        self.assertIn('GGRG:"G"', self.worker)
+        self.assertNotIn("Boss 12 Mẫu", self.source)
+        self.assertNotIn("image-12", self.source)
+        self.assertNotIn("image-12", self.worker)
 
-    def test_prepare_alert_fires_once_at_30_seconds_for_next_frame(self):
+    def test_recognition_is_three_closed_plus_live(self):
+        self.assertIn("function getClosed3Before", self.source)
+        self.assertIn("function latestClosed3", self.source)
+        self.assertIn("const code=closed3.map(x=>x.c).join(\"\")+liveColor", self.source)
+        self.assertIn("for(let i=0;i<4;i++)", self.source)
+        self.assertIn("3 nến đã đóng + nến live hiện tại", self.source)
+
+    def test_entry_alert_fires_once_at_30_seconds_for_next_frame(self):
         self.assertNotIn("remain<=60&&remain>30", self.source)
         self.assertIn("remain<=30&&remain>0", self.source)
-        self.assertIn("CÒN 30 GIÂY • PHIÊN SAU", self.source)
-        self.assertIn("phiên sau dự kiến MUA", self.source)
-        self.assertIn("threeSecondAlert", self.source)
+        self.assertIn("CÒN 30 GIÂY • VÀO LỆNH PHIÊN SAU", self.source)
         self.assertIn("prepare_30_start", self.source)
+        self.assertIn("CÒN ~30 GIÂY • VÀO LỆNH PHIÊN SAU", self.worker)
+        self.assertIn("schedulePrepareAt30", self.worker)
 
-    def test_final_signal_uses_closed_live_round(self):
-        self.assertIn("async function finalizeLiveRound", self.source)
-        self.assertIn("closed=await fetchRound(liveStart)", self.source)
-        self.assertIn("const code=info.prefix+closed.c", self.source)
-        self.assertIn("MUA XANH", self.source)
-        self.assertIn("MUA ĐỎ", self.source)
+    def test_two_losses_pause_signals_for_15_minutes(self):
+        self.assertIn("lossStreak", self.worker)
+        self.assertIn("state.pauseUntil=nowSec+15*60", self.worker)
+        self.assertIn("TẠM DỪNG BÁO LỆNH 15 PHÚT", self.worker)
+        self.assertIn("Number(state.pauseUntil||0)>nowSec", self.worker)
+        self.assertIn("cloudTradeState?.pauseUntil", self.source)
 
-    def test_adaptive_mode_uses_three_samples_and_60_percent(self):
-        self.assertIn("function adaptiveDecisionFromRows", self.source)
-        self.assertIn("const MIN_SAMPLES=3", self.source)
-        self.assertIn("const THRESHOLD=60", self.source)
-        self.assertIn("winRate>lossRate&&winRate>=THRESHOLD", self.source)
-        self.assertIn("lossRate>winRate&&lossRate>=THRESHOLD", self.source)
-        self.assertIn('mode:"REVERSE_RATE"', self.source)
-        self.assertIn("oppositeColor", self.source)
+    def test_result_message_reports_win_loss_and_money(self):
+        self.assertIn("THẮNG LỆNH", self.worker)
+        self.assertIn("THUA LỆNH", self.worker)
+        self.assertIn("Lãi/lỗ lệnh", self.worker)
+        self.assertIn("Lãi/lỗ hôm nay", self.worker)
+        self.assertIn("Thắng/Thua hôm nay", self.worker)
+        self.assertIn("maybeSendSettlement", self.worker)
 
-    def test_pattern_stats_use_rolling_last_100_raw_signals(self):
-        self.assertIn("const recent=rawPatternSettled().slice(-100)", self.source)
-        self.assertIn('recentCount+"/100 lệnh"', self.source)
-        self.assertIn("Cửa sổ trượt 100 lệnh", self.source)
-        self.assertIn("12 mẫu màu", self.source)
+    def test_pattern_history_uses_four_candles_then_next_result(self):
+        self.assertIn("for(let i=3;i<rounds.length;i++)", self.source)
+        self.assertIn("const w=rounds.slice(i-3,i+1)", self.source)
+        self.assertIn("const targetT=w[3].t+INTERVAL", self.source)
+        self.assertIn("for(let i=3;i<rounds.length;i++)", self.worker)
+        self.assertIn("const actual=byTime.get(w[3].t+INTERVAL)", self.worker)
 
     def test_24h_calendar_uses_288_five_minute_slots(self):
         self.assertIn("Lịch 24 giờ theo nhóm màu nến", self.source)
