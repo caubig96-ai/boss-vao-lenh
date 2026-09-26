@@ -32,7 +32,8 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("sourceStartForTarget(t)", self.source)
         self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("direction=tradeDirectionFromSource(sourceColor,!!state.reverseColorMode)", self.worker)
+        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0", self.worker)
+        self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
 
     def test_one_minute_telegram_alert(self):
         self.assertIn("remain<=60&&remain>30", self.source)
@@ -89,22 +90,28 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("function historicalTradePlan", self.source)
         self.assertIn("const maxLosses=lossCapitalMode?4:2", self.source)
 
-    def test_reverse_color_mode_has_toggle_and_flips_trade_direction(self):
+    def test_reverse_color_mode_auto_reverses_only_after_a_loss(self):
         self.assertIn("reverseColorMode:false", self.worker)
         self.assertIn("function tradeDirectionFromSource", self.worker)
         self.assertIn('return sourceColor==="G"?"R":"G"', self.worker)
-        self.assertIn("shadowSignalAt(env,payload,target,!!state.reverseColorMode)", self.worker)
-        self.assertIn("direction=tradeDirectionFromSource(sourceColor,!!state.reverseColorMode)", self.worker)
-        self.assertIn("reverseColorMode:!!state.reverseColorMode", self.worker)
+        self.assertIn("const reverseThisOrder=!!state.reverseColorMode&&Number(state.lossStreak||0)>0", self.worker)
+        self.assertIn("shadowSignalAt(env,payload,target,reverseThisOrder)", self.worker)
+        self.assertIn("direction=tradeDirectionFromSource(sourceColor,reverseThisOrder)", self.worker)
+        self.assertIn("reverseColorMode:reverseThisOrder", self.worker)
         self.assertIn('id="reverseColorModeBtn"', self.source)
         self.assertIn("toggleReverseColorMode", self.source)
-        self.assertIn("tradeDirectionFromSource(info.sourceColor,reverseColorMode)", self.source)
+        self.assertIn("const reverseThisOrder=reverseColorMode&&currentLossStreak>0", self.source)
+        self.assertIn("tradeDirectionFromSource(info.sourceColor,reverseThisOrder)", self.source)
+        self.assertIn("state.lossStreak=0", self.worker)
 
-    def test_reverse_color_mode_recalculates_24h_results(self):
+    def test_reverse_color_mode_recalculates_24h_results_by_loss_streak(self):
         self.assertIn("const reverseColorMode=!!cloudTradeState?.reverseColorMode", self.source)
-        self.assertIn("const direction=tradeDirectionFromSource(s.direction,reverseColorMode)", self.source)
+        self.assertIn("const reverseThisOrder=reverseColorMode&&lossStreak>0", self.source)
+        self.assertIn("const direction=tradeDirectionFromSource(s.direction,reverseThisOrder)", self.source)
         self.assertIn("const shadowWin=direction===s.actual", self.source)
         self.assertIn("const win=direction===s.actual", self.source)
+        self.assertIn("lossStreak=0", self.source)
+        self.assertIn("lossStreak++", self.source)
 
     def test_loss_capital_mode_preserves_win_double_rule(self):
         self.assertIn("Number(step)===1&&win?2:1", self.worker)
