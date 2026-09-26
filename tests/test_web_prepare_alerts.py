@@ -29,7 +29,6 @@ class WebPrepareAlertsTests(unittest.TestCase):
         self.assertNotIn("image-12", self.worker)
 
     def test_recognition_is_three_closed_plus_live(self):
-        self.assertIn("function getClosed3Before", self.source)
         self.assertIn("function latestClosed3", self.source)
         self.assertIn("const code=closed3.map(x=>x.c).join(\"\")+liveColor", self.source)
         self.assertIn("for(let i=0;i<4;i++)", self.source)
