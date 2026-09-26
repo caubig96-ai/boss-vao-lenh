@@ -1128,7 +1128,7 @@ function render(){
   const autoInfo=$("autoStrategyInfo");
   if(autoInfo){
     const a=autoStrategySnapshot;
-    const validRate=Number(a?.validateRate);
+    const validRate=a?.validateRate===null||a?.validateRate===undefined?NaN:Number(a.validateRate);
     autoInfo.textContent=autoStrategyMode
       ?(a
         ?"Đang chọn: "+String(a.name||a.id||"Theo màu mốc")+
@@ -1150,7 +1150,8 @@ function render(){
     const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===Number(info.targetStart)?autoStrategySnapshot:null;
     const direction=info.pending?.direction||(autoStrategyMode?sameAuto?.direction:info.sourceColor);
     const strategyName=info.pending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
-    const strategyRate=Number(info.pending?.autoValidateRate??sameAuto?.validateRate);
+    const rawStrategyRate=info.pending?.autoValidateRate??sameAuto?.validateRate;
+    const strategyRate=rawStrategyRate===null||rawStrategyRate===undefined?NaN:Number(rawStrategyRate);
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
     const alertAt=alertStartForTarget(info.targetStart);
 
