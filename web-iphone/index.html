@@ -163,19 +163,19 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     </div>
     <span id="patternRoundCount" class="label">0 vòng</span>
   </div>
-  <div class="note" style="margin-top:7px">Bảng dùng đúng 8 nhóm màu trong ảnh mới. Mỗi nhóm gồm 3 nến đã đóng + nến live; kết quả được tính bằng màu của phiên 5 phút kế tiếp.</div>
+  <div class="note" style="margin-top:7px">Bảng dùng 100 lệnh lịch sử của 8 nhóm. Với nhóm đang khớp, tool chỉ đọc 2 kết quả gần nhất của chính nhóm đó: V-V và V-X đánh theo màu gốc; X-X và X-V đảo màu. Thứ tự hiển thị là gần nhất trước.</div>
   <div class="tablewrap">
     <table class="ptable">
       <thead>
         <tr>
           <th>Nhóm</th>
           <th>Nhóm 4 nến</th>
+          <th>2 gần nhất</th>
+          <th>Cách đánh</th>
           <th>Lệnh</th>
           <th>Xuất hiện</th>
           <th>Thắng</th>
           <th>Thua</th>
-          <th>Tỷ lệ thắng</th>
-          <th>Tỷ lệ thua</th>
         </tr>
       </thead>
       <tbody id="patternStats"></tbody>
@@ -294,14 +294,18 @@ function firePrepareAlert(liveStart,remain,stage){
   const currentLiveStart=liveMarket.start||Math.floor(Date.now()/1000/INTERVAL)*INTERVAL;
   if(currentLiveStart!==liveStart)return;
 
+  const decision=recentTwoDecision(livePattern.code);
+  if(!decision.allow)return;
+
   prepare60Start=liveStart;
   sessionStorage.setItem("prepare_60_start",String(liveStart));
 
-  const buyText=livePattern.pred==="G"?"XANH":"ĐỎ";
+  const buyText=decision.direction==="G"?"XANH":"ĐỎ";
+  const modeText=String(decision.mode).startsWith("REVERSE")?"ĐẢO MÀU":"THEO MÀU GỐC";
   showTradeAlert(
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    livePattern.group+" • "+patternIcons(livePattern.code)+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
+    livePattern.group+" • "+patternIcons(livePattern.code)+" • 2 gần nhất "+decision.pair+" • "+modeText+" • MUA "+buyText+" • áp dụng vòng "+fmtFrame(liveStart+INTERVAL)
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -621,19 +625,20 @@ function renderPatternStats(){
   $("patternStats").innerHTML="";
   rows.forEach(row=>{
     const tr=document.createElement("tr");
-    const rate=row.settled?row.wins/row.settled*100:null;
-    const action=row.pred==="G"?"MUA XANH":"MUA ĐỎ";
-    const actionClass=row.pred==="G"?"buyg":"buyr";
-    const rateClass=rate===null?"":rate>=60?"rateGood":"rateBad";
+    const decision=recentTwoDecision(row.code);
+    const pair=decision.pair||"—";
+    const mode=decision.allow?(String(decision.mode).startsWith("REVERSE")?"ĐẢO":"THEO GỐC"):"CHỜ";
+    const action=decision.allow?(decision.direction==="G"?"MUA XANH":"MUA ĐỎ"):"—";
+    const actionClass=decision.direction==="G"?"buyg":decision.direction==="R"?"buyr":"";
     tr.innerHTML=
       '<td>'+patternGroupName(row.code)+'</td>'+
       '<td><span class="picons">'+patternIcons(row.code)+'</span><span class="mini">'+row.code+'</span></td>'+
+      '<td>'+pair+'</td>'+
+      '<td>'+mode+'</td>'+
       '<td class="'+actionClass+'">'+action+'</td>'+
       '<td>'+row.occurrences+'</td>'+
       '<td class="green">'+row.wins+'</td>'+
-      '<td class="red">'+row.losses+'</td>'+
-      '<td class="'+rateClass+'">'+(rate===null?"—":rate.toFixed(1)+"%")+'</td>'+
-      '<td class="'+(rate===null?"":(100-rate)>=60?"rateBad":"")+'">'+(rate===null?"—":(100-rate).toFixed(1)+"%")+'</td>';
+      '<td class="red">'+row.losses+'</td>';
     $("patternStats").appendChild(tr);
   });
 }
@@ -656,6 +661,35 @@ function rawPatternSettled(){
   return buildSignals()
     .filter(item=>!!item.actual)
     .map(item=>({...item,win:item.pred===item.actual}));
+}
+function recentTwoDecision(code){
+  const pred=PATTERNS[code]||null;
+  if(!pred)return {allow:false,direction:null,mode:"NONE",pair:"",reason:"Không thuộc 8 nhóm"};
+
+  const recent100=rawPatternSettled().slice(-100);
+  const sameGroup=recent100.filter(item=>item.pattern===code);
+  const two=sameGroup.slice(-2).reverse();
+  const wins=sameGroup.filter(item=>item.win).length;
+  const losses=sameGroup.length-wins;
+
+  if(two.length<2){
+    return {
+      allow:false,direction:null,mode:"NEED_2",
+      pair:two.map(item=>item.win?"V":"X").join("-"),
+      wins,losses,settled:sameGroup.length,
+      reason:"Chưa đủ 2 kết quả gần nhất của nhóm này trong 100 lệnh"
+    };
+  }
+
+  const pair=two.map(item=>item.win?"V":"X").join("-");
+  const latestWon=two[0].win===true;
+  return {
+    allow:true,
+    direction:latestWon?pred:(pred==="G"?"R":"G"),
+    mode:pair==="V-V"?"FOLLOW_VV":pair==="X-X"?"REVERSE_XX":pair==="V-X"?"FOLLOW_VX":"REVERSE_XV",
+    pair,wins,losses,settled:sameGroup.length,
+    reason:latestWon?"Kết quả gần nhất thắng → theo màu gốc":"Kết quả gần nhất thua → đảo màu"
+  };
 }
 function compute(){
   const bet1=cloudMoneySettings?.bet1??n("bet1",1);
@@ -868,12 +902,15 @@ function render(){
 
   const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
   const paused=pauseUntil>Date.now()/1000;
-  const pred=!paused&&livePattern?.pred?livePattern.pred:null;
+  const decision=livePattern?.pred?recentTwoDecision(livePattern.code):null;
+  const pred=!paused&&decision?.allow?decision.direction:null;
   const targetT=liveMarket.end||null;
 
   $("buy").textContent=paused
     ?"TẠM DỪNG 15 PHÚT"
-    :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 8 NHÓM":"CHỜ MÀU LIVE");
+    :livePattern?.pred&&!decision?.allow
+      ?"CHỜ / CHƯA ĐỦ 2 KẾT QUẢ"
+      :(pred==="G"?"DỰ KIẾN XANH":pred==="R"?"DỰ KIẾN ĐỎ":liveMarket.color?"KHÔNG KHỚP 8 NHÓM":"CHỜ MÀU LIVE");
   $("buy").className="big "+(pred==="G"?"green":pred==="R"?"red":"");
   $("frame").textContent=targetT?fmtFrame(targetT):"--:--–--:--";
   const nextAmount=calc.step===2?calc.bet2:calc.bet1;
@@ -881,8 +918,11 @@ function render(){
 
   if(paused){
     $("freshness").textContent="Đã có 2 lệnh thua liên tiếp • tạm dừng báo lệnh đến "+shortClock(pauseUntil)+".";
+  }else if(livePattern?.pred&&decision?.allow){
+    const modeText=String(decision.mode).startsWith("REVERSE")?"ĐẢO MÀU":"THEO MÀU GỐC";
+    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • 2 kết quả gần nhất "+decision.pair+" • "+modeText+" • 1 phút cuối báo MUA "+(decision.direction==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
   }else if(livePattern?.pred){
-    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • khớp 8 nhóm mới • 1 phút cuối sẽ báo MUA "+(livePattern.pred==="G"?"XANH":"ĐỎ")+" cho phiên sau.";
+    $("freshness").textContent=livePattern.group+" • "+patternIcons(livePattern.code)+" • "+(decision?.reason||"Chưa đủ dữ liệu")+" • chưa báo lệnh.";
   }else if(livePattern){
     $("freshness").textContent="Nhóm hiện tại "+patternIcons(livePattern.code)+" không thuộc 8 nhóm mới.";
   }else{
