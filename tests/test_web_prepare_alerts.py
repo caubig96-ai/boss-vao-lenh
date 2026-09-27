@@ -32,7 +32,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("sourceStartForTarget(t)", self.source)
         self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
         self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("autoStrategyAnalysis(payload,targetStart)", self.worker)
+        self.assertIn("cachedBinanceAutoStrategy(env,true)", self.worker)
         self.assertIn("const direction=auto.direction||sourceColor", self.worker)
 
     def test_one_minute_telegram_alert(self):
@@ -85,26 +85,37 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("function historicalTradePlan", self.source)
         self.assertIn("if(lossCapitalMode&&lossStreak>=4)lossStreak=0", self.source)
 
-    def test_auto_strategy_replaces_fixed_reverse_rule(self):
+    def test_auto_strategy_uses_binance_24h_statistics(self):
         self.assertIn("autoStrategyMode:true", self.worker)
-        self.assertIn("function autoStrategyAnalysis", self.worker)
-        self.assertIn('"reverse_after_order2_loss"', self.worker)
-        self.assertIn('"pattern2","pattern3","pattern4","reverse_after_order2_loss"', self.worker)
-        self.assertIn("AUTO_VALIDATE_SECONDS=6*3600", self.worker)
-        self.assertIn("AUTO_WINDOW_SECONDS=24*3600", self.worker)
+        self.assertIn('BINANCE_KLINES_URL="https://api.binance.com/api/v3/klines"', self.worker)
+        self.assertIn('BINANCE_AUTO_SYMBOL="BTCUSDT"', self.worker)
+        self.assertIn('BINANCE_AUTO_INTERVAL="5m"', self.worker)
+        self.assertIn("BINANCE_AUTO_LIMIT=288", self.worker)
+        self.assertIn("BINANCE_AUTO_PATTERN_LEN=3", self.worker)
+        self.assertIn("function streakTransitionTable", self.worker)
+        self.assertIn("function patternMatchPredict", self.worker)
+        self.assertIn("function backtestStrategies", self.worker)
+        self.assertIn('"streak"', self.worker)
+        self.assertIn('"pattern3"', self.worker)
+        self.assertIn('"trend"', self.worker)
+        self.assertIn('"opposite_trend"', self.worker)
+        self.assertIn('"day_majority"', self.worker)
+        self.assertIn("cachedBinanceAutoStrategy", self.worker)
         self.assertIn('u.pathname==="/auto-strategy"', self.worker)
         self.assertIn('id="autoStrategyModeBtn"', self.source)
         self.assertIn("toggleAutoStrategyMode", self.source)
+        self.assertIn("AUTO BINANCE 24H", self.source)
         self.assertNotIn('id="reverseColorModeBtn"', self.source)
         self.assertNotIn("toggleReverseColorMode", self.source)
+        self.assertNotIn("AUTO_VALIDATE_SECONDS=6*3600", self.worker)
+        self.assertNotIn('"reverse_after_order2_loss"', self.worker)
 
-    def test_24h_calendar_uses_auto_selected_candidate(self):
-        self.assertIn("const selectedId=autoMode?(autoStrategySnapshot?.id||\"source\"):\"source\"", self.source)
-        self.assertIn("autoPatternMapForCalendar", self.source)
-        self.assertIn("autoDirectionForCalendar", self.source)
-        self.assertIn('selectedId==="reverse_after_order2_loss"', self.source)
-        self.assertIn("autoConsecutiveLosses>=2", self.source)
-        self.assertIn("autoStrategySnapshot?.name", self.source)
+    def test_24h_calendar_uses_recorded_cloud_orders(self):
+        self.assertIn("Array.isArray(cloudTradeState?.completed)", self.source)
+        self.assertIn("autoStrategyId:o.autoStrategyId||null", self.source)
+        self.assertNotIn("autoPatternMapForCalendar", self.source)
+        self.assertNotIn("autoDirectionForCalendar", self.source)
+        self.assertNotIn('selectedId==="reverse_after_order2_loss"', self.source)
 
     def test_loss_capital_mode_preserves_win_double_rule(self):
         self.assertIn("Number(step)===1&&win?2:1", self.worker)
