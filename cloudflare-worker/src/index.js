@@ -332,238 +332,245 @@ function tradeDirectionFromSource(sourceColor,reverseColorMode=false){
 }
 
 
-const AUTO_WINDOW_SECONDS=24*3600;
-const AUTO_VALIDATE_SECONDS=6*3600;
-const AUTO_MIN_TRAIN=36;
-const AUTO_MIN_VALIDATE=12;
+const BINANCE_KLINES_URL="https://api.binance.com/api/v3/klines";
+const BINANCE_KLINES_FALLBACK_URL="https://data-api.binance.vision/api/v3/klines";
+const BINANCE_AUTO_SYMBOL="BTCUSDT";
+const BINANCE_AUTO_INTERVAL="5m";
+const BINANCE_AUTO_LIMIT=288;
+const BINANCE_AUTO_PATTERN_LEN=3;
+const BINANCE_AUTO_CACHE_SECONDS=30;
 
-function oppositeColor(color){
-  return color==="G"?"R":color==="R"?"G":null;
+function binanceColor(open,close){
+  const o=Number(open),c=Number(close);
+  if(!Number.isFinite(o)||!Number.isFinite(c))return "DOJI";
+  return c>o?"G":c<o?"R":"DOJI";
 }
 
-function majorityColorAt(byTime,sourceStart,count){
-  const colors=[];
-  for(let i=count-1;i>=0;i--){
-    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
-    if(c!=="G"&&c!=="R")return null;
-    colors.push(c);
-  }
-  const greens=colors.filter(c=>c==="G").length;
-  const reds=colors.length-greens;
-  if(greens===reds)return colors[colors.length-1]||null;
-  return greens>reds?"G":"R";
-}
-
-function patternKeyAt(byTime,sourceStart,count){
-  const colors=[];
-  for(let i=count-1;i>=0;i--){
-    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
-    if(c!=="G"&&c!=="R")return null;
-    colors.push(c);
-  }
-  return colors.join("");
-}
-
-function autoSamplesFromRounds(rounds,beforeTarget=Infinity){
-  const sorted=(rounds||[]).slice().sort((a,b)=>a.t-b.t);
-  const byTime=new Map(sorted.map(x=>[Number(x.t),x.c]));
-  const resolvedTargets=sorted
-    .map(x=>Number(x.t))
-    .filter(t=>Number.isFinite(t)&&t<Number(beforeTarget)&&sourceStartForTarget(t)!==null);
-  if(!resolvedTargets.length)return {samples:[],byTime};
-  const latest=resolvedTargets[resolvedTargets.length-1];
-  const floor=latest-AUTO_WINDOW_SECONDS+INTERVAL;
-  const samples=[];
-  for(const targetT of resolvedTargets){
-    if(targetT<floor)continue;
-    const sourceT=sourceStartForTarget(targetT);
-    const source=byTime.get(sourceT)||null;
-    const actual=byTime.get(targetT)||null;
-    if(!source||!actual)continue;
-    samples.push({sourceT,targetT,source,actual});
-  }
-  return {samples,byTime};
-}
-
-function trainPatternMap(train,byTime,count){
-  const stats=new Map();
-  for(const s of train){
-    const key=patternKeyAt(byTime,s.sourceT,count);
-    if(!key)continue;
-    const row=stats.get(key)||{G:0,R:0,total:0};
-    row[s.actual]++;
-    row.total++;
-    stats.set(key,row);
-  }
-  const out=new Map();
-  for(const [key,row] of stats){
-    if(row.total<3)continue;
-    out.set(key,row.G===row.R?null:(row.G>row.R?"G":"R"));
-  }
-  return out;
-}
-
-function baseCandidateDirection(id,sample,byTime,patternMaps){
-  if(!sample)return null;
-  if(id==="source")return sample.source;
-  if(id==="opposite_source")return oppositeColor(sample.source);
-  if(id==="prev5")return byTime.get(sample.sourceT-INTERVAL)||sample.source;
-  if(id==="opposite_prev5")return oppositeColor(byTime.get(sample.sourceT-INTERVAL)||sample.source);
-  if(id==="majority3")return majorityColorAt(byTime,sample.sourceT,3)||sample.source;
-  if(id==="opposite_majority3")return oppositeColor(majorityColorAt(byTime,sample.sourceT,3)||sample.source);
-  if(id==="majority5")return majorityColorAt(byTime,sample.sourceT,5)||sample.source;
-  if(id==="opposite_majority5")return oppositeColor(majorityColorAt(byTime,sample.sourceT,5)||sample.source);
-  const m=id.match(/^pattern([234])$/);
-  if(m){
-    const count=Number(m[1]);
-    const key=patternKeyAt(byTime,sample.sourceT,count);
-    return (key&&patternMaps?.[id]?.get(key))||sample.source;
-  }
-  return sample.source;
-}
-
-function candidateLabel(id){
-  const labels={
-    source:"Theo màu mốc",
-    opposite_source:"Ngược màu mốc",
-    prev5:"Theo nến 5 phút trước mốc",
-    opposite_prev5:"Ngược nến 5 phút trước mốc",
-    majority3:"Theo đa số 3 nến",
-    opposite_majority3:"Ngược đa số 3 nến",
-    majority5:"Theo đa số 5 nến",
-    opposite_majority5:"Ngược đa số 5 nến",
-    pattern2:"Mẫu tự học 2 nến",
-    pattern3:"Mẫu tự học 3 nến",
-    pattern4:"Mẫu tự học 4 nến",
-    reverse_after_order2_loss:"Đảo sau Lệnh 2 thua"
-  };
-  return labels[id]||id;
-}
-
-function evaluateStaticCandidate(id,samples,byTime,patternMaps){
-  let wins=0,losses=0,streak=0,maxLossStreak=0;
-  for(const s of samples){
-    const direction=baseCandidateDirection(id,s,byTime,patternMaps);
-    if(!direction)continue;
-    if(direction===s.actual){wins++;streak=0}
-    else{losses++;streak++;maxLossStreak=Math.max(maxLossStreak,streak)}
-  }
-  const total=wins+losses;
-  return {wins,losses,total,rate:total?wins/total:0,maxLossStreak};
-}
-
-function evaluateReverseAfterOrder2(samples){
-  let wins=0,losses=0,streak=0,maxLossStreak=0;
-  let consecutiveLosses=0;
-  let active=false;
-  for(const s of samples){
-    const direction=active?oppositeColor(s.source):s.source;
-    const win=direction===s.actual;
-    if(win){
-      wins++;streak=0;consecutiveLosses=0;active=false;
-    }else{
-      losses++;streak++;maxLossStreak=Math.max(maxLossStreak,streak);
-      consecutiveLosses++;
-      if(consecutiveLosses>=2)active=true;
+async function fetchBinanceKlines(symbol=BINANCE_AUTO_SYMBOL,interval=BINANCE_AUTO_INTERVAL,limit=BINANCE_AUTO_LIMIT){
+  const qs="?symbol="+encodeURIComponent(String(symbol).toUpperCase())+
+    "&interval="+encodeURIComponent(interval)+
+    "&limit="+encodeURIComponent(String(limit));
+  let lastError=null;
+  for(const base of [BINANCE_KLINES_URL,BINANCE_KLINES_FALLBACK_URL]){
+    try{
+      const r=await fetch(base+qs,{headers:{"accept":"application/json"}});
+      if(!r.ok){
+        lastError=new Error("Binance API "+r.status+": "+(await r.text()).slice(0,180));
+        continue;
+      }
+      const raw=await r.json();
+      if(!Array.isArray(raw))throw new Error("Binance API trả dữ liệu không hợp lệ");
+      return raw.map(k=>({
+        openTime:Number(k?.[0]),
+        open:Number(k?.[1]),
+        high:Number(k?.[2]),
+        low:Number(k?.[3]),
+        close:Number(k?.[4]),
+        volume:Number(k?.[5]),
+        color:binanceColor(k?.[1],k?.[4])
+      })).filter(x=>Number.isFinite(x.openTime));
+    }catch(e){
+      lastError=e;
     }
   }
-  const total=wins+losses;
-  return {wins,losses,total,rate:total?wins/total:0,maxLossStreak,active,consecutiveLosses};
+  throw lastError||new Error("Không lấy được dữ liệu Binance");
 }
 
-function autoStrategyAnalysis(payload,targetStart){
-  const rounds=internalRounds(payload).filter(x=>x.t<Number(targetStart));
-  const {samples,byTime}=autoSamplesFromRounds(rounds,targetStart);
-  const fallbackSource=byTime.get(sourceStartForTarget(targetStart))||null;
-  if(samples.length<AUTO_MIN_TRAIN+AUTO_MIN_VALIDATE){
-    return {
-      id:"source",name:candidateLabel("source"),direction:fallbackSource,
-      trainWins:0,trainLosses:0,trainRate:null,
-      validateWins:0,validateLosses:0,validateRate:null,
-      maxLossStreak:null,sampleCount:samples.length,
-      reason:"Chưa đủ dữ liệu 24h để AUTO STRATEGY kiểm tra ổn định."
-    };
-  }
-
-  const latest=samples[samples.length-1].targetT;
-  const splitAt=latest-AUTO_VALIDATE_SECONDS+INTERVAL;
-  const train=samples.filter(s=>s.targetT<splitAt);
-  const validate=samples.filter(s=>s.targetT>=splitAt);
-  if(train.length<AUTO_MIN_TRAIN||validate.length<AUTO_MIN_VALIDATE){
-    return {
-      id:"source",name:candidateLabel("source"),direction:fallbackSource,
-      trainWins:0,trainLosses:0,trainRate:null,
-      validateWins:0,validateLosses:0,validateRate:null,
-      maxLossStreak:null,sampleCount:samples.length,
-      reason:"Dữ liệu 18h/6h chưa đủ để chọn công thức."
-    };
-  }
-
-  const candidateIds=[
-    "source","opposite_source","prev5","opposite_prev5",
-    "majority3","opposite_majority3","majority5","opposite_majority5",
-    "pattern2","pattern3","pattern4","reverse_after_order2_loss"
-  ];
-  const trainPatternMaps={
-    pattern2:trainPatternMap(train,byTime,2),
-    pattern3:trainPatternMap(train,byTime,3),
-    pattern4:trainPatternMap(train,byTime,4)
-  };
-
-  const ranked=[];
-  for(const id of candidateIds){
-    let tr,va;
-    if(id==="reverse_after_order2_loss"){
-      tr=evaluateReverseAfterOrder2(train);
-      va=evaluateReverseAfterOrder2(validate);
-    }else{
-      tr=evaluateStaticCandidate(id,train,byTime,trainPatternMaps);
-      va=evaluateStaticCandidate(id,validate,byTime,trainPatternMaps);
+function streakTransitionTable(colors){
+  const table=new Map();
+  let i=0;
+  const n=colors.length;
+  while(i<n-1){
+    const color=colors[i];
+    if(color==="DOJI"){i++;continue;}
+    let streak=1;
+    let j=i+1;
+    while(j<n&&colors[j]===color){streak++;j++;}
+    if(j<n){
+      const next=colors[j];
+      const key=color+":"+Math.min(streak,6);
+      if(next==="G"||next==="R"){
+        const row=table.get(key)||{G:0,R:0,total:0};
+        row[next]++;
+        row.total++;
+        table.set(key,row);
+      }
     }
-    if(va.total<AUTO_MIN_VALIDATE)continue;
-    ranked.push({
-      id,name:candidateLabel(id),
-      trainWins:tr.wins,trainLosses:tr.losses,trainRate:tr.rate,
-      validateWins:va.wins,validateLosses:va.losses,validateRate:va.rate,
-      maxLossStreak:va.maxLossStreak
+    i=j;
+  }
+  return table;
+}
+
+function currentStreak(colors){
+  if(!colors.length)return {color:null,streak:0};
+  const lastColor=colors[colors.length-1];
+  let streak=1;
+  for(let i=colors.length-2;i>=0;i--){
+    if(colors[i]===lastColor)streak++;
+    else break;
+  }
+  return {color:lastColor,streak};
+}
+
+function patternMatchPredict(colors,patternLen=BINANCE_AUTO_PATTERN_LEN){
+  if(colors.length<=patternLen)return null;
+  const currentPattern=colors.slice(-patternLen);
+  const outcomes={G:0,R:0};
+  for(let i=0;i<colors.length-patternLen-1;i++){
+    let same=true;
+    for(let k=0;k<patternLen;k++){
+      if(colors[i+k]!==currentPattern[k]){same=false;break;}
+    }
+    if(!same)continue;
+    const next=colors[i+patternLen];
+    if(next==="G"||next==="R")outcomes[next]++;
+  }
+  return {pattern:currentPattern,outcomes,total:outcomes.G+outcomes.R};
+}
+
+function backtestStrategies(colors){
+  const valid=colors.filter(c=>c!=="DOJI");
+  if(valid.length<2)return null;
+  const greenCount=valid.filter(c=>c==="G").length;
+  const redCount=valid.length-greenCount;
+  const majorityColor=greenCount>=redCount?"G":"R";
+  const results={
+    trend:0,oppositeTrend:0,dayMajority:0,total:0,
+    majorityColor,lastValidColor:valid[valid.length-1]
+  };
+  for(let i=0;i<valid.length-1;i++){
+    const prev=valid[i];
+    const actualNext=valid[i+1];
+    const opposite=oppositeColor(prev);
+    results.total++;
+    if(prev===actualNext)results.trend++;
+    if(opposite===actualNext)results.oppositeTrend++;
+    if(majorityColor===actualNext)results.dayMajority++;
+  }
+  return results;
+}
+
+function colorName(color){
+  return color==="G"?"XANH":color==="R"?"ĐỎ":"DOJI";
+}
+
+function buildBinanceAutoCandidates(colors){
+  const candidates=[];
+  const streakNow=currentStreak(colors);
+  const table=streakTransitionTable(colors);
+
+  if((streakNow.color==="G"||streakNow.color==="R")&&streakNow.streak>0){
+    const key=streakNow.color+":"+Math.min(streakNow.streak,6);
+    const row=table.get(key);
+    if(row&&row.total>=5&&row.G!==row.R){
+      const direction=row.G>row.R?"G":"R";
+      const wins=Math.max(row.G,row.R);
+      candidates.push({
+        id:"streak",
+        name:"Streak "+streakNow.streak+"x "+colorName(streakNow.color),
+        direction,wins,losses:row.total-wins,total:row.total,rate:wins/row.total,
+        detail:{currentColor:streakNow.color,streak:streakNow.streak,nextGreen:row.G,nextRed:row.R}
+      });
+    }
+  }
+
+  const pm=patternMatchPredict(colors,BINANCE_AUTO_PATTERN_LEN);
+  if(pm&&pm.total>0&&pm.outcomes.G!==pm.outcomes.R){
+    const direction=pm.outcomes.G>pm.outcomes.R?"G":"R";
+    const wins=Math.max(pm.outcomes.G,pm.outcomes.R);
+    candidates.push({
+      id:"pattern3",
+      name:"Mẫu 3 nến "+pm.pattern.map(colorName).join("-"),
+      direction,wins,losses:pm.total-wins,total:pm.total,rate:wins/pm.total,
+      detail:{pattern:pm.pattern,nextGreen:pm.outcomes.G,nextRed:pm.outcomes.R}
     });
   }
-  ranked.sort((a,b)=>
-    b.validateRate-a.validateRate ||
-    a.maxLossStreak-b.maxLossStreak ||
-    b.trainRate-a.trainRate ||
-    b.validateWins-a.validateWins
-  );
-  const best=ranked[0]||{
-    id:"source",name:candidateLabel("source"),
-    trainWins:0,trainLosses:0,trainRate:0,
-    validateWins:0,validateLosses:0,validateRate:0,maxLossStreak:0
-  };
 
-  const allPatternMaps={
-    pattern2:trainPatternMap(samples,byTime,2),
-    pattern3:trainPatternMap(samples,byTime,3),
-    pattern4:trainPatternMap(samples,byTime,4)
-  };
-  const nextSample={
-    sourceT:sourceStartForTarget(targetStart),
-    targetT:Number(targetStart),
-    source:fallbackSource,
-    actual:null
-  };
-  let direction=fallbackSource;
-  if(best.id==="reverse_after_order2_loss"){
-    const sim=evaluateReverseAfterOrder2(samples);
-    direction=sim.active?oppositeColor(fallbackSource):fallbackSource;
-  }else{
-    direction=baseCandidateDirection(best.id,nextSample,byTime,allPatternMaps)||fallbackSource;
+  const bt=backtestStrategies(colors);
+  if(bt&&bt.total>0){
+    const backtests=[
+      {id:"trend",name:"Theo xu hướng",direction:bt.lastValidColor,wins:bt.trend},
+      {id:"opposite_trend",name:"Ngược xu hướng",direction:oppositeColor(bt.lastValidColor),wins:bt.oppositeTrend},
+      {id:"day_majority",name:"Theo màu đa số 24h",direction:bt.majorityColor,wins:bt.dayMajority}
+    ];
+    for(const x of backtests){
+      candidates.push({
+        ...x,
+        losses:bt.total-x.wins,total:bt.total,rate:x.wins/bt.total,
+        detail:{majorityColor:bt.majorityColor,lastValidColor:bt.lastValidColor}
+      });
+    }
   }
+  return {candidates,streakNow,pattern:pm,backtest:bt};
+}
+
+function chooseBinanceAutoCandidate(candidates){
+  const ranked=(candidates||[]).filter(x=>
+    (x.direction==="G"||x.direction==="R")&&
+    Number.isFinite(Number(x.rate))&&
+    Number(x.total)>0
+  ).slice();
+  ranked.sort((a,b)=>
+    Number(b.rate)-Number(a.rate) ||
+    Number(b.total)-Number(a.total) ||
+    Number(b.wins)-Number(a.wins)
+  );
+  return {best:ranked[0]||null,ranked};
+}
+
+async function binanceAutoStrategyAnalysis(){
+  const candles=await fetchBinanceKlines();
+  const colors=candles.map(c=>c.color);
+  const greenCount=colors.filter(c=>c==="G").length;
+  const redCount=colors.filter(c=>c==="R").length;
+  const dojiCount=colors.length-greenCount-redCount;
+  const built=buildBinanceAutoCandidates(colors);
+  const chosen=chooseBinanceAutoCandidate(built.candidates);
+  const best=chosen.best;
+  const fallbackColor=colors.slice().reverse().find(c=>c==="G"||c==="R")||null;
 
   return {
-    ...best,direction,sampleCount:samples.length,
-    trainCount:train.length,validateCount:validate.length,
-    candidates:ranked.slice(0,5)
+    engine:"BINANCE_24H_STATS_V1",
+    symbol:BINANCE_AUTO_SYMBOL,
+    interval:BINANCE_AUTO_INTERVAL,
+    candleCount:colors.length,
+    generatedAt:Date.now(),
+    id:best?.id||"trend",
+    name:best?.name||"Theo xu hướng",
+    direction:best?.direction||fallbackColor,
+    successRate:best?best.rate:null,
+    wins:best?best.wins:0,
+    losses:best?best.losses:0,
+    sampleCount:best?best.total:0,
+    validateRate:best?best.rate:null,
+    validateWins:best?best.wins:0,
+    validateLosses:best?best.losses:0,
+    overview:{
+      total:colors.length,green:greenCount,red:redCount,doji:dojiCount,
+      lastColor:colors[colors.length-1]||null,
+      streakColor:built.streakNow.color,streak:built.streakNow.streak
+    },
+    pattern:built.pattern,
+    backtest:built.backtest,
+    candidates:chosen.ranked.slice(0,5)
   };
+}
+
+async function cachedBinanceAutoStrategy(env,force=false){
+  const key="auto:binance24h:v1";
+  const now=Date.now();
+  if(!force){
+    try{
+      const raw=await env.BOSS_KV.get(key);
+      if(raw){
+        const cached=JSON.parse(raw);
+        if(cached&&now-Number(cached.generatedAt||0)<BINANCE_AUTO_CACHE_SECONDS*1000)return cached;
+      }
+    }catch(_){}
+  }
+  const analysis=await binanceAutoStrategyAnalysis();
+  try{await env.BOSS_KV.put(key,JSON.stringify(analysis),{expirationTtl:120})}catch(_){}
+  return analysis;
 }
 
 async function resolvedColorAt(env,payload,ts){
@@ -849,15 +856,13 @@ async function maybePrepare(env,payload,nowSec){
   if(state.pending&&Number(state.pending.targetStart)!==targetStart)return;
 
   const sourceColor=await resolvedColorAt(env,payload,sourceStart);
-  if(!sourceColor)return;
 
-  // AUTO STRATEGY quét 24h: 18h đầu tạo công thức, 6h cuối kiểm tra.
-  // Quy tắc "đảo sau Lệnh 2 thua" chỉ là một ứng viên, không còn bị ép cố định.
+  // AUTO BINANCE 24H: streak, mẫu 3 nến, xu hướng, ngược xu hướng và màu đa số.
   const auto=state.autoStrategyMode
-    ?autoStrategyAnalysis(payload,targetStart)
-    :{id:"source",name:"Theo màu mốc",direction:sourceColor,validateRate:null,validateWins:0,validateLosses:0};
+    ?await cachedBinanceAutoStrategy(env,true)
+    :{id:"source",name:"Theo màu mốc",direction:sourceColor,successRate:null,wins:0,losses:0,sampleCount:0};
   const direction=auto.direction||sourceColor;
-  const reverseThisOrder=direction!==sourceColor;
+  const reverseThisOrder=!!sourceColor&&direction!==sourceColor;
   if(!direction)return;
 
   const settings=tradeSettings(env);
@@ -875,11 +880,18 @@ async function maybePrepare(env,payload,nowSec){
       autoStrategyMode:!!state.autoStrategyMode,
       autoStrategyId:auto.id,
       autoStrategyName:auto.name,
-      autoValidateRate:auto.validateRate===null||auto.validateRate===undefined
+      autoStrategyEngine:auto.engine||null,
+      autoSuccessRate:auto.successRate===null||auto.successRate===undefined
         ?null
-        :(Number.isFinite(Number(auto.validateRate))?Number(auto.validateRate):null),
-      autoValidateWins:Number(auto.validateWins||0),
-      autoValidateLosses:Number(auto.validateLosses||0),
+        :(Number.isFinite(Number(auto.successRate))?Number(auto.successRate):null),
+      autoWins:Number(auto.wins||0),
+      autoLosses:Number(auto.losses||0),
+      autoSampleCount:Number(auto.sampleCount||0),
+      autoValidateRate:auto.successRate===null||auto.successRate===undefined
+        ?null
+        :(Number.isFinite(Number(auto.successRate))?Number(auto.successRate):null),
+      autoValidateWins:Number(auto.wins||0),
+      autoValidateLosses:Number(auto.losses||0),
       step:plan.step,
       capitalStage:plan.capitalStage,
       planLabel:plan.label,
@@ -899,10 +911,12 @@ async function maybePrepare(env,payload,nowSec){
 
   const buy=pending.direction==="G"?"🟢 <b>MUA XANH NGAY</b>":"🔴 <b>MUA ĐỎ NGAY</b>";
   const sourceText=pending.sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const autoRate=Number(pending.autoValidateRate);
+  const autoRate=Number(pending.autoSuccessRate??pending.autoValidateRate);
+  const autoWins=Number((pending.autoWins??pending.autoValidateWins)??0);
+  const autoLosses=Number((pending.autoLosses??pending.autoValidateLosses)??0);
   const autoLine=pending.autoStrategyMode
-    ?"🧠 AUTO 24H: <b>"+String(pending.autoStrategyName||pending.autoStrategyId||"Theo màu mốc")+"</b>"+
-      (Number.isFinite(autoRate)?" • test 6h <b>"+(autoRate*100).toFixed(1)+"%</b> ("+Number(pending.autoValidateWins||0)+"T/"+Number(pending.autoValidateLosses||0)+"B)":"")+"\n"
+    ?"🧠 BINANCE 24H: <b>"+String(pending.autoStrategyName||pending.autoStrategyId||"AUTO")+"</b>"+
+      (Number.isFinite(autoRate)?" • lịch sử <b>"+(autoRate*100).toFixed(1)+"%</b> ("+autoWins+"T/"+autoLosses+"B)":"")+"\n"
     :"";
 
   await sendTelegram(env,
@@ -1017,12 +1031,16 @@ export default {
         waitForWinAfterTwoLosses:false,
         previousResultColorRule:false,
         autoStrategy24h:true,
-        autoStrategyTrainHours:18,
-        autoStrategyValidateHours:6,
+        autoStrategyEngine:"BINANCE_24H_STATS_V1",
+        autoStrategySource:"Binance Spot BTCUSDT",
+        autoStrategyInterval:"5m",
+        autoStrategyCandles:288,
+        autoStrategyPatternLength:3,
+        autoStrategyMethods:["streak","pattern3","trend","opposite_trend","day_majority"],
         lossCapitalModeSupported:true,
         lossCapitalSequence:[1,1,2,4],
         reverseColorModeSupported:false,
-        reverseColorRuleIncludedAsCandidate:true,
+        reverseColorRuleIncludedAsCandidate:false,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -1067,12 +1085,16 @@ export default {
       const payload=await readHistory(env);
       const sourceStart=sourceStartForTarget(targetStart);
       const sourceColor=sourceStart===null?null:await resolvedColorAt(env,payload,sourceStart);
-      const analysis=autoStrategyAnalysis(payload,targetStart);
-      return json({
-        ok:true,targetStart,sourceStart,sourceColor,
-        ...analysis,
-        direction:analysis.direction||sourceColor
-      });
+      try{
+        const analysis=await cachedBinanceAutoStrategy(env,false);
+        return json({
+          ok:true,targetStart,sourceStart,sourceColor,
+          ...analysis,
+          direction:analysis.direction||sourceColor
+        });
+      }catch(e){
+        return json({ok:false,targetStart,sourceStart,sourceColor,error:String(e.message||e)},502);
+      }
     }
 
 
@@ -1113,8 +1135,8 @@ export default {
       }
       if(hasAutoStrategy){
         message=state.autoStrategyMode
-          ?"Đã bật AUTO STRATEGY 24H: tool tự so sánh công thức bằng 18h học + 6h kiểm tra."
-          :"Đã tắt AUTO STRATEGY: tool quay về đánh theo màu mốc.";
+          ?"Đã bật AUTO BINANCE 24H: quét 288 nến 5 phút và chọn phương pháp thống kê có tỷ lệ lịch sử cao nhất."
+          :"Đã tắt AUTO BINANCE 24H: tool quay về đánh theo màu mốc.";
       }
 
       return json({
