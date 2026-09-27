@@ -73,15 +73,15 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   </div>
   <div class="row" style="margin-top:9px;background:#10161c;border-radius:12px;padding:11px">
     <div>
-      <b>AUTO STRATEGY 24H</b>
-      <div class="label">Quét 24 giờ nến đã đóng • 18 giờ tạo công thức • 6 giờ kiểm tra • tự chọn công thức có tỷ lệ thắng kiểm tra cao nhất</div>
+      <b>AUTO BINANCE 24H</b>
+      <div class="label">BTCUSDT Spot • 288 nến 5 phút gần nhất • streak + mẫu 3 nến + backtest 3 chiến lược • tự chọn phương pháp có tỷ lệ lịch sử cao nhất</div>
     </div>
     <button id="autoStrategyModeBtn" class="secondary" onclick="toggleAutoStrategyMode()">ĐANG TẢI</button>
   </div>
   <div id="autoStrategyInfo" class="note" style="margin-top:7px">Đang phân tích công thức...</div>
   <div class="stats" style="margin-top:12px">
-    <div class="stat"><span class="label">Mốc lấy màu</span><b id="sourceFrame">--:--</b></div>
-    <div class="stat"><span class="label">Màu mốc</span><b id="sourceColor">CHỜ</b></div>
+    <div class="stat"><span class="label">Mốc lịch</span><b id="sourceFrame">--:--</b></div>
+    <div class="stat"><span class="label">Màu Predict mốc</span><b id="sourceColor">CHỜ</b></div>
     <div class="stat"><span class="label">Phiên đặt lệnh</span><b id="targetFrame">--:--–--:--</b></div>
     <div class="stat"><span class="label">Lệnh dự kiến</span><b id="buy">CHỜ</b></div>
   </div>
@@ -144,7 +144,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. AUTO STRATEGY thử nhiều cách chọn màu trên 24 giờ gần nhất; “đảo sau Lệnh 2 thua” chỉ là một ứng viên, không còn là luật bắt buộc.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. Lịch này dùng kết quả các lệnh thực tế đã được Boss Cloud ghi lại; màu AUTO được chọn từ thống kê Binance 24h tại thời điểm báo lệnh.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -255,8 +255,8 @@ function firePrepareAlert(liveStart,remain,stage){
   if(pending&&Number(pending.targetStart)!==targetStart)return;
 
   const sourceColor=roundColorAt(sourceStart);
-  if(!sourceColor)return;
   const autoMode=cloudTradeState?.autoStrategyMode!==false;
+  if(!sourceColor&&!autoMode)return;
   const samePending=pending&&Number(pending.targetStart)===targetStart?pending:null;
   const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===targetStart?autoStrategySnapshot:null;
   if(autoMode&&!samePending&&!sameAuto)return;
@@ -271,8 +271,7 @@ function firePrepareAlert(liveStart,remain,stage){
   showTradeAlert(
     "prepare",
     "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    "Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ")+
-    (autoMode?" • AUTO: "+strategyName:"")+
+    (autoMode?"BINANCE 24H • "+strategyName:"Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ"))+
     " • MUA "+buyText+" • phiên "+fmtFrame(targetStart)
   );
   threeSecondAlert("prepare");
@@ -655,61 +654,6 @@ function roundColorAt(ts){
   return rounds.find(x=>Number(x.t)===Number(ts))?.c||null;
 }
 
-function autoMajorityColorAt(byTime,sourceStart,count){
-  const colors=[];
-  for(let i=count-1;i>=0;i--){
-    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
-    if(c!=="G"&&c!=="R")return null;
-    colors.push(c);
-  }
-  const g=colors.filter(c=>c==="G").length;
-  const r=colors.length-g;
-  return g===r?colors[colors.length-1]:(g>r?"G":"R");
-}
-function autoPatternKeyAt(byTime,sourceStart,count){
-  const out=[];
-  for(let i=count-1;i>=0;i--){
-    const c=byTime.get(Number(sourceStart)-i*INTERVAL);
-    if(c!=="G"&&c!=="R")return null;
-    out.push(c);
-  }
-  return out.join("");
-}
-function autoPatternMapForCalendar(signals,byTime,count){
-  if(!signals.length)return new Map();
-  const latest=signals[signals.length-1].targetT;
-  const splitAt=latest-6*3600+INTERVAL;
-  const stats=new Map();
-  for(const s of signals){
-    if(s.targetT>=splitAt||!s.actual)continue;
-    const key=autoPatternKeyAt(byTime,s.sourceT,count);
-    if(!key)continue;
-    const row=stats.get(key)||{G:0,R:0,total:0};
-    row[s.actual]++;row.total++;stats.set(key,row);
-  }
-  const map=new Map();
-  for(const [key,row] of stats){
-    if(row.total>=3&&row.G!==row.R)map.set(key,row.G>row.R?"G":"R");
-  }
-  return map;
-}
-function autoDirectionForCalendar(id,s,byTime,patternMaps){
-  const source=s.direction;
-  const opposite=x=>x==="G"?"R":x==="R"?"G":null;
-  if(id==="opposite_source")return opposite(source);
-  if(id==="prev5")return byTime.get(s.sourceT-INTERVAL)||source;
-  if(id==="opposite_prev5")return opposite(byTime.get(s.sourceT-INTERVAL)||source);
-  if(id==="majority3")return autoMajorityColorAt(byTime,s.sourceT,3)||source;
-  if(id==="opposite_majority3")return opposite(autoMajorityColorAt(byTime,s.sourceT,3)||source);
-  if(id==="majority5")return autoMajorityColorAt(byTime,s.sourceT,5)||source;
-  if(id==="opposite_majority5")return opposite(autoMajorityColorAt(byTime,s.sourceT,5)||source);
-  const m=String(id||"").match(/^pattern([234])$/);
-  if(m){
-    const key=autoPatternKeyAt(byTime,s.sourceT,Number(m[1]));
-    return (key&&patternMaps?.[id]?.get(key))||source;
-  }
-  return source;
-}
 function upcomingTargetStart(nowSec=Date.now()/1000){
   const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
   for(let i=0;i<8;i++){
@@ -788,71 +732,40 @@ function usd24(value,forceSign=false){
 }
 
 function buildTimedHistory(){
-  const signals=buildTimeSignals();
-  const out=[];
-  const moneySettings=historicalMoneySettings();
-  const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
-  const autoMode=cloudTradeState?.autoStrategyMode!==false;
-  const selectedId=autoMode?(autoStrategySnapshot?.id||"source"):"source";
-  const byTime=new Map(rounds.map(x=>[Number(x.t),x.c]));
-  const patternMaps={
-    pattern2:autoPatternMapForCalendar(signals,byTime,2),
-    pattern3:autoPatternMapForCalendar(signals,byTime,3),
-    pattern4:autoPatternMapForCalendar(signals,byTime,4)
-  };
-  let autoReverseActive=false;
-  let autoConsecutiveLosses=0;
-  let lossStreak=0;
-  let step=1;
+  const completed=Array.isArray(cloudTradeState?.completed)?cloudTradeState.completed:[];
+  const out=completed.map(o=>({
+    sourceT:Number(o.sourceStart||0),
+    targetT:Number(o.targetStart||0),
+    direction:o.direction||null,
+    actual:o.actual||null,
+    status:o.win===true?"WIN":o.win===false?"LOSS":"WAIT",
+    win:typeof o.win==="boolean"?o.win:null,
+    step:Number(o.step||1),
+    capitalStage:Number(o.capitalStage||0),
+    amount:Number(o.amount||0),
+    delta:Number(o.delta||0),
+    autoStrategyId:o.autoStrategyId||null,
+    autoStrategyName:o.autoStrategyName||null
+  })).filter(o=>Number.isFinite(o.targetT)&&o.targetT>0);
 
-  for(const s of signals){
-    let direction;
-    if(selectedId==="reverse_after_order2_loss"){
-      direction=autoReverseActive?tradeDirectionFromSource(s.direction,true):s.direction;
-    }else{
-      direction=autoDirectionForCalendar(selectedId,s,byTime,patternMaps);
-    }
-    if(!direction||!s.actual){
-      out.push({...s,direction,status:"WAIT"});
-      continue;
-    }
-
-    const plan=historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode);
-    const win=direction===s.actual;
-    const delta=win?plan.amount*moneySettings.payout:-plan.amount;
+  const p=cloudTradeState?.pending;
+  if(p){
     out.push({
-      ...s,
-      direction,
-      autoStrategyId:selectedId,
-      autoStrategyName:autoStrategySnapshot?.name||"Theo màu mốc",
-      status:win?"WIN":"LOSS",
-      win,
-      step:plan.step,
-      capitalStage:plan.capitalStage,
-      amount:plan.amount,
-      delta,
-      lossCapitalMode
+      sourceT:Number(p.sourceStart||0),
+      targetT:Number(p.targetStart||0),
+      direction:p.direction||null,
+      actual:null,
+      status:"WAIT",
+      win:null,
+      step:Number(p.step||1),
+      capitalStage:Number(p.capitalStage||0),
+      amount:Number(p.amount||0),
+      delta:0,
+      autoStrategyId:p.autoStrategyId||null,
+      autoStrategyName:p.autoStrategyName||null
     });
-
-    if(selectedId==="reverse_after_order2_loss"){
-      if(win){
-        autoConsecutiveLosses=0;
-        autoReverseActive=false;
-      }else{
-        autoConsecutiveLosses++;
-        if(autoConsecutiveLosses>=2)autoReverseActive=true;
-      }
-    }
-
-    if(win){
-      lossStreak=0;
-    }else{
-      lossStreak++;
-      if(lossCapitalMode&&lossStreak>=4)lossStreak=0;
-    }
-    step=nextHistoricalStep(step,win);
   }
-  return out;
+  return out.sort((a,b)=>a.targetT-b.targetT);
 }
 function nextTimeSignalInfo(){
   const targetStart=upcomingTargetStart();
@@ -1128,14 +1041,17 @@ function render(){
   const autoInfo=$("autoStrategyInfo");
   if(autoInfo){
     const a=autoStrategySnapshot;
-    const validRate=a?.validateRate===null||a?.validateRate===undefined?NaN:Number(a.validateRate);
+    const rate=a?.successRate===null||a?.successRate===undefined?NaN:Number(a.successRate);
+    const overview=a?.overview||{};
     autoInfo.textContent=autoStrategyMode
       ?(a
-        ?"Đang chọn: "+String(a.name||a.id||"Theo màu mốc")+
-          (Number.isFinite(validRate)?" • Test 6h: "+(validRate*100).toFixed(1)+"% • "+Number(a.validateWins||0)+" thắng / "+Number(a.validateLosses||0)+" thua":"")+
-          " • đã quét "+Number(a.sampleCount||0)+" mẫu"
-        :"Đang tải kết quả AUTO STRATEGY...")
-      :"AUTO STRATEGY đang tắt • dùng màu mốc.";
+        ?"Đang chọn: "+String(a.name||a.id||"AUTO")+
+          (Number.isFinite(rate)?" • lịch sử "+(rate*100).toFixed(1)+"% • "+Number(a.wins||0)+" thắng / "+Number(a.losses||0)+" thua":"")+
+          " • mẫu "+Number(a.sampleCount||0)+
+          " • 288 nến: "+Number(overview.green||0)+" xanh / "+Number(overview.red||0)+" đỏ"+
+          (Number(overview.doji||0)>0?" / "+Number(overview.doji||0)+" doji":"")
+        :"Đang tải thống kê Binance 24h...")
+      :"AUTO BINANCE 24H đang tắt • dùng màu mốc.";
   }
 
   if(info){
@@ -1150,7 +1066,7 @@ function render(){
     const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===Number(info.targetStart)?autoStrategySnapshot:null;
     const direction=info.pending?.direction||(autoStrategyMode?sameAuto?.direction:info.sourceColor);
     const strategyName=info.pending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
-    const rawStrategyRate=info.pending?.autoValidateRate??sameAuto?.validateRate;
+    const rawStrategyRate=info.pending?.autoSuccessRate??info.pending?.autoValidateRate??sameAuto?.successRate??sameAuto?.validateRate;
     const strategyRate=rawStrategyRate===null||rawStrategyRate===undefined?NaN:Number(rawStrategyRate);
     const inAlertWindow=isEntryAlertWindow(info.targetStart);
     const alertAt=alertStartForTarget(info.targetStart);
@@ -1187,17 +1103,17 @@ function render(){
 
     if(isWaitingPrevious){
       $("freshness").textContent="Tool vẫn theo dõi đúng giờ và màu nến, nhưng chưa vào lệnh mới cho tới khi lệnh trước được xác nhận THẮNG hoặc THUA.";
-    }else if(info.sourceColor&&inAlertWindow){
+    }else if((info.sourceColor||autoStrategyMode)&&inAlertWindow){
       $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • AUTO: "+strategyName+
-        (Number.isFinite(strategyRate)?" • test 6h "+(strategyRate*100).toFixed(1)+"%":"")+
+        (Number.isFinite(strategyRate)?" • lịch sử "+(strategyRate*100).toFixed(1)+"%":"")+
         " • MUA "+(direction==="G"?"XANH":direction==="R"?"ĐỎ":"CHỜ")+" • phiên "+fmtFrame(info.targetStart)+".";
-    }else if(info.sourceColor){
+    }else if(info.sourceColor||autoStrategyMode){
       $("freshness").textContent="AUTO đang chọn "+strategyName+
-        (Number.isFinite(strategyRate)?" • test 6h "+(strategyRate*100).toFixed(1)+"%":"")+
+        (Number.isFinite(strategyRate)?" • lịch sử "+(strategyRate*100).toFixed(1)+"%":"")+
         " • dự kiến "+(direction==="G"?"MUA XANH":direction==="R"?"MUA ĐỎ":"đang chờ dữ liệu")+
         ". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh.";
     }else{
-      $("freshness").textContent="Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
+      $("freshness").textContent=autoStrategyMode?"Đang chờ dữ liệu Binance 24h.":"Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
     }
   }else{
     $("sourceFrame").textContent="--:--";
