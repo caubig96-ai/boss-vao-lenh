@@ -23,3 +23,13 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 - Secret: `CLOUD_TELEGRAM_BOT_TOKEN`
 - Secret: `CLOUD_TELEGRAM_CHAT_ID`
 - Cron: mỗi phút
+
+## Deploy
+
+Worker này đang dùng **Cloudflare Workers Builds** kết nối trực tiếp với GitHub.
+
+- Repository: `caubig96-ai/boss-vao-lenh`
+- Root directory trên Cloudflare: `cloudflare-worker`
+- Production branch: `main`
+- Mỗi lần push lên `main`, Cloudflare tự build và deploy Worker.
+- Không cần GitHub Actions token riêng cho Cloudflare.
