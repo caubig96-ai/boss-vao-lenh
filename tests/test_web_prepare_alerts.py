@@ -83,7 +83,7 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('id="lossCapitalModeBtn"', self.source)
         self.assertIn("toggleLossCapitalMode", self.source)
         self.assertIn("function historicalTradePlan", self.source)
-        self.assertIn("if(lossCapitalMode&&lossStreak>=4)lossStreak=0", self.source)
+        self.assertIn("capitalStage===2?1:capitalStage===3?2:4", self.source)
 
     def test_auto_strategy_uses_binance_24h_statistics(self):
         self.assertIn("autoStrategyMode:true", self.worker)
@@ -121,14 +121,14 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("Number(step)===1&&win?2:1", self.worker)
         self.assertIn("Number(step)===1&&win?2:1", self.source)
         self.assertIn('label:"Lệnh thắng x2"', self.worker)
-        self.assertIn("step=nextHistoricalStep(step,win)", self.source)
+        self.assertIn("const step=Number(cloudTradeState.step||1)", self.source)
 
     def test_24h_money_uses_double_step_after_step1_win(self):
         self.assertIn("function historicalMoneySettings", self.source)
         self.assertIn("function nextHistoricalStep", self.source)
         self.assertIn("Number(step)===1&&win?2:1", self.source)
-        self.assertIn("const plan=historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode)", self.source)
-        self.assertIn("const delta=win?plan.amount*moneySettings.payout:-plan.amount", self.source)
+        self.assertIn("amount:Number(o.amount||0)", self.source)
+        self.assertIn("delta:Number(o.delta||0)", self.source)
         self.assertIn('id="calendar24GrossWin"', self.source)
         self.assertIn('id="calendar24GrossLoss"', self.source)
         self.assertIn('id="calendar24Net"', self.source)
