@@ -33,7 +33,20 @@ Hai dãy CHẴN và LẺ có bước vốn **độc lập**:
 - Sau Lệnh 2 của dãy đó, dù thắng hay thua → quay về Lệnh 1.
 - Lệnh 1 thua → lần kế tiếp cùng dãy vẫn là Lệnh 1.
 - Vì hai dãy xen kẽ 5 phút, tại 16:18 tool có thể chuẩn bị lệnh LẺ 16:25 dù lệnh CHẴN 16:20 vẫn đang chạy; bước vốn LẺ dựa trên kết quả LẺ trước đó.
-- Khi kết quả gần nhất của MỐC CHẴN và MỐC LẺ đều là THUA, tool dừng 30 phút.
+- Khi có **2 lệnh thực tế liên tiếp đều thua**, tool dừng đúng 30 phút.
+- Sau 30 phút, lệnh mới được phép bắt đầu khi thời điểm mở nến mục tiêu đã tới hoặc sau `pauseUntil`.
+- Hết thời gian nghỉ, cả hai dãy quay về Lệnh 1.
+
+## Backtest 24 giờ
+
+Giao diện iPhone dựng lại toàn bộ chiến lược từ màu nến lịch sử thay vì chỉ đọc danh sách lệnh cũ:
+
+- mỗi mốc đóng 5 phút được phân loại CHẴN/LẺ;
+- lấy đúng 3 nến cùng dãy để áp dụng AAA→A / ABA→B;
+- Lệnh 1 / Lệnh 2 x2 được mô phỏng độc lập cho từng dãy;
+- 2 lệnh thua liên tiếp sẽ tạo khoảng nghỉ 30 phút;
+- bảng 24h hiển thị theo từng giờ: số lệnh, thắng, thua, phút nghỉ, tiền thắng, tiền thua và lãi/lỗ ròng;
+- tổng 24h hiển thị số lệnh, tỷ lệ thắng, số lần nghỉ, tổng phút nghỉ và PnL.
 
 ## Telegram
 
