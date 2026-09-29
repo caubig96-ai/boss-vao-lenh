@@ -788,7 +788,8 @@ export default {
       return json({
         ok:true,
         ...signal,
-        paused:Number(state.pauseUntil||0)>nowSec,
+        paused:Number(state.pauseUntil||0)>0&&(Number(targetStart)-INTERVAL)<Number(state.pauseUntil||0),
+        pauseActiveNow:Number(state.pauseUntil||0)>nowSec,
         pauseUntil:Number(state.pauseUntil||0),
         laneResults:state.laneResults||{EVEN:null,ODD:null},
         laneSteps:state.laneSteps||{EVEN:1,ODD:1},
