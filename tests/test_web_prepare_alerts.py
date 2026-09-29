@@ -30,9 +30,9 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("const SIGNAL_STEP=600", self.worker)
         self.assertIn("const ALERT_LEAD=420", self.worker)
         self.assertIn("const PAUSE_SECONDS=1800", self.worker)
-        self.assertIn('STRATEGY_VERSION="alternating-lane-tminus7-v5"', self.worker)
+        self.assertIn('STRATEGY_VERSION="alternating-lane-tminus7-v6"', self.worker)
         self.assertIn("const PREVIEW_ALERT_LEAD=420", self.source)
-        self.assertIn('STRATEGY_VERSION="alternating-lane-tminus7-v5"', self.source)
+        self.assertIn('STRATEGY_VERSION="alternating-lane-tminus7-v6"', self.source)
         self.assertIn("remain<=450&&remain>=390", self.worker)
         self.assertIn("remain<=450&&remain>=390", self.source)
 
@@ -82,11 +82,13 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("independentLaneMoneySteps:true", self.worker)
         self.assertIn("calc.laneSteps?.[info.lane]", self.source)
 
-    def test_pause_after_latest_even_and_odd_losses(self):
-        self.assertIn('state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS"', self.worker)
+    def test_pause_after_two_consecutive_losses(self):
+        self.assertIn("consecutiveLosses:0", self.worker)
+        self.assertIn("state.consecutiveLosses=win?0:Number(state.consecutiveLosses||0)+1", self.worker)
+        self.assertIn("if(state.consecutiveLosses>=2)", self.worker)
         self.assertIn("PAUSE_SECONDS=1800", self.worker)
         self.assertIn("state.laneSteps={EVEN:1,ODD:1}", self.worker)
-        self.assertIn("DỪNG 30 PHÚT", self.worker)
+        self.assertNotIn('state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS"', self.worker)
 
     def test_telegram_contains_required_context(self):
         self.assertIn('"Nến live đang chạy đóng lúc: <b>"+timeText(pending.liveCloseMark)', self.worker)
@@ -101,11 +103,35 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn("Math.floor(nowSec/INTERVAL)*INTERVAL+2*INTERVAL", self.worker)
         self.assertIn("Math.floor(Number(nowSec)/INTERVAL)*INTERVAL+2*INTERVAL", self.source)
 
-    def test_calendar_has_all_five_minute_close_marks(self):
-        self.assertIn("00/10/20/30/40/50", self.source)
-        self.assertIn("05/15/25/35/45/55", self.source)
+    def test_calendar_backtests_all_five_minute_close_marks(self):
+        self.assertIn("function backtestStrategy24h", self.source)
+        self.assertIn("function historicalPatternForTarget", self.source)
+        self.assertIn("historicalColorAtClose", self.source)
         self.assertIn("for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55])", self.source)
-        self.assertIn("slice(row*12,row*12+12)", self.source)
+        self.assertIn("AAA→A / ABA→B", self.source)
+
+    def test_calendar_uses_independent_lane_x2_and_pause(self):
+        self.assertIn("const laneSteps={EVEN:1,ODD:1}", self.source)
+        self.assertIn("laneSteps[lane]=step===1&&win?2:1", self.source)
+        self.assertIn("consecutiveLosses=win?0:consecutiveLosses+1", self.source)
+        self.assertIn("if(consecutiveLosses>=2)", self.source)
+        self.assertIn("const pauseEnd=t+1800", self.source)
+        self.assertIn('status:"PAUSE"', self.source)
+
+    def test_calendar_reports_hourly_and_total_profit_pause_stats(self):
+        self.assertIn('id="calendar24Pauses"', self.source)
+        self.assertIn('id="calendar24PauseMinutes"', self.source)
+        self.assertIn('" • Nghỉ "+rowPauseMinutes+"p"', self.source)
+        self.assertIn('" • T+ "+usd24(rowGrossWin)', self.source)
+        self.assertIn('" • T- $"+rowGrossLoss.toFixed(2)', self.source)
+        self.assertIn('" • Net "+usd24(rowNet,true)', self.source)
+        self.assertIn('calendar24PauseMinutes', self.source)
+
+    def test_pause_resume_uses_target_market_start(self):
+        self.assertIn("const targetMarketStart=targetStart-INTERVAL", self.worker)
+        self.assertIn("targetMarketStart<Number(state.pauseUntil)", self.worker)
+        self.assertIn("pauseActiveNow", self.worker)
+        self.assertIn("patternSnapshot.paused", self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
