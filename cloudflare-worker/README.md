@@ -34,7 +34,11 @@ Hai dãy CHẴN và LẺ có bước vốn **độc lập**:
 - Lệnh 1 thua → lần kế tiếp cùng dãy vẫn là Lệnh 1.
 - Vì hai dãy xen kẽ 5 phút, tại 16:18 tool có thể chuẩn bị lệnh LẺ 16:25 dù lệnh CHẴN 16:20 vẫn đang chạy; bước vốn LẺ dựa trên kết quả LẺ trước đó.
 - Khi có **2 lệnh thực tế liên tiếp đều thua**, tool dừng đúng 30 phút.
-- Sau 30 phút, lệnh mới được phép bắt đầu khi thời điểm mở nến mục tiêu đã tới hoặc sau `pauseUntil`.
+- Trong 30 phút nghỉ, tool không chuẩn bị trước lệnh mới.
+- Ví dụ lệnh thua thứ 2 kết thúc lúc 16:10 → nghỉ đến 16:40.
+- Đến 16:40, tool lấy nến live đang chạy 16:40–16:45 làm mốc hiện tại; vì nến live đóng 16:45 là MỐC LẺ, lệnh kế tiếp đóng 16:50 thuộc MỐC CHẴN.
+- Khoảng 16:43 tool lấy 3 MỐC CHẴN gần nhất 16:20, 16:30, 16:40 để chọn màu cho nến 16:50.
+- Không đánh nến 16:45 vì thời điểm cần báo cho nến đó là 16:38, vẫn nằm trong thời gian nghỉ.
 - Hết thời gian nghỉ, cả hai dãy quay về Lệnh 1.
 
 ## Backtest 24 giờ
