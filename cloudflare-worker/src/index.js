@@ -3,10 +3,11 @@ const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
 const SIGNAL_STEP=600;       // mỗi dãy CHẴN/LẺ cách nhau 10 phút
-const ENTRY_GRACE_SECONDS=70; // gửi lệnh trong khoảng đầu phiên mới sau khi phiên trước được chốt
+const ALERT_LEAD=420;         // báo trước 7 phút: :18 báo cho nến đóng :25
 const PAUSE_SECONDS=1800;     // dãy CHẴN và dãy LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="continuous-even-odd-minute-v4";
+const STRATEGY_VERSION="alternating-lane-tminus7-v5";
 // CHẴN = phút 00/10/20/30/40/50; LẺ = phút 05/15/25/35/45/55.
+// targetStart là MỐC ĐÓNG nến. Ví dụ targetStart=:25 nghĩa là nến :20-:25.
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -41,7 +42,7 @@ function freshTradeState(day){
   return {
     day,
     strategyVersion:STRATEGY_VERSION,
-    step:1,
+    laneSteps:{EVEN:1,ODD:1},
     pnl:0,
     wins:0,
     losses:0,
@@ -70,8 +71,9 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
     await writeTradeState(env,state);
   }
 
-  if(!Number.isFinite(Number(state.step)))state.step=1;
-  state.step=Number(state.step)===2?2:1;
+  if(!state.laneSteps||typeof state.laneSteps!=="object")state.laneSteps={EVEN:1,ODD:1};
+  state.laneSteps.EVEN=Number(state.laneSteps.EVEN)===2?2:1;
+  state.laneSteps.ODD=Number(state.laneSteps.ODD)===2?2:1;
   if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
@@ -96,8 +98,9 @@ function nextStepAfter(step,win){
   return Number(step)===1&&win?2:1;
 }
 
-function tradePlan(settings,state){
-  const step=Number(state.step)===2?2:1;
+function tradePlan(settings,state,lane){
+  const key=lane==="ODD"?"ODD":"EVEN";
+  const step=Number(state.laneSteps?.[key])===2?2:1;
   return step===2
     ?{step:2,capitalStage:0,amount:Number(settings.bet2),label:"Lệnh 2 x2"}
     :{step:1,capitalStage:0,amount:Number(settings.bet1),label:"Lệnh 1"};
@@ -355,6 +358,8 @@ async function patternSignalForTarget(env,payload,targetStart){
   const decision=directionFromThree(decisionColors);
   return {
     targetStart:target,
+    marketStart:target-INTERVAL,
+    liveCloseMark:target-INTERVAL,
     lane,
     laneText:laneText(lane),
     marks,
@@ -366,10 +371,18 @@ async function patternSignalForTarget(env,payload,targetStart){
   };
 }
 
-function entryTargetForNow(nowSec){
-  const target=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
-  const elapsed=Number(nowSec)-target;
-  return elapsed>=0&&elapsed<=ENTRY_GRACE_SECONDS?target:null;
+function alertTargetForNow(nowSec){
+  const base=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
+  for(let i=1;i<=4;i++){
+    const target=base+i*INTERVAL;
+    const remain=target-Number(nowSec);
+    if(isPatternTarget(target)&&remain<=450&&remain>=390)return target;
+  }
+  return null;
+}
+
+function targetCandleFrame(ts){
+  return timeText(Number(ts)-INTERVAL)+"–"+timeText(Number(ts));
 }
 
 function laneResultText(value){
@@ -423,30 +436,30 @@ async function sendReadyOnce(env){
 
 
 async function settleDueOrders(env,payload,nowSec,state){
-  const currentStart=Math.floor(nowSec/INTERVAL)*INTERVAL;
   const settings=tradeSettings(env);
   const stillPending=[];
   const results=[];
 
   for(const pending of (state.pendingOrders||[]).slice().sort((a,b)=>Number(a.targetStart)-Number(b.targetStart))){
-    if(Number(pending.targetStart)>=currentStart){
+    if(Number(nowSec)<Number(pending.targetStart)){
       stillPending.push(pending);
       continue;
     }
 
+    const marketStart=Number(pending.marketStart??(Number(pending.targetStart)-INTERVAL));
     const rounds=internalRounds(payload);
-    let actual=rounds.find(x=>x.t===Number(pending.targetStart))?.c||null;
+    let actual=rounds.find(x=>x.t===marketStart)?.c||null;
     if(!actual){
       try{
-        const raw=await apiCategory(Number(pending.targetStart),env.PREDICT_API_KEY);
+        const raw=await apiCategory(marketStart,env.PREDICT_API_KEY);
         const normalized=normalizeCategory(raw);
         actual=normalized?.color==="V"?"G":normalized?.color==="X"?"R":null;
         if(!actual)actual=liveColorFromCategory(raw);
         if(actual){
           const existing=await readHistory(env);
           const synthetic={
-            slug:"btc-updown-5m-"+Number(pending.targetStart),
-            ts:Number(pending.targetStart),
+            slug:"btc-updown-5m-"+marketStart,
+            ts:marketStart,
             color:actual==="G"?"V":"X",
             outcome:actual==="G"?"UP":"DOWN"
           };
@@ -477,14 +490,14 @@ async function settleDueOrders(env,payload,nowSec,state){
     state.laneLastResultTarget[lane]=Number(pending.targetStart);
 
     const nextStep=nextStepAfter(pending.step,win);
-    state.step=nextStep;
+    state.laneSteps[lane]=nextStep;
 
     const bothLanesLost=state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS";
     let pauseTriggered=false;
     if(bothLanesLost){
       state.pauseUntil=Math.max(
         Number(state.pauseUntil||0),
-        Number(pending.targetStart)+INTERVAL+PAUSE_SECONDS
+        Number(pending.targetStart)+PAUSE_SECONDS
       );
       state.pauseReason="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA";
       pauseTriggered=true;
@@ -494,6 +507,7 @@ async function settleDueOrders(env,payload,nowSec,state){
     const result={
       id:pending.id,
       targetStart:Number(pending.targetStart),
+      marketStart,
       lane,
       laneText:laneText(lane),
       marks:pending.marks||[],
@@ -524,9 +538,7 @@ async function settleDueOrders(env,payload,nowSec,state){
     results.push(result);
 
     if(pauseTriggered){
-      state.step=1;
-      state.laneResults={EVEN:null,ODD:null};
-      state.laneLastResultTarget={EVEN:0,ODD:0};
+      state.laneSteps={EVEN:1,ODD:1};
     }
   }
 
@@ -543,22 +555,26 @@ async function maybePrepare(env,payload,nowSec){
   if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil)<=Number(nowSec)){
     state.pauseUntil=0;
     state.pauseReason=null;
-    state.step=1;
+    state.laneSteps={EVEN:1,ODD:1};
     state.laneResults={EVEN:null,ODD:null};
     state.laneLastResultTarget={EVEN:0,ODD:0};
     await writeTradeState(env,state);
   }
 
-  const targetStart=entryTargetForNow(nowSec);
+  const targetStart=alertTargetForNow(nowSec);
   if(!targetStart)return;
-  if((state.pendingOrders||[]).length)return;
   if((state.pendingOrders||[]).some(p=>Number(p.targetStart)===targetStart))return;
 
   const signal=await patternSignalForTarget(env,payload,targetStart);
   if(!signal?.direction)return;
 
+  // Hai dãy chạy độc lập. Ở :18, lệnh LẺ :25 chỉ phụ thuộc kết quả LẺ :15,
+  // nên có thể chuẩn bị dù lệnh CHẴN :20 vẫn đang chạy.
+  const sameLanePending=(state.pendingOrders||[]).find(p=>p.lane===signal.lane&&Number(p.targetStart)<targetStart);
+  if(sameLanePending)return;
+
   const settings=tradeSettings(env);
-  const plan=tradePlan(settings,state);
+  const plan=tradePlan(settings,state,signal.lane);
   const previousEven=state.laneResults?.EVEN||null;
   const previousOdd=state.laneResults?.ODD||null;
 
@@ -566,6 +582,8 @@ async function maybePrepare(env,payload,nowSec){
     id:String(targetStart)+"-"+signal.lane,
     day:dayTextFromSeconds(targetStart),
     targetStart,
+    marketStart:signal.marketStart,
+    liveCloseMark:signal.liveCloseMark,
     lane:signal.lane,
     laneText:signal.laneText,
     marks:signal.marks,
@@ -595,12 +613,12 @@ async function maybePrepare(env,payload,nowSec){
   const rule=pending.patternType==="SAME"?"3 màu giống nhau → theo cùng màu":"mẫu xen kẽ A-B-A → tiếp tục màu B";
 
   await sendTelegram(env,
-    "🚨 <b>BÁO LỆNH KHUNG "+pending.laneText+"</b>\n"+
+    "🚨 <b>BÁO LỆNH "+pending.laneText+" • NẾN "+timeText(pending.targetStart)+"</b>\n"+
+    "Nến live đang chạy đóng lúc: <b>"+timeText(pending.liveCloseMark)+"</b>\n"+
     "4 màu trước: "+fourLine+"\n"+
-    "3 màu quyết định: <b>"+threeLine+"</b>\n"+
+    "3 mốc chọn màu: <b>"+pending.decisionMarks.map((m,i)=>timeText(m)+" "+icon(pending.decisionColors[i])).join(" • ")+"</b>\n"+
     "Quy tắc: <b>"+rule+"</b>\n"+
-    "➡️ "+buy+"\n"+
-    "Phiên mua liên tục: <b>"+frameText(pending.targetStart)+"</b> • "+pending.laneText+"\n"+
+    "➡️ "+buy+" cho nến <b>"+timeText(pending.targetStart)+"</b> ("+targetCandleFrame(pending.targetStart)+")\n"+
     "<b>"+pending.planLabel+" • "+amountText(pending.amount)+"</b>\n"+
     "Lệnh gần nhất MỐC CHẴN: <b>"+laneResultText(previousEven)+"</b> • MỐC LẺ: <b>"+laneResultText(previousOdd)+"</b>"
   );
@@ -632,10 +650,10 @@ function resultMessagePart(result,settings){
 
   return (
     title+"\n"+
-    "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
+    "Nến vừa xong: <b>"+timeText(result.targetStart)+"</b> ("+targetCandleFrame(result.targetStart)+")\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
     "Kết quả gần nhất MỐC CHẴN: <b>"+laneResultText(laneEven)+"</b> • MỐC LẺ: <b>"+laneResultText(laneOdd)+"</b>\n"+
-    "Đã dùng: <b>Lệnh "+Number(result.step||1)+"</b> • lệnh kế tiếp: <b>Lệnh "+Number(result.nextStep||1)+(Number(result.nextStep||1)===2?" x2":"")+"</b>\n"+
+    "Dãy "+result.laneText+": đã dùng <b>Lệnh "+Number(result.step||1)+"</b> • lần "+result.laneText+" kế tiếp: <b>Lệnh "+Number(result.nextStep||1)+(Number(result.nextStep||1)===2?" x2":"")+"</b>\n"+
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
@@ -706,13 +724,15 @@ export default {
         evenMinuteMarks:["00","10","20","30","40","50"],
         oddMinuteMarks:["05","15","25","35","45","55"],
         entryEveryMinutes:5,
-        continuousEntry:true,
-        entryGraceSeconds:ENTRY_GRACE_SECONDS,
-        previewUsesNextFiveMinuteLane:true,
+        alertLeadMinutes:ALERT_LEAD/60,
+        targetLabelsAreCandleCloseMinutes:true,
+        independentLaneMoneySteps:true,
+        exampleOdd:{alert:"16:18",liveClose:"16:20",decisionMarks:["15:55","16:05","16:15"],targetClose:"16:25"},
+        exampleEven:{alert:"16:23",decisionMarks:["16:00","16:10","16:20"],targetClose:"16:30"},
         patternRules:["AAA->A","ABA->B"],
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
         winDoubleRule:true,
-        moneyRule:"Lệnh 1 thắng -> Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> về Lệnh 1",
+        moneyRule:"Mỗi dãy CHẴN/LẺ quản lý riêng: Lệnh 1 thắng -> lần cùng dãy kế tiếp dùng Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> Lệnh 1",
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
@@ -753,7 +773,7 @@ export default {
       const targetParam=Number(u.searchParams.get("target"));
       const targetStart=Number.isFinite(targetParam)&&targetParam>0
         ?Math.floor(targetParam/INTERVAL)*INTERVAL
-        :Math.floor(nowSec/INTERVAL)*INTERVAL+INTERVAL;
+        :Math.floor(nowSec/INTERVAL)*INTERVAL+2*INTERVAL;
       const payload=await readHistory(env);
       const signal=await patternSignalForTarget(env,payload,targetStart);
       const state=await readTradeState(env,nowSec);
@@ -763,8 +783,9 @@ export default {
         paused:Number(state.pauseUntil||0)>nowSec,
         pauseUntil:Number(state.pauseUntil||0),
         laneResults:state.laneResults||{EVEN:null,ODD:null},
-        step:Number(state.step||1),
-        amount:tradePlan(tradeSettings(env),state).amount
+        laneSteps:state.laneSteps||{EVEN:1,ODD:1},
+        step:Number(state.laneSteps?.[signal?.lane]||1),
+        amount:tradePlan(tradeSettings(env),state,signal?.lane).amount
       });
     }
 
@@ -782,7 +803,7 @@ export default {
 
       return json({
         ok:true,
-        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, trạng thái CHẴN/LẺ và thời gian nghỉ về 0.",
+        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, trạng thái hai dãy CHẴN/LẺ và thời gian nghỉ về 0.",
         state
       });
     }
