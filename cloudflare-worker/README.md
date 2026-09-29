@@ -7,26 +7,45 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 - CHẴN/LẺ được xác định theo **phút**, không theo giờ:
   - MỐC CHẴN: :00, :10, :20, :30, :40, :50.
   - MỐC LẺ: :05, :15, :25, :35, :45, :55.
-- Tool vào lệnh liên tục mỗi 5 phút.
-- Phiên kế tiếp thuộc dãy nào thì dùng 3 mốc đã đóng gần nhất của chính dãy đó:
-  - đang chạy 16:00 → phiên kế tiếp 16:05 là MỐC LẺ → dùng 15:35, 15:45, 15:55 để chọn màu 16:05;
-  - đang chạy 16:05 → phiên kế tiếp 16:10 là MỐC CHẴN → dùng 15:40, 15:50, 16:00 để chọn màu 16:10.
+- Mốc tên lệnh là **mốc đóng nến**.
+  - “lệnh :25” = nến :20–:25.
+  - “lệnh :30” = nến :25–:30.
+- Tool báo màu trước khoảng **7 phút**:
+  - lúc 16:18, nến live đang chạy sẽ đóng ở 16:20;
+  - lệnh kế tiếp là nến đóng 16:25, thuộc MỐC LẺ;
+  - tool lấy 3 nến LẺ đã đóng gần nhất: 15:55, 16:05, 16:15;
+  - Telegram báo màu mua cho nến 16:25 ngay khoảng 16:18.
+- Khi sang phía ngược lại:
+  - khoảng 16:23, tool lấy 16:00, 16:10, 16:20 của MỐC CHẴN;
+  - báo màu mua cho nến đóng 16:30.
 - Quy tắc màu:
-  - AAA → lệnh kế tiếp cùng màu A.
-  - ABA → lệnh kế tiếp theo màu B để tiếp tục A-B-A-B.
+  - AAA → mua A.
+  - ABA → mua B để tiếp tục A-B-A-B.
   - mẫu khác → bỏ qua.
-- Giao diện xem trước màu của phiên kế tiếp trong nến live hiện tại.
-- Cloud chốt kết quả phiên vừa xong trước, sau đó mới xác định tiền Lệnh 1/Lệnh 2 x2 và gửi lệnh cho phiên mới.
-- Telegram hiển thị 4 màu trước của dãy mục tiêu, 3 màu quyết định, MỐC CHẴN/MỐC LẺ, màu mua và kết quả gần nhất của hai dãy.
-- Không dùng đảo màu, AUTO Binance hoặc các bộ chọn màu trước đây.
 
 ## Quản lý tiền
 
-- Lệnh 1 dùng `CLOUD_BET1`.
-- Nếu **Lệnh 1 thắng**, lệnh thực tế kế tiếp dùng **Lệnh 2 x2** với `CLOUD_BET2`.
-- Sau Lệnh 2, dù thắng hay thua, quay về Lệnh 1.
-- Nếu Lệnh 1 thua, tiếp tục Lệnh 1.
-- Khi kết quả gần nhất của MỐC CHẴN và MỐC LẺ đều là THUA, tool dừng 30 phút; hết thời gian nghỉ bắt đầu lại từ Lệnh 1.
+Hai dãy CHẴN và LẺ có bước vốn **độc lập**:
+
+- MỐC CHẴN có Lệnh 1 / Lệnh 2 x2 riêng.
+- MỐC LẺ có Lệnh 1 / Lệnh 2 x2 riêng.
+- Lệnh 1 của một dãy thắng → lần tiếp theo của chính dãy đó dùng Lệnh 2 x2.
+- Sau Lệnh 2 của dãy đó, dù thắng hay thua → quay về Lệnh 1.
+- Lệnh 1 thua → lần kế tiếp cùng dãy vẫn là Lệnh 1.
+- Vì hai dãy xen kẽ 5 phút, tại 16:18 tool có thể chuẩn bị lệnh LẺ 16:25 dù lệnh CHẴN 16:20 vẫn đang chạy; bước vốn LẺ dựa trên kết quả LẺ trước đó.
+- Khi kết quả gần nhất của MỐC CHẴN và MỐC LẺ đều là THUA, tool dừng 30 phút.
+
+## Telegram
+
+Tin nhắn lệnh hiển thị:
+- nến live hiện tại sẽ đóng lúc nào;
+- 4 màu trước;
+- 3 mốc thực sự dùng để chọn màu;
+- đang dùng MỐC CHẴN hay MỐC LẺ;
+- màu cần mua;
+- nến mục tiêu và khung 5 phút tương ứng;
+- Lệnh 1 hay Lệnh 2 x2 của đúng dãy;
+- kết quả gần nhất của CHẴN và LẺ.
 
 ## Cấu hình
 
@@ -42,9 +61,4 @@ Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone kh�
 
 ## Deploy
 
-Worker dùng **Cloudflare Workers Builds** kết nối trực tiếp với GitHub.
-
-- Repository: `caubig96-ai/boss-vao-lenh`
-- Root directory trên Cloudflare: `cloudflare-worker`
-- Production branch: `main`
-- Mỗi lần push lên `main`, Cloudflare tự build và deploy Worker.
+Worker dùng Cloudflare Workers Builds kết nối trực tiếp với GitHub.
