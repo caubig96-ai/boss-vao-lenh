@@ -19,7 +19,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
 .g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:920px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
+.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:1040px;display:grid;grid-template-columns:48px repeat(12,1fr) 205px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.pause{background:#243447;color:#7fc1ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -30,7 +30,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss Mốc Chẵn</h1><div class="sub">mốc 10 phút • báo trước 1 phút • lệnh 5 phút kế tiếp</div></div>
+  <div><h1>Boss Mốc Chẵn/Lẻ</h1><div class="sub">CHẴN/LẺ xen kẽ • báo trước 7 phút • thống kê chiến lược 24h</div></div>
   <button class="secondary" onclick="refreshNow()">↻</button>
 </div>
 
@@ -121,8 +121,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Lịch 24 giờ theo phiên đặt lệnh</b>
-      <div class="label">24 hàng giờ • lệnh liên tục mỗi 5 phút • CHẴN 00/10/20/30/40/50 • LẺ 05/15/25/35/45/55</div>
+      <b>Backtest 24 giờ theo chiến lược CHẴN/LẺ</b>
+      <div class="label">Tự dựng lại từng lệnh từ màu nến lịch sử • AAA→A / ABA→B • x2 riêng từng dãy • 2 lệnh thua liên tiếp nghỉ 30 phút</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -130,13 +130,15 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
     <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
     <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
-    <div><span class="label">Đang chờ</span><b id="calendar24NoOrders">0</b></div>
+    <div><span class="label">Bỏ qua</span><b id="calendar24NoOrders">0</b></div>
+    <div><span class="label">Lần nghỉ</span><b id="calendar24Pauses">0</b></div>
+    <div><span class="label">Phút nghỉ</span><b id="calendar24PauseMinutes">0</b></div>
     <div><span class="label">Tiền thắng 24h</span><b class="green" id="calendar24GrossWin">$0.00</b></div>
     <div><span class="label">Tiền thua 24h</span><b class="red" id="calendar24GrossLoss">$0.00</b></div>
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • … = chưa tới. Màu lệnh kế tiếp lấy từ dãy CHẴN/LẺ của chính phiên kế tiếp. Lệnh 1 thắng → Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua → về Lệnh 1.</div>
+  <div class="note" style="margin-top:9px">V = thắng • X = thua • ⏸ = đang trong 30 phút nghỉ • – = mẫu không phải AAA/ABA • … = chưa tới/chưa đủ dữ liệu. Bảng này backtest trực tiếp từ nến lịch sử, không dùng danh sách lệnh đã gửi trước đây.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -152,7 +154,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <script>
 const SIGNAL_STEP=600;
 const PREVIEW_ALERT_LEAD=420;
-const STRATEGY_VERSION="alternating-lane-tminus7-v5";
+const STRATEGY_VERSION="alternating-lane-tminus7-v6";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -612,36 +614,177 @@ function usd24(value,forceSign=false){
   return sign+"$"+Math.abs(n).toFixed(2);
 }
 
-function buildTimedHistory(){
-  const completed=Array.isArray(cloudTradeState?.completed)?cloudTradeState.completed:[];
-  const out=completed.map(o=>({
-    targetT:Number(o.targetStart||0),
-    lane:o.lane||laneForTarget(o.targetStart),
-    direction:o.direction||null,
-    actual:o.actual||null,
-    status:o.win===true?"WIN":o.win===false?"LOSS":"WAIT",
-    win:typeof o.win==="boolean"?o.win:null,
-    step:Number(o.step||1),
-    amount:Number(o.amount||0),
-    delta:Number(o.delta||0),
-    colors:Array.isArray(o.colors)?o.colors:[],
-    marks:Array.isArray(o.marks)?o.marks:[]
-  })).filter(o=>Number.isFinite(o.targetT)&&o.targetT>0);
-
-  for(const p of (Array.isArray(cloudTradeState?.pendingOrders)?cloudTradeState.pendingOrders:[])){
-    out.push({
-      targetT:Number(p.targetStart||0),
-      lane:p.lane||laneForTarget(p.targetStart),
-      direction:p.direction||null,
-      actual:null,status:"WAIT",win:null,
-      step:Number(p.step||1),
-      amount:Number(p.amount||0),delta:0,
-      colors:Array.isArray(p.colors)?p.colors:[],
-      marks:Array.isArray(p.marks)?p.marks:[]
-    });
-  }
-  return out.sort((a,b)=>a.targetT-b.targetT);
+function historicalColorMap(){
+  return new Map(
+    (rounds||[])
+      .filter(x=>Number.isFinite(Number(x.t))&&(x.c==="G"||x.c==="R"))
+      .map(x=>[Number(x.t),x.c])
+  );
 }
+
+function historicalColorAtClose(closeMark,colorMap){
+  return colorMap.get(Number(closeMark)-INTERVAL)||null;
+}
+
+function historicalDirectionFromThree(colors){
+  if(!Array.isArray(colors)||colors.length!==3)return null;
+  const [a,b,d]=colors;
+  if(!["G","R"].includes(a)||!["G","R"].includes(b)||!["G","R"].includes(d))return null;
+  if(a===b&&b===d)return {direction:a,patternType:"SAME"};
+  if(a===d&&a!==b)return {direction:b,patternType:"ALTERNATE"};
+  return null;
+}
+
+function historicalPatternForTarget(targetT,colorMap){
+  const marks=[targetT-3*SIGNAL_STEP,targetT-2*SIGNAL_STEP,targetT-SIGNAL_STEP];
+  const colors=marks.map(m=>historicalColorAtClose(m,colorMap));
+  const decision=historicalDirectionFromThree(colors);
+  const actual=historicalColorAtClose(targetT,colorMap);
+  return {
+    targetT,
+    marketStart:targetT-INTERVAL,
+    lane:laneForTarget(targetT),
+    marks,
+    colors,
+    direction:decision?.direction||null,
+    patternType:decision?.patternType||null,
+    actual
+  };
+}
+
+function overlapSeconds(aStart,aEnd,bStart,bEnd){
+  return Math.max(0,Math.min(aEnd,bEnd)-Math.max(aStart,bStart));
+}
+
+function backtestStrategy24h(){
+  const now=Math.floor(Date.now()/1000);
+  const lastClosedMark=Math.floor(now/INTERVAL)*INTERVAL;
+  const currentHour=Math.floor(now/3600)*3600;
+  const first=currentHour-23*3600;
+  const last=currentHour+55*60;
+  const warmupStart=first-2*3600;
+  const colorMap=historicalColorMap();
+  const money=historicalMoneySettings();
+  const laneSteps={EVEN:1,ODD:1};
+  const slots=[];
+  const signalMap=new Map();
+  const pauseIntervals=[];
+  let pauseUntil=0;
+  let consecutiveLosses=0;
+
+  // Warm up two hours so Lệnh 2 x2 / nghỉ 30 phút can carry naturally into the 24h window.
+  for(let t=warmupStart;t<=lastClosedMark;t+=INTERVAL){
+    const signal=historicalPatternForTarget(t,colorMap);
+    const inWindow=t>=first;
+    const marketStart=t-INTERVAL;
+
+    if(pauseUntil>0&&marketStart<pauseUntil){
+      if(inWindow){
+        const item={...signal,status:"PAUSE",pauseUntil,step:null,amount:0,delta:0};
+        slots.push(item);signalMap.set(t,item);
+      }
+      continue;
+    }
+
+    if(!signal.actual){
+      if(inWindow){
+        const item={...signal,status:"NODATA",step:null,amount:0,delta:0};
+        slots.push(item);signalMap.set(t,item);
+      }
+      continue;
+    }
+
+    if(!signal.direction){
+      if(inWindow){
+        const item={...signal,status:"SKIP",step:null,amount:0,delta:0};
+        slots.push(item);signalMap.set(t,item);
+      }
+      continue;
+    }
+
+    const lane=signal.lane;
+    const step=laneSteps[lane]===2?2:1;
+    const amount=step===2?money.bet2:money.bet1;
+    const win=signal.direction===signal.actual;
+    const delta=win?amount*money.payout:-amount;
+
+    laneSteps[lane]=step===1&&win?2:1;
+    consecutiveLosses=win?0:consecutiveLosses+1;
+
+    const item={
+      ...signal,
+      status:win?"WIN":"LOSS",
+      win,step,amount,delta,
+      pauseTriggered:false
+    };
+
+    if(consecutiveLosses>=2){
+      const pauseStart=t;
+      const pauseEnd=t+1800;
+      pauseIntervals.push({start:pauseStart,end:pauseEnd});
+      pauseUntil=pauseEnd;
+      consecutiveLosses=0;
+      laneSteps.EVEN=1;
+      laneSteps.ODD=1;
+      item.pauseTriggered=true;
+      item.pauseUntil=pauseEnd;
+    }
+
+    if(inWindow){
+      slots.push(item);
+      signalMap.set(t,item);
+    }
+  }
+
+  // Add future cells in the current displayed hour.
+  for(let t=Math.max(first,lastClosedMark+INTERVAL);t<=last;t+=INTERVAL){
+    if(!signalMap.has(t)){
+      const item={
+        targetT:t,marketStart:t-INTERVAL,lane:laneForTarget(t),
+        marks:[t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP],
+        colors:[],direction:null,actual:null,status:"FUTURE",step:null,amount:0,delta:0
+      };
+      slots.push(item);signalMap.set(t,item);
+    }
+  }
+
+  // Ensure all 24 x 12 cells exist even if history has gaps.
+  for(let hour=0;hour<24;hour++){
+    const hourStart=first+hour*3600;
+    for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
+      const t=hourStart+minute*60;
+      if(signalMap.has(t))continue;
+      const status=t>lastClosedMark?"FUTURE":"NODATA";
+      const item={
+        targetT:t,marketStart:t-INTERVAL,lane:laneForTarget(t),
+        marks:[t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP],
+        colors:[],direction:null,actual:null,status,step:null,amount:0,delta:0
+      };
+      slots.push(item);signalMap.set(t,item);
+    }
+  }
+
+  slots.sort((a,b)=>a.targetT-b.targetT);
+
+  const settled=slots.filter(x=>x.status==="WIN"||x.status==="LOSS");
+  const wins=settled.filter(x=>x.status==="WIN").length;
+  const losses=settled.filter(x=>x.status==="LOSS").length;
+  const skips=slots.filter(x=>x.status==="SKIP").length;
+  const grossWin=settled.reduce((s,x)=>s+Math.max(0,Number(x.delta||0)),0);
+  const grossLoss=settled.reduce((s,x)=>s+Math.abs(Math.min(0,Number(x.delta||0))),0);
+  const net=settled.reduce((s,x)=>s+Number(x.delta||0),0);
+  const pauseSeconds=pauseIntervals.reduce((s,p)=>s+overlapSeconds(p.start,p.end,first,Math.min(now,last+INTERVAL)),0);
+
+  return {
+    first,last,lastClosedMark,slots,signalMap,pauseIntervals,
+    wins,losses,signals:settled.length,skips,
+    grossWin,grossLoss,net,
+    pauseCount:pauseIntervals.filter(p=>p.end>first&&p.start<Math.min(now,last+INTERVAL)).length,
+    pauseMinutes:Math.round(pauseSeconds/60),
+    rate:settled.length?wins/settled.length*100:null
+  };
+}
+
 function nextTimeSignalInfo(){
   const now=Date.now()/1000;
   const targetStart=upcomingTargetStart(now);
@@ -725,55 +868,7 @@ function renderLive(){
   $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
 }
 function buildCalendar24h(){
-  const now=Math.floor(Date.now()/1000);
-  const currentHour=Math.floor(now/3600)*3600;
-  const first=currentHour-23*3600;
-  const last=currentHour+50*60;
-
-  const timed=buildTimedHistory();
-  const signalMap=new Map(timed.map(s=>[Number(s.targetT),s]));
-  const slots=[];
-  let wins=0,losses=0,signals=0,waitChecks=0,future=0,waiting=0;
-  let grossWin=0,grossLoss=0,net=0;
-
-  for(let hour=0;hour<24;hour++){
-    const hourStart=first+hour*3600;
-    for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
-      const t=hourStart+minute*60;
-      const lane=laneForTarget(t);
-      const signal=signalMap.get(t)||null;
-      let status="WAIT";
-
-      if(t>now){
-        status="FUTURE";
-        future++;
-      }else if(signal?.status==="WIN"){
-        status="WIN";wins++;signals++;
-        grossWin+=Math.max(0,Number(signal.delta||0));
-        net+=Number(signal.delta||0);
-      }else if(signal?.status==="LOSS"){
-        status="LOSS";losses++;signals++;
-        grossLoss+=Math.abs(Math.min(0,Number(signal.delta||0)));
-        net+=Number(signal.delta||0);
-      }else if(signal?.status==="WAIT_WIN"){
-        status="WAIT_WIN";waitChecks++;
-      }else if(signal?.status==="WAIT_LOSS"){
-        status="WAIT_LOSS";waitChecks++;
-      }else{
-        status="WAIT";
-        waiting++;
-      }
-
-      slots.push({t,status,signal,lane});
-    }
-  }
-
-  const settled=wins+losses;
-  return{
-    first,last,slots,wins,losses,signals,waitChecks,future,waiting,
-    grossWin,grossLoss,net,
-    rate:settled?wins/settled*100:null
-  };
+  return backtestStrategy24h();
 }
 
 function shortClock(ts){
@@ -800,77 +895,100 @@ function renderCalendar24h(){
 
   const headSum=document.createElement("div");
   headSum.className="calHead";
-  headSum.textContent="Tổng 1 giờ";
+  headSum.textContent="Thống kê 1 giờ";
   root.appendChild(headSum);
 
   for(let row=23;row>=0;row--){
-    const rowSlots=cal.slots.slice(row*12,row*12+12);
+    const hourStart=cal.first+row*3600;
+    const hourEnd=hourStart+3600;
+    const rowSlots=[0,5,10,15,20,25,30,35,40,45,50,55]
+      .map(minute=>cal.signalMap.get(hourStart+minute*60))
+      .filter(Boolean);
+
     const label=document.createElement("div");
     label.className="calTime";
-    const rowHour=localTimeParts(rowSlots[0].t).hour;
+    const rowHour=localTimeParts(hourStart).hour;
     label.textContent=String(rowHour).padStart(2,"0")+":00";
     root.appendChild(label);
 
-    let rowW=0,rowL=0,rowCW=0,rowCL=0,rowWait=0,rowF=0,rowNet=0;
+    let rowW=0,rowL=0,rowSkip=0,rowGrossWin=0,rowGrossLoss=0,rowNet=0;
     rowSlots.forEach(slot=>{
       const d=document.createElement("div");
       d.className="calCell signal";
 
       if(slot.status==="WIN"){
-        rowW++;rowNet+=Number(slot.signal?.delta||0);d.classList.add("win");d.textContent="V";
+        rowW++;
+        rowGrossWin+=Math.max(0,Number(slot.delta||0));
+        rowNet+=Number(slot.delta||0);
+        d.classList.add("win");d.textContent="V";
       }else if(slot.status==="LOSS"){
-        rowL++;rowNet+=Number(slot.signal?.delta||0);d.classList.add("loss");d.textContent="X";
-      }else if(slot.status==="WAIT_WIN"){
-        rowCW++;d.classList.add("wait");d.textContent="C✓";
-      }else if(slot.status==="WAIT_LOSS"){
-        rowCL++;d.classList.add("wait");d.textContent="C×";
+        rowL++;
+        rowGrossLoss+=Math.abs(Math.min(0,Number(slot.delta||0)));
+        rowNet+=Number(slot.delta||0);
+        d.classList.add("loss");d.textContent="X";
+      }else if(slot.status==="PAUSE"){
+        d.classList.add("pause");d.textContent="⏸";
+      }else if(slot.status==="SKIP"){
+        rowSkip++;d.classList.add("skip");d.textContent="–";
       }else if(slot.status==="FUTURE"){
-        rowF++;d.classList.add("future");d.textContent="…";
+        d.classList.add("future");d.textContent="…";
       }else{
-        rowWait++;d.classList.add("wait");d.textContent="…";
+        d.classList.add("wait");d.textContent="?";
       }
 
-      const s=slot.signal;
-      let detail=shortClock(slot.t)+" • ";
-      if(slot.status==="FUTURE"){
-        detail+="ô đặt lệnh • chưa tới";
-      }else if(slot.status==="WIN"||slot.status==="LOSS"){
-        detail+=laneText(s.lane)+" • nến "+shortClock(s.targetT)+" ("+targetCandleFrame(s.targetT)+") • "+
-          (s.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ")+
-          " • kết quả "+(s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
-          " • Lệnh "+Number(s.step||1)+(Number(s.step||1)===2?" x2":"")+
-          " • "+usd24(s.amount)+" • "+usd24(s.delta,true);
-      }else if(slot.status==="WAIT_WIN"){
-        detail+="nhịp chờ giả lập THẮNG • mở khóa lệnh kế tiếp";
-      }else if(slot.status==="WAIT_LOSS"){
-        detail+="nhịp chờ giả lập THUA • tiếp tục chờ";
+      let detail=shortClock(slot.targetT)+" • "+laneText(slot.lane)+" • ";
+      if(slot.status==="WIN"||slot.status==="LOSS"){
+        detail+="3 màu "+(slot.colors||[]).map(colorIcon).join(" ")+" • "+
+          (slot.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ")+" • "+
+          "kết quả "+(slot.actual==="G"?"XANH":"ĐỎ")+" • "+
+          (slot.status==="WIN"?"THẮNG":"THUA")+" • "+
+          "Lệnh "+Number(slot.step||1)+(Number(slot.step||1)===2?" x2":"")+
+          " • "+usd24(slot.amount)+" • "+usd24(slot.delta,true)+
+          (slot.pauseTriggered?" • THUA LIÊN TIẾP LẦN 2 → NGHỈ 30 PHÚT":"");
+      }else if(slot.status==="PAUSE"){
+        detail+="ĐANG NGHỈ 30 PHÚT • không vào lệnh";
+      }else if(slot.status==="SKIP"){
+        detail+="mẫu không phải AAA/ABA • bỏ qua";
+      }else if(slot.status==="FUTURE"){
+        detail+="chưa tới";
       }else{
-        detail+=laneText(slot.lane)+" • chưa có lệnh";
+        detail+="chưa đủ dữ liệu lịch sử";
       }
-
       d.title=detail;
       d.setAttribute("aria-label",detail);
       root.appendChild(d);
     });
 
+    const rowPauseSeconds=cal.pauseIntervals.reduce(
+      (s,p)=>s+overlapSeconds(p.start,p.end,hourStart,Math.min(hourEnd,Date.now()/1000)),0
+    );
+    const rowPauseMinutes=Math.round(rowPauseSeconds/60);
+
     const sum=document.createElement("div");
     sum.className="calHourSum";
-    sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL+
-      " • "+usd24(rowNet,true)+((rowWait+rowF)?" • … "+(rowWait+rowF):"");
+    sum.textContent=
+      "L "+(rowW+rowL)+" • V "+rowW+" • X "+rowL+
+      " • Nghỉ "+rowPauseMinutes+"p"+
+      " • T+ "+usd24(rowGrossWin)+
+      " • T- $"+rowGrossLoss.toFixed(2)+
+      " • Net "+usd24(rowNet,true)+
+      (rowSkip?" • Bỏ "+rowSkip:"");
     root.appendChild(sum);
   }
 
   $("calendar24Signals").textContent=String(cal.signals);
   $("calendar24Wins").textContent=String(cal.wins);
   $("calendar24Losses").textContent=String(cal.losses);
-  $("calendar24NoOrders").textContent=String(cal.waitChecks);
+  $("calendar24NoOrders").textContent=String(cal.skips);
+  $("calendar24Pauses").textContent=String(cal.pauseCount);
+  $("calendar24PauseMinutes").textContent=String(cal.pauseMinutes);
   $("calendar24GrossWin").textContent=usd24(cal.grossWin);
   $("calendar24GrossLoss").textContent="-$"+Number(cal.grossLoss||0).toFixed(2);
   $("calendar24Net").textContent=usd24(cal.net,true);
   $("calendar24Net").className=cal.net>0?"green":cal.net<0?"red":"";
   $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
   $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
-  $("calendar24Updated").textContent="24 giờ đến "+shortClock(Math.min(Math.floor(Date.now()/1000),cal.last));
+  $("calendar24Updated").textContent="Backtest đến "+shortClock(cal.lastClosedMark);
 }
 
 function render(){
@@ -911,7 +1029,7 @@ function render(){
 
     const liveClose=Math.floor(now/INTERVAL)*INTERVAL+INTERVAL;
     if(paused){
-      $("freshness").textContent="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA • nghỉ đến "+shortClock(pauseUntil)+".";
+      $("freshness").textContent="2 lệnh thực tế liên tiếp đều THUA • nghỉ đến "+shortClock(pauseUntil)+".";
     }else if(!direction){
       $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • dãy "+info.laneText+" không có mẫu AAA hoặc ABA cho nến "+shortClock(info.targetStart)+" • bỏ qua.";
     }else if(inWindow||info.pending){
