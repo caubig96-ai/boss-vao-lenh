@@ -19,7 +19,7 @@ h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-hei
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
 .g{color:var(--g)}.r{color:var(--r)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:520px;display:grid;grid-template-columns:48px repeat(6,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
+.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:920px;display:grid;grid-template-columns:48px repeat(12,1fr) 112px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
 input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
 details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
@@ -37,8 +37,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Cảnh báo trước lệnh 1 phút</b>
-      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp khoảng 1 phút trước phiên đặt lệnh</div>
+      <b>Cảnh báo trước lệnh 7 phút</b>
+      <div id="alertPermissionText" class="label">Bấm một lần để Safari cho phép phát bíp khoảng 7 phút trước phiên đặt lệnh</div>
     </div>
     <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
   </div>
@@ -62,30 +62,21 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </section>
 
 <section class="card">
-  <div class="label">Chiến lược mốc thời gian chẵn</div>
-  <div class="note" style="margin-top:6px">Lấy màu nến ở các mốc phút 00, 10, 20, 30, 40, 50. Sau mỗi lệnh, tool chờ kết quả được xác nhận rồi mới xét lệnh ở khung giờ kế tiếp. Khi bật chế độ vốn thua 4 lệnh, chuỗi vốn là $1 → $1 → $2 → $4 rồi quay lại lệnh 1; màu lệnh mới luôn dựa vào kết quả của lệnh thực tế liền trước.</div>
-  <div class="row" style="margin-top:12px;background:#10161c;border-radius:12px;padding:11px">
-    <div>
-      <b>Chế độ vốn thua 4 lệnh</b>
-      <div class="label">1 → 1 → 2 → 4 • lệnh thắng vẫn giữ nhịp x2 rồi về lệnh 1</div>
-    </div>
-    <button id="lossCapitalModeBtn" class="secondary" onclick="toggleLossCapitalMode()">ĐANG TẢI</button>
+  <div class="label">Chiến lược 3 màu CHẴN / LẺ</div>
+  <div class="note" style="margin-top:6px">
+    CHẴN: :00, :10, :20, :30, :40, :50 • LẺ: :05, :15, :25, :35, :45, :55.
+    Lấy 3 mốc cùng dãy: AAA → mua A; ABA → mua B để tiếp tục xen kẽ. Mẫu khác thì bỏ qua.
+    Báo trước 7 phút. Nếu kết quả gần nhất của cả CHẴN và LẺ đều THUA, tool nghỉ 30 phút rồi xét lại.
   </div>
-  <div class="row" style="margin-top:9px;background:#10161c;border-radius:12px;padding:11px">
-    <div>
-      <b>AUTO BINANCE 24H</b>
-      <div class="label">BTCUSDT Spot • 288 nến 5 phút gần nhất • streak + mẫu 3 nến + backtest 3 chiến lược • tự chọn phương pháp có tỷ lệ lịch sử cao nhất</div>
-    </div>
-    <button id="autoStrategyModeBtn" class="secondary" onclick="toggleAutoStrategyMode()">ĐANG TẢI</button>
-  </div>
-  <div id="autoStrategyInfo" class="note" style="margin-top:7px">Đang phân tích công thức...</div>
   <div class="stats" style="margin-top:12px">
-    <div class="stat"><span class="label">Mốc lịch</span><b id="sourceFrame">--:--</b></div>
-    <div class="stat"><span class="label">Màu Predict mốc</span><b id="sourceColor">CHỜ</b></div>
+    <div class="stat"><span class="label">Dãy đang xét</span><b id="laneText">--</b></div>
+    <div class="stat"><span class="label">3 màu quyết định</span><b id="pattern3">--</b></div>
     <div class="stat"><span class="label">Phiên đặt lệnh</span><b id="targetFrame">--:--–--:--</b></div>
     <div class="stat"><span class="label">Lệnh dự kiến</span><b id="buy">CHỜ</b></div>
   </div>
-  <div id="bet" class="note" style="margin-top:9px">--</div>
+  <div id="fourColorsInfo" class="note" style="margin-top:9px">Đang tải 4 màu trước...</div>
+  <div id="laneResultInfo" class="note" style="margin-top:5px"></div>
+  <div id="bet" class="note" style="margin-top:5px">--</div>
   <div id="freshness" class="note" style="margin-top:5px"></div>
 </section>
 
@@ -118,7 +109,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <summary>Cài đặt tiền lệnh</summary>
     <div class="grid2" style="margin-top:12px">
       <div class="field"><div class="label">Lệnh 1</div><input id="bet1" inputmode="decimal"></div>
-      <div class="field"><div class="label">Lệnh 2</div><input id="bet2" inputmode="decimal"></div>
+      <div class="field"><div class="label">Lệnh 2 x2</div><input id="bet2" inputmode="decimal"></div>
       <div class="field"><div class="label">Vốn bắt đầu</div><input id="startBalance" inputmode="decimal"></div>
       <div class="field"><div class="label">Trả thưởng %</div><input id="payout" inputmode="decimal"></div>
       <button class="wide" onclick="saveMoney()">LƯU CÀI ĐẶT</button>
@@ -130,7 +121,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="row">
     <div>
       <b>Lịch 24 giờ theo phiên đặt lệnh</b>
-      <div class="label">24 hàng giờ • mỗi hàng chỉ hiện 6 ô đặt lệnh: 00/10/20/30/40/50</div>
+      <div class="label">24 hàng giờ • 12 mốc CHẴN/LẺ mỗi giờ: 00/05/10/15/.../55</div>
     </div>
     <span id="calendar24Updated" class="label">--:--</span>
   </div>
@@ -144,7 +135,7 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
     <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
     <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
   </div>
-  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = chưa có dữ liệu/chưa tới. Lịch này dùng kết quả các lệnh thực tế đã được Boss Cloud ghi lại; màu AUTO được chọn từ thống kê Binance 24h tại thời điểm báo lệnh.</div>
+  <div class="note" style="margin-top:9px">V = lệnh thực tế thắng • X = lệnh thực tế thua • … = không có lệnh/chưa tới. Lệnh 1 thắng → lệnh kế tiếp dùng Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua → về Lệnh 1.</div>
   <div class="calendarWrap">
     <div id="calendar24" class="calendar24"></div>
   </div>
@@ -155,12 +146,12 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div id="status" class="status"></div>
 </section>
 
-<div class="note">Boss Cloud theo dõi chiến lược mốc chẵn ngay cả khi iPhone đóng web. Cảnh báo âm thanh trong trang chỉ hoạt động khi trang đang mở.</div>
+<div class="note">Boss Cloud theo dõi chiến lược 3 màu CHẴN/LẺ ngay cả khi iPhone đóng web. Cảnh báo âm thanh trong trang chỉ hoạt động khi trang đang mở.</div>
 </main>
 <script>
-const SOURCE_STEP=600;
-const ENTRY_DELAY=600;
-const STRATEGY_VERSION="even-10m-2loss-waitwin-v4";
+const LANE_STEP=600;
+const ALERT_LEAD=420;
+const STRATEGY_VERSION="even-odd-3color-v1";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -176,13 +167,13 @@ let audioContext=null;
 let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
 let alertsEnabled=false;
 let wakeLock=null;
-let prepare60Start=Number(sessionStorage.getItem("prepare_60_start")||0);
+let preparedTarget=Number(sessionStorage.getItem("pattern_prepared_target")||0);
 let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
 let finalizingStart=0;
 let historyLoading=false;
 let cloudTradeState=null;
 let cloudMoneySettings=null;
-let autoStrategySnapshot=null;
+let patternSnapshot=null;
 
 async function enableAlerts(){
   try{
@@ -243,36 +234,23 @@ function showTradeAlert(kind,title,detail){
   $("tradeAlertTitle").textContent=title;
   $("tradeAlertDetail").textContent=detail;
 }
-function firePrepareAlert(liveStart,remain,stage){
-  if(stage!==60)return;
-  const targetStart=liveStart+INTERVAL;
-  const sourceStart=sourceStartForTarget(targetStart);
-  if(sourceStart===null||prepare60Start===targetStart)return;
-  if(!isEntryAlertWindow(targetStart))return;
+function colorIcon(c){return c==="G"?"🟢":c==="R"?"🔴":"⚪"}
+function laneResultLabel(v){return v==="WIN"?"THẮNG":v==="LOSS"?"THUA":"CHƯA CÓ"}
 
-  const waitForWin=false;
-  const pending=cloudTradeState?.pending;
-  if(pending&&Number(pending.targetStart)!==targetStart)return;
+function firePrepareAlert(){
+  const s=patternSnapshot;
+  if(!s?.targetStart||preparedTarget===Number(s.targetStart))return;
+  if(!isEntryAlertWindow(s.targetStart))return;
+  if(s.paused||!s.direction)return;
 
-  const sourceColor=roundColorAt(sourceStart);
-  const autoMode=cloudTradeState?.autoStrategyMode!==false;
-  if(!sourceColor&&!autoMode)return;
-  const samePending=pending&&Number(pending.targetStart)===targetStart?pending:null;
-  const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===targetStart?autoStrategySnapshot:null;
-  if(autoMode&&!samePending&&!sameAuto)return;
-  const direction=samePending?.direction||(autoMode?sameAuto?.direction:sourceColor);
-  if(!direction)return;
-  const strategyName=samePending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
-
-  prepare60Start=targetStart;
-  sessionStorage.setItem("prepare_60_start",String(targetStart));
-
-  const buyText=direction==="G"?"XANH":"ĐỎ";
+  preparedTarget=Number(s.targetStart);
+  sessionStorage.setItem("pattern_prepared_target",String(preparedTarget));
+  const buyText=s.direction==="G"?"XANH":"ĐỎ";
+  const colors=(s.decisionColors||[]).map(colorIcon).join(" ");
   showTradeAlert(
     "prepare",
-    "⚠️ CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU",
-    (autoMode?"BINANCE 24H • "+strategyName:"Mốc "+shortClock(sourceStart)+" • "+(sourceColor==="G"?"🟢 XANH":"🔴 ĐỎ"))+
-    " • MUA "+buyText+" • phiên "+fmtFrame(targetStart)
+    "⚠️ BÁO LỆNH KHUNG "+String(s.laneText||""),
+    colors+" → MUA "+buyText+" • phiên "+fmtFrame(Number(s.targetStart))
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -419,67 +397,21 @@ async function fetchTradeState(){
   }
 }
 
-async function fetchAutoStrategy(){
+async function fetchPatternSignal(){
   try{
     const targetStart=upcomingTargetStart();
     if(targetStart===null)return null;
-    const r=await fetch(CLOUD+"/auto-strategy?target="+targetStart,{cache:"no-store"});
-    if(!r.ok)throw new Error("Boss Cloud auto-strategy HTTP "+r.status);
+    const r=await fetch(CLOUD+"/pattern-signal?target="+targetStart,{cache:"no-store"});
+    if(!r.ok)throw new Error("Boss Cloud pattern-signal HTTP "+r.status);
     const j=await r.json();
-    if(j?.ok===false)throw new Error(j.error||"AUTO STRATEGY lỗi");
-    autoStrategySnapshot=j;
+    if(j?.ok===false)throw new Error(j.error||"Không lấy được mẫu 3 màu");
+    patternSnapshot=j;
     render();
     return j;
   }catch(e){
     return null;
   }
 }
-
-async function toggleLossCapitalMode(){
-  const btn=$("lossCapitalModeBtn");
-  const current=!!cloudTradeState?.lossCapitalMode;
-  if(btn){btn.disabled=true;btn.textContent="ĐANG LƯU...";}
-  try{
-    const r=await fetch(CLOUD+"/trade-mode",{
-      method:"POST",
-      cache:"no-store",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({lossCapitalMode:!current})
-    });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
-    await fetchTradeState();
-    render();
-    setStatus(j.message||"Đã cập nhật chế độ vốn.","ok");
-  }catch(e){
-    setStatus("Lỗi đổi chế độ vốn: "+String(e.message||e),"err");
-  }finally{
-    if(btn)btn.disabled=false;
-  }
-}
-async function toggleAutoStrategyMode(){
-  const btn=$("autoStrategyModeBtn");
-  const current=cloudTradeState?.autoStrategyMode!==false;
-  if(btn){btn.disabled=true;btn.textContent="ĐANG LƯU...";}
-  try{
-    const r=await fetch(CLOUD+"/trade-mode",{
-      method:"POST",
-      cache:"no-store",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({autoStrategyMode:!current})
-    });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
-    await Promise.allSettled([fetchTradeState(),fetchAutoStrategy()]);
-    render();
-    setStatus(j.message||"Đã cập nhật AUTO STRATEGY.","ok");
-  }catch(e){
-    setStatus("Lỗi đổi AUTO STRATEGY: "+String(e.message||e),"err");
-  }finally{
-    if(btn)btn.disabled=false;
-  }
-}
-
 
 async function resetTradeStateAndHistory(){
   const btn=$("resetBtn");
@@ -503,8 +435,8 @@ async function resetTradeStateAndHistory(){
     if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
 
     cloudTradeState=null;
-    sessionStorage.removeItem("prepare_60_start");
-    prepare60Start=0;
+    sessionStorage.removeItem("pattern_prepared_target");
+    preparedTarget=0;
     await Promise.allSettled([fetchTradeState(),fetchCloudHistory(true)]);
     render();
     setStatus("Đã reset về 0 và tải lại lịch sử mốc chẵn.","ok");
@@ -561,10 +493,10 @@ async function refreshHistory(){
   try{
     progress(0,1,"Đang đồng bộ lịch sử Boss Cloud...");
     const cloud=await fetchCloudHistory(true);
-    await fetchAutoStrategy();
+    await fetchPatternSignal();
     render();
     progress(1,1,"Đã tải "+cloud.cloudCount+" nến đã đóng.");
-    setStatus("Đã cập nhật lịch sử mốc chẵn từ Boss Cloud.","ok");
+    setStatus("Đã cập nhật lịch sử CHẴN/LẺ từ Boss Cloud.","ok");
     if(btn){
       btn.classList.remove("working","fail");
       btn.classList.add("success");
@@ -591,7 +523,7 @@ async function refreshHistory(){
 async function autoStart(){
   startPolling();
   await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),fetchTradeState()]);
-  await fetchAutoStrategy();
+  await fetchPatternSignal();
   render();
 }
 
@@ -624,77 +556,38 @@ function startPolling(){
   if(liveTimer)clearInterval(liveTimer);
   if(countdownTimer)clearInterval(countdownTimer);
   if(calendarSyncTimer)clearInterval(calendarSyncTimer);
-  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState();fetchAutoStrategy()}},20000);
+  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState();fetchPatternSignal()}},20000);
   liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
   calendarSyncTimer=setInterval(async()=>{
     if(document.visibilityState!=="visible")return;
     try{
       await fetchCloudHistory(false);
-      await fetchAutoStrategy();
+      await fetchPatternSignal();
       render();
     }catch(_){}
   },INTERVAL*1000);
   countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
   fetchLiveMarket();
 }
-function isSourceStart(ts){
-  return Number.isFinite(Number(ts))&&Math.floor(Number(ts))%SOURCE_STEP===0;
+function laneForTarget(targetStart){
+  return ((Math.floor(Number(targetStart))%LANE_STEP)+LANE_STEP)%LANE_STEP===0?"EVEN":"ODD";
 }
-function sourceStartForTarget(targetStart){
-  const source=Number(targetStart)-ENTRY_DELAY;
-  return isSourceStart(source)?source:null;
-}
-
-function tradeDirectionFromSource(sourceColor,reverseColorMode=false){
-  if(sourceColor!=="G"&&sourceColor!=="R")return null;
-  if(!reverseColorMode)return sourceColor;
-  return sourceColor==="G"?"R":"G";
-}
-function roundColorAt(ts){
-  return rounds.find(x=>Number(x.t)===Number(ts))?.c||null;
-}
-
+function laneText(lane){return lane==="EVEN"?"CHẴN":"LẺ"}
 function upcomingTargetStart(nowSec=Date.now()/1000){
   const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
-  for(let i=0;i<8;i++){
-    const t=base+i*INTERVAL;
-    if(t+1<nowSec)continue;
-    if(sourceStartForTarget(t)!==null)return t;
+  for(let i=1;i<=4;i++){
+    const target=base+i*INTERVAL;
+    const remain=target-nowSec;
+    if(remain>=390)return target;
   }
-  return null;
+  return base+2*INTERVAL;
 }
-function alertStartForTarget(targetStart){
-  return Number(targetStart)-60;
-}
+function alertStartForTarget(targetStart){return Number(targetStart)-ALERT_LEAD}
 function isEntryAlertWindow(targetStart,nowSec=Date.now()/1000){
   const remain=Number(targetStart)-Number(nowSec);
-  return remain<=60&&remain>0;
+  return remain<=450&&remain>=390;
 }
 
-function buildTimeSignals(){
-  const byTime=new Map(rounds.map(x=>[Number(x.t),x]));
-  const times=[...byTime.keys()].filter(Number.isFinite).sort((a,b)=>a-b);
-  if(!times.length)return[];
-
-  const first=Math.floor(times[0]/INTERVAL)*INTERVAL;
-  const last=Math.floor(times[times.length-1]/INTERVAL)*INTERVAL;
-  const out=[];
-
-  for(let targetT=first;targetT<=last;targetT+=INTERVAL){
-    const sourceT=sourceStartForTarget(targetT);
-    if(sourceT===null)continue;
-    const direction=byTime.get(sourceT)?.c||null;
-    const actual=byTime.get(targetT)?.c||null;
-    out.push({
-      sourceT,
-      targetT,
-      direction,
-      actual,
-      rawWin:direction&&actual?direction===actual:null
-    });
-  }
-  return out;
-}
 function historicalMoneySettings(){
   const bet1=Number(cloudMoneySettings?.bet1??n("bet1",1));
   const bet2=Number(cloudMoneySettings?.bet2??n("bet2",2));
@@ -703,26 +596,6 @@ function historicalMoneySettings(){
     bet1:Number.isFinite(bet1)?bet1:1,
     bet2:Number.isFinite(bet2)?bet2:2,
     payout:Number.isFinite(payout)?payout:.8
-  };
-}
-function nextHistoricalStep(step,win){
-  return Number(step)===1&&win?2:1;
-}
-
-function historicalTradePlan(step,lossStreak,moneySettings,lossCapitalMode){
-  if(lossCapitalMode&&lossStreak>0){
-    const capitalStage=Math.min(4,lossStreak+1);
-    const multiplier=capitalStage===2?1:capitalStage===3?2:4;
-    return {
-      step,
-      capitalStage,
-      amount:moneySettings.bet1*multiplier
-    };
-  }
-  return {
-    step,
-    capitalStage:lossCapitalMode?1:0,
-    amount:step===2?moneySettings.bet2:moneySettings.bet1
   };
 }
 function usd24(value,forceSign=false){
@@ -734,55 +607,54 @@ function usd24(value,forceSign=false){
 function buildTimedHistory(){
   const completed=Array.isArray(cloudTradeState?.completed)?cloudTradeState.completed:[];
   const out=completed.map(o=>({
-    sourceT:Number(o.sourceStart||0),
     targetT:Number(o.targetStart||0),
+    lane:o.lane||laneForTarget(o.targetStart),
     direction:o.direction||null,
     actual:o.actual||null,
     status:o.win===true?"WIN":o.win===false?"LOSS":"WAIT",
     win:typeof o.win==="boolean"?o.win:null,
     step:Number(o.step||1),
-    capitalStage:Number(o.capitalStage||0),
     amount:Number(o.amount||0),
     delta:Number(o.delta||0),
-    autoStrategyId:o.autoStrategyId||null,
-    autoStrategyName:o.autoStrategyName||null
+    colors:Array.isArray(o.colors)?o.colors:[],
+    marks:Array.isArray(o.marks)?o.marks:[]
   })).filter(o=>Number.isFinite(o.targetT)&&o.targetT>0);
 
-  const p=cloudTradeState?.pending;
-  if(p){
+  for(const p of (Array.isArray(cloudTradeState?.pendingOrders)?cloudTradeState.pendingOrders:[])){
     out.push({
-      sourceT:Number(p.sourceStart||0),
       targetT:Number(p.targetStart||0),
+      lane:p.lane||laneForTarget(p.targetStart),
       direction:p.direction||null,
-      actual:null,
-      status:"WAIT",
-      win:null,
+      actual:null,status:"WAIT",win:null,
       step:Number(p.step||1),
-      capitalStage:Number(p.capitalStage||0),
-      amount:Number(p.amount||0),
-      delta:0,
-      autoStrategyId:p.autoStrategyId||null,
-      autoStrategyName:p.autoStrategyName||null
+      amount:Number(p.amount||0),delta:0,
+      colors:Array.isArray(p.colors)?p.colors:[],
+      marks:Array.isArray(p.marks)?p.marks:[]
     });
   }
   return out.sort((a,b)=>a.targetT-b.targetT);
 }
 function nextTimeSignalInfo(){
-  const targetStart=upcomingTargetStart();
-  if(targetStart===null)return null;
-  const sourceStart=sourceStartForTarget(targetStart);
-  const sourceColor=roundColorAt(sourceStart);
-  const pending=cloudTradeState?.pending;
-  const waitForWin=false;
-  const blockingPending=pending&&Number(pending.targetStart)!==targetStart?pending:null;
-
+  const now=Date.now()/1000;
+  const pendingOrders=(Array.isArray(cloudTradeState?.pendingOrders)?cloudTradeState.pendingOrders:[])
+    .filter(p=>Number(p.targetStart)>now-INTERVAL)
+    .sort((a,b)=>Number(a.targetStart)-Number(b.targetStart));
+  const pending=pendingOrders[0]||null;
+  const targetStart=pending?Number(pending.targetStart):Number(patternSnapshot?.targetStart||upcomingTargetStart(now));
+  if(!targetStart)return null;
+  const snap=patternSnapshot&&Number(patternSnapshot.targetStart)===targetStart?patternSnapshot:null;
   return{
-    sourceStart,
-    sourceColor,
     targetStart,
-    waitForWin,
-    blockingPending,
-    pending:pending&&Number(pending.targetStart)===targetStart?pending:null
+    lane:pending?.lane||snap?.lane||laneForTarget(targetStart),
+    laneText:pending?.laneText||snap?.laneText||laneText(laneForTarget(targetStart)),
+    direction:pending?.direction||snap?.direction||null,
+    colors:pending?.colors||snap?.colors||[],
+    marks:pending?.marks||snap?.marks||[],
+    decisionColors:pending?.decisionColors||snap?.decisionColors||[],
+    patternType:pending?.patternType||snap?.patternType||null,
+    pending,
+    paused:Number(cloudTradeState?.pauseUntil||0)>now,
+    pauseUntil:Number(cloudTradeState?.pauseUntil||0)
   };
 }
 
@@ -791,52 +663,20 @@ function compute(){
   const bet2=cloudMoneySettings?.bet2??n("bet2",2);
   const payout=(cloudMoneySettings?.payoutPct??n("payout",80))/100;
   const start=cloudMoneySettings?.startBalance??n("startBalance",0);
-
   if(cloudTradeState){
     const wins=Number(cloudTradeState.wins||0);
     const losses=Number(cloudTradeState.losses||0);
     const pnl=Number(cloudTradeState.pnl||0);
-    const step=Number(cloudTradeState.step||1);
+    const step=Number(cloudTradeState.step||1)===2?2:1;
     const completed=Array.isArray(cloudTradeState.completed)?cloudTradeState.completed:[];
-    const pending=cloudTradeState.pending?[cloudTradeState.pending]:[];
+    const pending=Array.isArray(cloudTradeState.pendingOrders)?cloudTradeState.pendingOrders:[];
     const orders=[
-      ...completed.map(o=>({
-        ...o,
-        placedAt:Number(o.targetStart||0)*1000,
-        targetStart:Number(o.targetStart||0),
-        direction:o.direction,
-        step:Number(o.step||1),
-        amount:Number(o.amount||0),
-        actual:o.actual||null,
-        win:typeof o.win==="boolean"?o.win:null,
-        cloud:true
-      })),
-      ...pending.map(o=>({
-        ...o,
-        placedAt:Number(o.targetStart||0)*1000,
-        targetStart:Number(o.targetStart||0),
-        direction:o.direction,
-        step:Number(o.step||1),
-        amount:Number(o.amount||0),
-        actual:null,
-        win:null,
-        cloud:true
-      }))
+      ...completed.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,win:typeof o.win==="boolean"?o.win:null,cloud:true})),
+      ...pending.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,actual:null,win:null,cloud:true}))
     ].sort((a,b)=>Number(a.targetStart||0)-Number(b.targetStart||0));
-
-    return{
-      bet1,bet2,payout,start,step,pnl,wins,losses,
-      settled:orders.filter(o=>o.win!==null),
-      orders,
-      hasOrders:(wins+losses+pending.length)>0,
-      cloud:true
-    };
+    return{bet1,bet2,payout,start,step,pnl,wins,losses,settled:orders.filter(o=>o.win!==null),orders,hasOrders:(wins+losses+pending.length)>0,cloud:true};
   }
-
-  return{
-    bet1,bet2,payout,start,step:1,pnl:0,wins:0,losses:0,
-    settled:[],orders:[],hasOrders:false,cloud:false
-  };
+  return{bet1,bet2,payout,start,step:1,pnl:0,wins:0,losses:0,settled:[],orders:[],hasOrders:false,cloud:false};
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
 function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
@@ -844,8 +684,7 @@ function alertTick(){
   const now=Date.now()/1000;
   const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
   const end=liveMarket.end||start+INTERVAL;
-  const remain=Math.max(0,Math.ceil(end-now));
-  if(remain<=60&&remain>30)firePrepareAlert(start,remain,60);
+  firePrepareAlert();
   if(now>=end&&start>0)finalizeLiveRound(start);
 }
 function renderLive(){
@@ -886,9 +725,9 @@ function buildCalendar24h(){
 
   for(let hour=0;hour<24;hour++){
     const hourStart=first+hour*3600;
-    for(const minute of [0,10,20,30,40,50]){
+    for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
       const t=hourStart+minute*60;
-      const sourceT=sourceStartForTarget(t);
+      const lane=laneForTarget(t);
       const signal=signalMap.get(t)||null;
       let status="WAIT";
 
@@ -912,7 +751,7 @@ function buildCalendar24h(){
         waiting++;
       }
 
-      slots.push({t,status,signal,sourceT});
+      slots.push({t,status,signal,lane});
     }
   }
 
@@ -939,7 +778,7 @@ function renderCalendar24h(){
   headHour.textContent="Giờ";
   root.appendChild(headHour);
 
-  for(const minute of [0,10,20,30,40,50]){
+  for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
     const d=document.createElement("div");
     d.className="calHead";
     d.textContent=String(minute).padStart(2,"0");
@@ -952,7 +791,7 @@ function renderCalendar24h(){
   root.appendChild(headSum);
 
   for(let row=23;row>=0;row--){
-    const rowSlots=cal.slots.slice(row*6,row*6+6);
+    const rowSlots=cal.slots.slice(row*12,row*12+12);
     const label=document.createElement("div");
     label.className="calTime";
     label.textContent=String(new Date(rowSlots[0].t*1000).getHours()).padStart(2,"0")+":00";
@@ -982,20 +821,17 @@ function renderCalendar24h(){
       if(slot.status==="FUTURE"){
         detail+="ô đặt lệnh • chưa tới";
       }else if(slot.status==="WIN"||slot.status==="LOSS"){
-        detail+="mốc "+shortClock(s.sourceT)+" • "+
+        detail+=laneText(s.lane)+" • "+
           (s.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ")+
-          (s.reverseColorMode?" (đảo màu)":"")+" → +10 phút vào lệnh • kết quả đóng ở +15 phút • "+
-          (s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
-          " • "+(s.lossCapitalMode&&Number(s.capitalStage||0)>0
-            ?"vốn "+Number(s.capitalStage)+"/4"
-            :"lệnh "+Number(s.step||1))+
+          " • kết quả "+(s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
+          " • Lệnh "+Number(s.step||1)+(Number(s.step||1)===2?" x2":"")+
           " • "+usd24(s.amount)+" • "+usd24(s.delta,true);
       }else if(slot.status==="WAIT_WIN"){
         detail+="nhịp chờ giả lập THẮNG • mở khóa lệnh kế tiếp";
       }else if(slot.status==="WAIT_LOSS"){
         detail+="nhịp chờ giả lập THUA • tiếp tục chờ";
       }else{
-        detail+="ô đặt lệnh • đang chờ đủ dữ liệu mốc "+shortClock(slot.sourceT)+" và kết quả";
+        detail+="mốc "+laneText(slot.lane)+" • chưa có lệnh";
       }
 
       d.title=detail;
@@ -1026,112 +862,67 @@ function renderCalendar24h(){
 function render(){
   const calc=compute();
   const info=nextTimeSignalInfo();
-  const lossCapitalMode=!!cloudTradeState?.lossCapitalMode;
-  const autoStrategyMode=cloudTradeState?.autoStrategyMode!==false;
-  const modeBtn=$("lossCapitalModeBtn");
-  if(modeBtn){
-    modeBtn.textContent=lossCapitalMode?"BẬT":"TẮT";
-    modeBtn.className=lossCapitalMode?"success":"secondary";
-  }
-  const autoBtn=$("autoStrategyModeBtn");
-  if(autoBtn){
-    autoBtn.textContent=autoStrategyMode?"BẬT":"TẮT";
-    autoBtn.className=autoStrategyMode?"success":"secondary";
-  }
-  const autoInfo=$("autoStrategyInfo");
-  if(autoInfo){
-    const a=autoStrategySnapshot;
-    const rate=a?.successRate===null||a?.successRate===undefined?NaN:Number(a.successRate);
-    const overview=a?.overview||{};
-    autoInfo.textContent=autoStrategyMode
-      ?(a
-        ?"Đang chọn: "+String(a.name||a.id||"AUTO")+
-          (Number.isFinite(rate)?" • lịch sử "+(rate*100).toFixed(1)+"% • "+Number(a.wins||0)+" thắng / "+Number(a.losses||0)+" thua":"")+
-          " • mẫu "+Number(a.sampleCount||0)+
-          " • 288 nến: "+Number(overview.green||0)+" xanh / "+Number(overview.red||0)+" đỏ"+
-          (Number(overview.doji||0)>0?" / "+Number(overview.doji||0)+" doji":"")
-        :"Đang tải thống kê Binance 24h...")
-      :"AUTO BINANCE 24H đang tắt • dùng màu mốc.";
-  }
+  const now=Date.now()/1000;
+  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
+  const paused=pauseUntil>now;
 
   if(info){
-    $("sourceFrame").textContent=shortClock(info.sourceStart);
-    $("sourceColor").textContent=info.sourceColor==="G"?"🟢 XANH":info.sourceColor==="R"?"🔴 ĐỎ":"CHỜ KẾT QUẢ";
-    $("sourceColor").className=info.sourceColor==="G"?"green":info.sourceColor==="R"?"red":"";
+    $("laneText").textContent=info.laneText||laneText(info.lane);
     $("targetFrame").textContent=fmtFrame(info.targetStart);
+    $("pattern3").textContent=(info.decisionColors||[]).map(colorIcon).join(" ")||"--";
 
-    const isWaitingWin=false;
-    const isWaitingPrevious=!!info.blockingPending;
-    const currentLossStreak=Math.max(0,Number(cloudTradeState?.lossStreak||0));
-    const sameAuto=autoStrategySnapshot&&Number(autoStrategySnapshot.targetStart)===Number(info.targetStart)?autoStrategySnapshot:null;
-    const direction=info.pending?.direction||(autoStrategyMode?sameAuto?.direction:info.sourceColor);
-    const strategyName=info.pending?.autoStrategyName||sameAuto?.name||"Theo màu mốc";
-    const rawStrategyRate=info.pending?.autoSuccessRate??info.pending?.autoValidateRate??sameAuto?.successRate??sameAuto?.validateRate;
-    const strategyRate=rawStrategyRate===null||rawStrategyRate===undefined?NaN:Number(rawStrategyRate);
-    const inAlertWindow=isEntryAlertWindow(info.targetStart);
-    const alertAt=alertStartForTarget(info.targetStart);
+    const four=(info.colors||[]).map((color,i)=>{
+      const mark=Number((info.marks||[])[i]);
+      return (Number.isFinite(mark)?shortClock(mark)+" ":"")+colorIcon(color);
+    }).join(" • ");
+    $("fourColorsInfo").textContent=four?"4 màu trước: "+four:"Chưa đủ 4 màu lịch sử.";
 
-    $("buy").textContent=isWaitingPrevious
-      ?"CHỜ KẾT QUẢ LỆNH TRƯỚC"
-      :!inAlertWindow
-        ?"CHỜ "+shortClock(alertAt)
-        :direction==="G"
-          ?"MUA XANH"
-          :direction==="R"
-            ?"MUA ĐỎ"
-            :"CHỜ MÀU MỐC";
-    $("buy").className=!isWaitingPrevious&&inAlertWindow&&direction==="G"
-      ?"green"
-      :!isWaitingPrevious&&inAlertWindow&&direction==="R"
-        ?"red"
-        :"";
+    const lr=cloudTradeState?.laneResults||patternSnapshot?.laneResults||{};
+    $("laneResultInfo").textContent="Kết quả gần nhất • CHẴN: "+laneResultLabel(lr.EVEN)+" • LẺ: "+laneResultLabel(lr.ODD);
 
-    const pendingAmount=Number(info.pending?.amount);
-    const localPlan=historicalTradePlan(calc.step,currentLossStreak,{bet1:calc.bet1,bet2:calc.bet2,payout:calc.payout},lossCapitalMode);
-    const nextAmount=Number.isFinite(pendingAmount)&&pendingAmount>0?pendingAmount:localPlan.amount;
-    const planText=lossCapitalMode
-      ?(currentLossStreak>0
-        ?"Vốn thua "+Math.min(4,currentLossStreak+1)+"/4"
-        :calc.step===2?"Lệnh thắng x2":"Vốn thua 1/4")
-      :"Lệnh "+calc.step;
+    const inWindow=isEntryAlertWindow(info.targetStart);
+    const direction=info.direction;
+    $("buy").textContent=paused
+      ?"DỪNG 30 PHÚT"
+      :!direction
+        ?"BỎ QUA"
+        :!inWindow&&!info.pending
+          ?"CHỜ "+shortClock(alertStartForTarget(info.targetStart))
+          :direction==="G"?"MUA XANH":"MUA ĐỎ";
+    $("buy").className=!paused&&direction==="G"&&(inWindow||info.pending)?"green":!paused&&direction==="R"&&(inWindow||info.pending)?"red":"";
 
-    $("bet").textContent=isWaitingPrevious
-      ?"Đang chờ lệnh "+fmtFrame(Number(info.blockingPending.targetStart))+" có kết quả rồi mới xét lệnh kế tiếp"
-      :inAlertWindow
-        ?planText+" • "+nextAmount.toFixed(2)+" USDT"
-        :"Chưa báo lệnh • "+planText+" • "+nextAmount.toFixed(2)+" USDT • sẽ báo khoảng "+shortClock(alertAt);
+    const step=Number(info.pending?.step||calc.step||1)===2?2:1;
+    const amount=Number(info.pending?.amount??(step===2?calc.bet2:calc.bet1));
+    $("bet").textContent=(step===2?"Lệnh 2 x2":"Lệnh 1")+" • "+amount.toFixed(2)+" USDT";
 
-    if(isWaitingPrevious){
-      $("freshness").textContent="Tool vẫn theo dõi đúng giờ và màu nến, nhưng chưa vào lệnh mới cho tới khi lệnh trước được xác nhận THẮNG hoặc THUA.";
-    }else if((info.sourceColor||autoStrategyMode)&&inAlertWindow){
-      $("freshness").textContent="ĐẾN GIỜ BÁO LỆNH • AUTO: "+strategyName+
-        (Number.isFinite(strategyRate)?" • lịch sử "+(strategyRate*100).toFixed(1)+"%":"")+
-        " • MUA "+(direction==="G"?"XANH":direction==="R"?"ĐỎ":"CHỜ")+" • phiên "+fmtFrame(info.targetStart)+".";
-    }else if(info.sourceColor||autoStrategyMode){
-      $("freshness").textContent="AUTO đang chọn "+strategyName+
-        (Number.isFinite(strategyRate)?" • lịch sử "+(strategyRate*100).toFixed(1)+"%":"")+
-        " • dự kiến "+(direction==="G"?"MUA XANH":direction==="R"?"MUA ĐỎ":"đang chờ dữ liệu")+
-        ". Chờ đến khoảng "+shortClock(alertAt)+" để báo lệnh.";
+    if(paused){
+      $("freshness").textContent="CHẴN và LẺ đều có kết quả gần nhất là THUA • nghỉ đến "+shortClock(pauseUntil)+" rồi xét lại từ Lệnh 1.";
+    }else if(Array.isArray(cloudTradeState?.pendingOrders)&&cloudTradeState.pendingOrders.length&& !info.pending){
+      $("freshness").textContent="Đang chờ kết quả lệnh trước để xác định Lệnh 1 hay Lệnh 2 x2.";
+    }else if(!direction){
+      $("freshness").textContent="Mẫu 3 màu hiện tại không phải AAA hoặc ABA • bỏ qua phiên "+fmtFrame(info.targetStart)+".";
+    }else if(inWindow||info.pending){
+      $("freshness").textContent="BÁO LỆNH "+info.laneText+" • "+(info.patternType==="SAME"?"AAA → theo cùng màu":"ABA → tiếp tục màu giữa")+" • "+(step===2?"LỆNH 2 x2":"LỆNH 1")+" • MUA "+(direction==="G"?"XANH":"ĐỎ")+".";
     }else{
-      $("freshness").textContent=autoStrategyMode?"Đang chờ dữ liệu Binance 24h.":"Đang chờ màu nến của mốc "+shortClock(info.sourceStart)+".";
+      $("freshness").textContent="Đang chờ đến "+shortClock(alertStartForTarget(info.targetStart))+" để báo trước 7 phút cho phiên "+fmtFrame(info.targetStart)+".";
     }
   }else{
-    $("sourceFrame").textContent="--:--";
-    $("sourceColor").textContent="CHỜ";
-    $("sourceColor").className="";
+    $("laneText").textContent="--";
+    $("pattern3").textContent="--";
     $("targetFrame").textContent="--:--–--:--";
     $("buy").textContent="CHỜ";
     $("buy").className="";
+    $("fourColorsInfo").textContent="Đang tải 4 màu trước...";
+    $("laneResultInfo").textContent="";
     $("bet").textContent="--";
-    $("freshness").textContent="Đang xác định mốc thời gian kế tiếp.";
+    $("freshness").textContent="Đang xác định phiên kế tiếp.";
   }
-
   renderCalendar24h();
 }
 document.addEventListener("visibilitychange",async()=>{
   if(document.visibilityState==="visible"){
     if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState();fetchAutoStrategy()
+    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState();fetchPatternSignal()
   }
 });
 loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
