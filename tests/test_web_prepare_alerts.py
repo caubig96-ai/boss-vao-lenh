@@ -86,7 +86,7 @@ class WebTimeStrategyTests(unittest.TestCase):
     def test_telegram_shows_four_colors_lane_and_previous_results(self):
         self.assertIn('"4 màu trước: "+fourLine', self.worker)
         self.assertIn('"3 màu quyết định: <b>"+threeLine', self.worker)
-        self.assertIn('"BÁO LỆNH KHUNG "+pending.laneText', self.worker)
+        self.assertIn('"🚨 <b>BÁO LỆNH KHUNG "+pending.laneText', self.worker)
         self.assertIn('"Lệnh gần nhất CHẴN: <b>"+laneResultText(previousEven)', self.worker)
         self.assertIn('LẺ: <b>"+laneResultText(previousOdd)', self.worker)
 
