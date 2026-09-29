@@ -37,8 +37,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 <section class="card">
   <div class="row">
     <div>
-      <b>Cảnh báo trước lệnh kế tiếp</b>
-      <div id="alertPermissionText" class="label">Bấm một lần để Safari phát bíp khoảng 1 phút trước phiên kế tiếp</div>
+      <b>Cảnh báo trước lệnh 7 phút</b>
+      <div id="alertPermissionText" class="label">Bấm một lần để Safari phát bíp khoảng 7 phút trước nến mục tiêu</div>
     </div>
     <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
   </div>
@@ -65,9 +65,9 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
   <div class="label">Chiến lược 3 màu CHẴN / LẺ</div>
   <div class="note" style="margin-top:6px">
     MỐC CHẴN: :00, :10, :20, :30, :40, :50 • MỐC LẺ: :05, :15, :25, :35, :45, :55.
-    Tool vào lệnh liên tục mỗi 5 phút: đang chạy 16:00 thì xét dãy LẺ để chuẩn bị 16:05; đang chạy 16:05 thì xét dãy CHẴN để chuẩn bị 16:10.
-    AAA → mua A; ABA → mua B để tiếp tục xen kẽ. Mẫu khác thì bỏ qua.
-    Nếu kết quả gần nhất của MỐC CHẴN và MỐC LẺ đều THUA, tool nghỉ 30 phút rồi xét lại.
+    Ví dụ lúc 16:18, nến live đang chạy sẽ đóng ở 16:20. Tool lấy 3 nến LẺ đã đóng 15:55 – 16:05 – 16:15 để chọn màu cho nến 16:25 và báo Telegram ngay khoảng 16:18.
+    Khi đến chu kỳ LẺ thì làm ngược lại: lấy 3 nến CHẴN gần nhất để chọn màu cho nến CHẴN kế tiếp.
+    AAA → mua A; ABA → mua B. Hai dãy CHẴN/LẺ quản lý Lệnh 1 → Lệnh 2 x2 độc lập.
   </div>
   <div class="stats" style="margin-top:12px">
     <div class="stat"><span class="label">Dãy của lệnh kế tiếp</span><b id="laneText">--</b></div>
@@ -151,8 +151,8 @@ details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#
 </main>
 <script>
 const SIGNAL_STEP=600;
-const PREVIEW_ALERT_LEAD=60;
-const STRATEGY_VERSION="continuous-even-odd-minute-v4";
+const PREVIEW_ALERT_LEAD=420;
+const STRATEGY_VERSION="alternating-lane-tminus7-v5";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
 const INTERVAL=300;
 const $=id=>document.getElementById(id);
@@ -251,7 +251,7 @@ function firePrepareAlert(){
   showTradeAlert(
     "prepare",
     "⚠️ BÁO TRƯỚC LỆNH KẾ TIẾP • "+String(s.laneText||""),
-    colors+" → MUA "+buyText+" • phiên "+fmtFrame(Number(s.targetStart))
+    colors+" → MUA "+buyText+" • nến "+shortClock(Number(s.targetStart))+" ("+targetCandleFrame(Number(s.targetStart))+")"
   );
   threeSecondAlert("prepare");
   flash("prepare");
@@ -587,12 +587,13 @@ function isPatternTarget(targetStart){
   return localTimeParts(targetStart).minute%5===0;
 }
 function upcomingTargetStart(nowSec=Date.now()/1000){
-  return Math.floor(Number(nowSec)/INTERVAL)*INTERVAL+INTERVAL;
+  // targetStart là mốc ĐÓNG nến. Lúc 16:18: base=16:15 -> target=16:25.
+  return Math.floor(Number(nowSec)/INTERVAL)*INTERVAL+2*INTERVAL;
 }
 function alertStartForTarget(targetStart){return Number(targetStart)-PREVIEW_ALERT_LEAD}
 function isEntryAlertWindow(targetStart,nowSec=Date.now()/1000){
   const remain=Number(targetStart)-Number(nowSec);
-  return remain<=PREVIEW_ALERT_LEAD&&remain>0;
+  return remain<=450&&remain>=390;
 }
 
 function historicalMoneySettings(){
@@ -675,18 +676,22 @@ function compute(){
     const wins=Number(cloudTradeState.wins||0);
     const losses=Number(cloudTradeState.losses||0);
     const pnl=Number(cloudTradeState.pnl||0);
-    const step=Number(cloudTradeState.step||1)===2?2:1;
+    const laneSteps={
+      EVEN:Number(cloudTradeState?.laneSteps?.EVEN)===2?2:1,
+      ODD:Number(cloudTradeState?.laneSteps?.ODD)===2?2:1
+    };
     const completed=Array.isArray(cloudTradeState.completed)?cloudTradeState.completed:[];
     const pending=Array.isArray(cloudTradeState.pendingOrders)?cloudTradeState.pendingOrders:[];
     const orders=[
       ...completed.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,win:typeof o.win==="boolean"?o.win:null,cloud:true})),
       ...pending.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,actual:null,win:null,cloud:true}))
     ].sort((a,b)=>Number(a.targetStart||0)-Number(b.targetStart||0));
-    return{bet1,bet2,payout,start,step,pnl,wins,losses,settled:orders.filter(o=>o.win!==null),orders,hasOrders:(wins+losses+pending.length)>0,cloud:true};
+    return{bet1,bet2,payout,start,laneSteps,pnl,wins,losses,settled:orders.filter(o=>o.win!==null),orders,hasOrders:(wins+losses+pending.length)>0,cloud:true};
   }
-  return{bet1,bet2,payout,start,step:1,pnl:0,wins:0,losses:0,settled:[],orders:[],hasOrders:false,cloud:false};
+  return{bet1,bet2,payout,start,laneSteps:{EVEN:1,ODD:1},pnl:0,wins:0,losses:0,settled:[],orders:[],hasOrders:false,cloud:false};
 }
 function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+function targetCandleFrame(mark){return fmtFrame(Number(mark)-INTERVAL)}
 function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
 function alertTick(){
   const now=Date.now()/1000;
@@ -830,7 +835,7 @@ function renderCalendar24h(){
       if(slot.status==="FUTURE"){
         detail+="ô đặt lệnh • chưa tới";
       }else if(slot.status==="WIN"||slot.status==="LOSS"){
-        detail+=laneText(s.lane)+" • "+
+        detail+=laneText(s.lane)+" • nến "+shortClock(s.targetT)+" ("+targetCandleFrame(s.targetT)+") • "+
           (s.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ")+
           " • kết quả "+(s.actual==="G"?"XANH":"ĐỎ")+" • "+(slot.status==="WIN"?"THẮNG":"THUA")+
           " • Lệnh "+Number(s.step||1)+(Number(s.step||1)===2?" x2":"")+
@@ -877,7 +882,7 @@ function render(){
 
   if(info){
     $("laneText").textContent=info.laneText||laneText(info.lane);
-    $("targetFrame").textContent=fmtFrame(info.targetStart);
+    $("targetFrame").textContent=shortClock(info.targetStart)+" • "+targetCandleFrame(info.targetStart);
     $("pattern3").textContent=(info.decisionColors||[]).map(colorIcon).join(" ")||"--";
 
     const four=(info.colors||[]).map((color,i)=>{
@@ -900,22 +905,19 @@ function render(){
           :direction==="G"?"MUA XANH":"MUA ĐỎ";
     $("buy").className=!paused&&direction==="G"&&(inWindow||info.pending)?"green":!paused&&direction==="R"&&(inWindow||info.pending)?"red":"";
 
-    const step=Number(info.pending?.step||calc.step||1)===2?2:1;
-    const amount=Number(info.pending?.amount??(step===2?calc.bet2:calc.bet1));
-    $("bet").textContent=info.currentPending
-      ?"Màu đã chuẩn bị • tiền lệnh sẽ chốt sau kết quả "+fmtFrame(Number(info.currentPending.targetStart))
-      :(step===2?"Lệnh 2 x2":"Lệnh 1")+" • "+amount.toFixed(2)+" USDT";
+    const laneStep=Number(info.pending?.step||calc.laneSteps?.[info.lane]||1)===2?2:1;
+    const amount=Number(info.pending?.amount??(laneStep===2?calc.bet2:calc.bet1));
+    $("bet").textContent=(laneStep===2?"Lệnh 2 x2":"Lệnh 1")+" của "+info.laneText+" • "+amount.toFixed(2)+" USDT";
 
+    const liveClose=Math.floor(now/INTERVAL)*INTERVAL+INTERVAL;
     if(paused){
-      $("freshness").textContent="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA • nghỉ đến "+shortClock(pauseUntil)+" rồi xét lại từ Lệnh 1.";
+      $("freshness").textContent="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA • nghỉ đến "+shortClock(pauseUntil)+".";
     }else if(!direction){
-      $("freshness").textContent="Dãy "+info.laneText+" của phiên kế tiếp không có mẫu AAA hoặc ABA • bỏ qua "+fmtFrame(info.targetStart)+".";
-    }else if(info.currentPending){
-      $("freshness").textContent="Đang chạy "+fmtFrame(Number(info.currentPending.targetStart))+" • đã dùng dãy "+info.laneText+" để chuẩn bị "+fmtFrame(info.targetStart)+" • dự kiến MUA "+(direction==="G"?"XANH":"ĐỎ")+"; số tiền chốt ngay sau kết quả phiên hiện tại.";
+      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • dãy "+info.laneText+" không có mẫu AAA hoặc ABA cho nến "+shortClock(info.targetStart)+" • bỏ qua.";
     }else if(inWindow||info.pending){
-      $("freshness").textContent="LỆNH KẾ TIẾP "+info.laneText+" • "+(info.patternType==="SAME"?"AAA → theo cùng màu":"ABA → tiếp tục màu giữa")+" • "+(step===2?"LỆNH 2 x2":"LỆNH 1")+" • MUA "+(direction==="G"?"XANH":"ĐỎ")+".";
+      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" → dùng "+info.laneText+" để đánh nến "+shortClock(info.targetStart)+" • "+(info.patternType==="SAME"?"AAA → theo cùng màu":"ABA → lấy màu giữa")+" • "+(laneStep===2?"LỆNH 2 x2":"LỆNH 1")+" • MUA "+(direction==="G"?"XANH":"ĐỎ")+".";
     }else{
-      $("freshness").textContent="Phiên kế tiếp "+fmtFrame(info.targetStart)+" dùng "+info.laneText+" • dự kiến MUA "+(direction==="G"?"XANH":"ĐỎ")+".";
+      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • mục tiêu "+shortClock(info.targetStart)+" dùng "+info.laneText+" • Telegram báo khoảng "+shortClock(alertStartForTarget(info.targetStart))+".";
     }
   }else{
     $("laneText").textContent="--";
