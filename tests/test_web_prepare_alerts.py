@@ -127,11 +127,18 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.assertIn('" • Net "+usd24(rowNet,true)', self.source)
         self.assertIn('calendar24PauseMinutes', self.source)
 
-    def test_pause_resume_uses_target_market_start(self):
-        self.assertIn("const targetMarketStart=targetStart-INTERVAL", self.worker)
-        self.assertIn("targetMarketStart<Number(state.pauseUntil)", self.worker)
+    def test_pause_resume_uses_current_live_candle_after_pause(self):
+        self.assertIn("if(Number(state.pauseUntil||0)>Number(nowSec))return", self.worker)
+        self.assertIn("Đến 16:40 mới quan sát nến live 16:40-16:45", self.worker)
+        self.assertNotIn("targetMarketStart<Number(state.pauseUntil)", self.worker)
         self.assertIn("pauseActiveNow", self.worker)
         self.assertIn("patternSnapshot.paused", self.source)
+
+    def test_24h_pause_skips_target_whose_alert_was_inside_pause(self):
+        self.assertIn("const alertAt=t-PREVIEW_ALERT_LEAD", self.source)
+        self.assertIn("if(pauseUntil>0&&alertAt<pauseUntil)", self.source)
+        self.assertIn("target 16:45 có giờ báo 16:38 nên bỏ", self.source)
+        self.assertIn("target 16:50 có giờ báo 16:43 nên được xét lại", self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
