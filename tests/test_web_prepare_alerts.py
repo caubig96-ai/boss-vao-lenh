@@ -11,127 +11,96 @@ class WebTimeStrategyTests(unittest.TestCase):
         self.source = (ROOT / "web-iphone" / "index.html").read_text(encoding="utf-8")
         self.worker = (ROOT / "cloudflare-worker" / "src" / "index.js").read_text(encoding="utf-8")
 
-    def test_old_pattern_strategy_is_removed(self):
-        self.assertNotIn("PATTERN_GROUPS", self.source)
-        self.assertNotIn("PATTERNS=", self.source)
-        self.assertNotIn("recentTwoDecision", self.source)
-        self.assertNotIn("buildAdaptiveHistory", self.source)
-        self.assertNotIn("decisionFor", self.worker)
-        self.assertNotIn("settledSignals", self.worker)
-        self.assertNotIn("PATTERN_VARIANTS", self.worker)
+    def test_old_color_engines_are_removed(self):
+        for token in [
+            "BINANCE_KLINES_URL",
+            "cachedBinanceAutoStrategy",
+            "autoStrategyMode",
+            "reverseColorMode",
+            "reverseAfterSecondLossActive",
+            "lossCapitalMode",
+            "toggleAutoStrategyMode",
+            "toggleLossCapitalMode",
+            "tradeDirectionFromSource",
+            "reverse_after_order2_loss",
+        ]:
+            self.assertNotIn(token, self.worker + self.source)
 
-    def test_even_time_strategy_constants(self):
-        self.assertIn("const SOURCE_STEP=600", self.source)
-        self.assertIn("const ENTRY_DELAY=600", self.source)
-        self.assertIn("const SOURCE_STEP=600", self.worker)
-        self.assertIn("const ENTRY_DELAY=600", self.worker)
-        self.assertIn('STRATEGY_VERSION="even-10m-2loss-waitwin-v4"', self.worker)
+    def test_even_odd_hour_strategy_constants(self):
+        self.assertIn("const SIGNAL_STEP=600", self.worker)
+        self.assertIn("const ALERT_LEAD=420", self.worker)
+        self.assertIn("const PAUSE_SECONDS=1800", self.worker)
+        self.assertIn('STRATEGY_VERSION="even-odd-hour-3color-v2"', self.worker)
+        self.assertIn("const SIGNAL_STEP=600", self.source)
+        self.assertIn("const ALERT_LEAD=420", self.source)
+        self.assertIn('STRATEGY_VERSION="even-odd-hour-3color-v2"', self.source)
 
-    def test_source_color_timing_is_preserved_before_auto_strategy_decision(self):
-        self.assertIn("sourceStartForTarget", self.source)
-        self.assertIn("sourceStartForTarget(t)", self.source)
-        self.assertIn("direction=byTime.get(sourceT)?.c||null", self.source)
-        self.assertIn("sourceStart=sourceStartForTarget(targetStart)", self.worker)
-        self.assertIn("cachedBinanceAutoStrategy(env,true)", self.worker)
-        self.assertIn("const direction=auto.direction||sourceColor", self.worker)
+    def test_even_odd_is_based_on_local_hour(self):
+        self.assertIn('timeZone:"Asia/Ho_Chi_Minh"', self.worker)
+        self.assertIn('hour%2===0?"EVEN":"ODD"', self.worker)
+        self.assertIn('return lane==="EVEN"?"GIỜ CHẴN":"GIỜ LẺ"', self.worker)
+        self.assertIn('minute===30||minute===40||minute===50', self.worker)
+        self.assertIn('hour%2===0?"EVEN":"ODD"', self.source)
 
-    def test_one_minute_telegram_alert(self):
-        self.assertIn("remain<=60&&remain>30", self.source)
-        self.assertIn("CÒN 1 PHÚT • VÀO LỆNH PHIÊN SAU", self.source)
-        self.assertIn("CÒN ~1 PHÚT • BÁO LỆNH PHIÊN SAU", self.worker)
-        self.assertIn("Mốc lấy màu:", self.worker)
-        self.assertIn("vào phiên +10 phút, chốt màu ở +15 phút", self.worker)
+    def test_three_color_rules_match_requested_patterns(self):
+        self.assertIn("function directionFromThree", self.worker)
+        self.assertIn('if(a===b&&b===d)return {direction:a,patternType:"SAME"}', self.worker)
+        self.assertIn('if(a===d&&a!==b)return {direction:b,patternType:"ALTERNATE"}', self.worker)
+        self.assertIn("fourPreviousMarksForTarget", self.worker)
+        self.assertIn("decisionColors=colors.slice(1)", self.worker)
 
-    def test_signal_is_not_shown_early(self):
-        self.assertIn("function isEntryAlertWindow", self.source)
-        self.assertIn("alertStartForTarget", self.source)
-        self.assertIn('?"CHỜ "+shortClock(alertAt)', self.source)
-        self.assertIn("const secondsToTarget=targetStart-nowSec", self.worker)
-        self.assertIn("if(secondsToTarget>70||secondsToTarget<=45)return", self.worker)
-        self.assertIn("17:00 -> order frame 17:10-17:15 -> alert around 17:09", self.worker)
+    def test_example_1600_1610_1620_targets_1630(self):
+        self.assertIn("t-3*SIGNAL_STEP", self.worker)
+        self.assertIn("t-2*SIGNAL_STEP", self.worker)
+        self.assertIn("t-SIGNAL_STEP", self.worker)
+        self.assertIn("return Number(markTs)-INTERVAL", self.worker)
+        self.assertIn("16:00–16:10–16:20 → dự đoán 16:30", self.source)
 
-    def test_previous_order_must_settle_before_next_order(self):
-        self.assertIn("lastResultWin:null", self.worker)
-        self.assertIn("state.lastResultWin=win", self.worker)
-        self.assertIn("if(state.pending&&Number(state.pending.targetStart)!==targetStart)return", self.worker)
-        self.assertIn("if(pending&&Number(pending.targetStart)!==targetStart)return", self.source)
-        self.assertIn("CHỜ KẾT QUẢ LỆNH TRƯỚC", self.source)
-        self.assertIn("Tool vẫn theo dõi đúng giờ và màu nến", self.source)
-        self.assertNotIn("state.waitForWin=true", self.worker)
-        self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.source)
-        self.assertNotIn("SKIP_BEATS_AFTER_TWO_LOSSES", self.worker)
+    def test_alert_is_seven_minutes_before_target(self):
+        self.assertIn("ALERT_LEAD=420", self.worker)
+        self.assertIn("remain<=450&&remain>=390", self.worker)
+        self.assertIn("Báo trước 7 phút", self.source)
+        self.assertIn("remain<=450&&remain>=390", self.source)
 
-    def test_24h_calendar_shows_only_six_order_slots_per_hour_newest_first(self):
-        self.assertIn("24 hàng giờ", self.source)
+    def test_previous_order_must_settle_before_assigning_next_money_step(self):
+        self.assertIn("if((state.pendingOrders||[]).length)return", self.worker)
+        self.assertIn("settleDueOrders", self.worker)
+        self.assertIn("pendingOrders", self.source)
+
+    def test_win_double_rule_is_preserved(self):
+        self.assertIn("function nextStepAfter(step,win)", self.worker)
+        self.assertIn("Number(step)===1&&win?2:1", self.worker)
+        self.assertIn('label:"Lệnh 2 x2"', self.worker)
+        self.assertIn('label:"Lệnh 1"', self.worker)
+        self.assertIn("state.step=nextStep", self.worker)
+        self.assertIn("Lệnh 2 x2", self.source)
+        self.assertIn("const step=Number(cloudTradeState.step||1)===2?2:1", self.source)
+
+    def test_both_even_and_odd_losses_pause_30_minutes(self):
+        self.assertIn('state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS"', self.worker)
+        self.assertIn("PAUSE_SECONDS=1800", self.worker)
+        self.assertIn("state.step=1", self.worker)
+        self.assertIn("DỪNG 30 PHÚT", self.worker)
+        self.assertIn("DỪNG 30 PHÚT", self.source)
+
+    def test_telegram_shows_four_colors_lane_and_previous_results(self):
+        self.assertIn('"4 màu trước: "+fourLine', self.worker)
+        self.assertIn('"3 màu quyết định: <b>"+threeLine', self.worker)
+        self.assertIn('"BÁO LỆNH KHUNG "+pending.laneText', self.worker)
+        self.assertIn('"Lệnh gần nhất CHẴN: <b>"+laneResultText(previousEven)', self.worker)
+        self.assertIn('LẺ: <b>"+laneResultText(previousOdd)', self.worker)
+
+    def test_pattern_signal_endpoint_replaces_auto_strategy_endpoint(self):
+        self.assertIn('u.pathname==="/pattern-signal"', self.worker)
+        self.assertIn('CLOUD+"/pattern-signal?target="+targetStart', self.source)
+        self.assertNotIn('u.pathname==="/auto-strategy"', self.worker)
+        self.assertNotIn("/auto-strategy?target=", self.source)
+
+    def test_calendar_keeps_ten_minute_marks(self):
         self.assertIn("00/10/20/30/40/50", self.source)
         self.assertIn("for(const minute of [0,10,20,30,40,50])", self.source)
-        self.assertIn("for(let row=23;row>=0;row--)", self.source)
         self.assertIn("slice(row*6,row*6+6)", self.source)
-        self.assertNotIn('status="SOURCE"', self.source)
-        self.assertNotIn('status="SKIP"', self.source)
-        self.assertIn('status="WAIT"', self.source)
-        self.assertNotIn('d.textContent="B"', self.source)
-        self.assertNotIn('d.textContent="·"', self.source)
-        self.assertIn('sum.textContent="V "+rowW+" • X "+rowL+" • C✓ "+rowCW+" • C× "+rowCL', self.source)
-
-    def test_loss_capital_mode_has_toggle_endpoint_and_1_1_2_4_plan(self):
-        self.assertIn("lossCapitalMode:false", self.worker)
-        self.assertIn('u.pathname==="/trade-mode"', self.worker)
-        self.assertIn("function tradePlan", self.worker)
-        self.assertIn("capitalStage===2?1:capitalStage===3?2:4", self.worker)
-        self.assertIn("if(state.lossCapitalMode&&state.lossStreak>=4)state.lossStreak=0", self.worker)
-        self.assertIn('id="lossCapitalModeBtn"', self.source)
-        self.assertIn("toggleLossCapitalMode", self.source)
-        self.assertIn("function historicalTradePlan", self.source)
-        self.assertIn("capitalStage===2?1:capitalStage===3?2:4", self.source)
-
-    def test_auto_strategy_uses_binance_24h_statistics(self):
-        self.assertIn("autoStrategyMode:true", self.worker)
-        self.assertIn('BINANCE_KLINES_URL="https://api.binance.com/api/v3/klines"', self.worker)
-        self.assertIn('BINANCE_AUTO_SYMBOL="BTCUSDT"', self.worker)
-        self.assertIn('BINANCE_AUTO_INTERVAL="5m"', self.worker)
-        self.assertIn("BINANCE_AUTO_LIMIT=288", self.worker)
-        self.assertIn("BINANCE_AUTO_PATTERN_LEN=3", self.worker)
-        self.assertIn("function streakTransitionTable", self.worker)
-        self.assertIn("function patternMatchPredict", self.worker)
-        self.assertIn("function backtestStrategies", self.worker)
-        self.assertIn('"streak"', self.worker)
-        self.assertIn('"pattern3"', self.worker)
-        self.assertIn('"trend"', self.worker)
-        self.assertIn('"opposite_trend"', self.worker)
-        self.assertIn('"day_majority"', self.worker)
-        self.assertIn("cachedBinanceAutoStrategy", self.worker)
-        self.assertIn('u.pathname==="/auto-strategy"', self.worker)
-        self.assertIn('id="autoStrategyModeBtn"', self.source)
-        self.assertIn("toggleAutoStrategyMode", self.source)
-        self.assertIn("AUTO BINANCE 24H", self.source)
-        self.assertNotIn('id="reverseColorModeBtn"', self.source)
-        self.assertNotIn("toggleReverseColorMode", self.source)
-        self.assertNotIn("AUTO_VALIDATE_SECONDS=6*3600", self.worker)
-        self.assertNotIn('"reverse_after_order2_loss"', self.worker)
-
-    def test_24h_calendar_uses_recorded_cloud_orders(self):
-        self.assertIn("Array.isArray(cloudTradeState?.completed)", self.source)
-        self.assertIn("autoStrategyId:o.autoStrategyId||null", self.source)
-        self.assertNotIn("autoPatternMapForCalendar", self.source)
-        self.assertNotIn("autoDirectionForCalendar", self.source)
-        self.assertNotIn('selectedId==="reverse_after_order2_loss"', self.source)
-
-    def test_loss_capital_mode_preserves_win_double_rule(self):
-        self.assertIn("Number(step)===1&&win?2:1", self.worker)
-        self.assertIn("Number(step)===1&&win?2:1", self.source)
-        self.assertIn('label:"Lệnh thắng x2"', self.worker)
-        self.assertIn("const step=Number(cloudTradeState.step||1)", self.source)
-
-    def test_24h_money_uses_double_step_after_step1_win(self):
-        self.assertIn("function historicalMoneySettings", self.source)
-        self.assertIn("function nextHistoricalStep", self.source)
-        self.assertIn("Number(step)===1&&win?2:1", self.source)
-        self.assertIn("amount:Number(o.amount||0)", self.source)
-        self.assertIn("delta:Number(o.delta||0)", self.source)
-        self.assertIn('id="calendar24GrossWin"', self.source)
-        self.assertIn('id="calendar24GrossLoss"', self.source)
-        self.assertIn('id="calendar24Net"', self.source)
+        self.assertIn("isPatternTarget(slot.t)", self.source)
 
     def test_result_message_and_reset_remain(self):
         self.assertIn("THẮNG LỆNH", self.worker)
