@@ -678,7 +678,12 @@ function backtestStrategy24h(){
     const inWindow=t>=first;
     const marketStart=t-INTERVAL;
 
-    if(pauseUntil>0&&marketStart<pauseUntil){
+    // Không chuẩn bị lệnh trong thời gian nghỉ.
+    // Dùng thời điểm báo T-7 để quyết định lệnh nào bị bỏ qua.
+    // Ví dụ pause đến 16:40: target 16:45 có giờ báo 16:38 nên bỏ;
+    // target 16:50 có giờ báo 16:43 nên được xét lại từ nến live sau khi nghỉ.
+    const alertAt=t-PREVIEW_ALERT_LEAD;
+    if(pauseUntil>0&&alertAt<pauseUntil){
       if(inWindow){
         const item={...signal,status:"PAUSE",pauseUntil,step:null,amount:0,delta:0};
         slots.push(item);signalMap.set(t,item);
@@ -998,7 +1003,7 @@ function render(){
   const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
   const paused=patternSnapshot&&Number(patternSnapshot.targetStart)===Number(info?.targetStart)
     ?!!patternSnapshot.paused
-    :(pauseUntil>0&&(Number(info?.targetStart||0)-INTERVAL)<pauseUntil);
+    :pauseUntil>now;
 
   if(info){
     $("laneText").textContent=info.laneText||laneText(info.lane);
@@ -1031,7 +1036,7 @@ function render(){
 
     const liveClose=Math.floor(now/INTERVAL)*INTERVAL+INTERVAL;
     if(paused){
-      $("freshness").textContent="2 lệnh thực tế liên tiếp đều THUA • nghỉ đến "+shortClock(pauseUntil)+".";
+      $("freshness").textContent="2 lệnh thực tế liên tiếp đều THUA • nghỉ đến "+shortClock(pauseUntil)+" • hết nghỉ sẽ lấy nến live lúc đó để chọn dãy CHẴN/LẺ của lệnh kế tiếp.";
     }else if(!direction){
       $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • dãy "+info.laneText+" không có mẫu AAA hoặc ABA cho nến "+shortClock(info.targetStart)+" • bỏ qua.";
     }else if(inWindow||info.pending){
