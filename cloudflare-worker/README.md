@@ -1,31 +1,32 @@
-# Boss Mốc Chẵn Cloud — Cloudflare Worker
+# Boss Mốc Chẵn/Lẻ Cloud — Cloudflare Worker
 
 Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone không mở web.
 
 ## Chiến lược hiện tại
 
-- Phân loại theo **giờ địa phương Việt Nam**:
-  - GIỜ CHẴN: 00h, 02h, 04h, ..., 22h.
-  - GIỜ LẺ: 01h, 03h, 05h, ..., 23h.
-- Trong mỗi giờ, các mốc màu là: :00, :10, :20, :30, :40, :50.
-- Chỉ xét phiên đặt lệnh tại :30, :40, :50 để có đủ 3 mốc màu trước đó trong cùng giờ.
-- Ví dụ: 16:00, 16:10, 16:20 được dùng để xét phiên 16:30; cảnh báo được gửi khoảng 16:23.
+- CHẴN/LẺ được xác định theo **phút**, không theo giờ:
+  - MỐC CHẴN: :00, :10, :20, :30, :40, :50.
+  - MỐC LẺ: :05, :15, :25, :35, :45, :55.
+- Tool vào lệnh liên tục mỗi 5 phút.
+- Phiên kế tiếp thuộc dãy nào thì dùng 3 mốc đã đóng gần nhất của chính dãy đó:
+  - đang chạy 16:00 → phiên kế tiếp 16:05 là MỐC LẺ → dùng 15:35, 15:45, 15:55 để chọn màu 16:05;
+  - đang chạy 16:05 → phiên kế tiếp 16:10 là MỐC CHẴN → dùng 15:40, 15:50, 16:00 để chọn màu 16:10.
 - Quy tắc màu:
-  - AAA → lệnh thứ 4 cùng màu A.
-  - ABA → lệnh thứ 4 theo màu B để tiếp tục chuỗi xen kẽ A-B-A-B.
-  - Mẫu khác → bỏ qua.
-- Telegram hiển thị 4 màu trước, 3 màu quyết định, GIỜ CHẴN/GIỜ LẺ, màu mua và kết quả gần nhất của hai loại giờ.
-- Không dùng đảo màu.
-- Không dùng bộ chọn màu Binance 24h hoặc các công thức AUTO trước đây.
+  - AAA → lệnh kế tiếp cùng màu A.
+  - ABA → lệnh kế tiếp theo màu B để tiếp tục A-B-A-B.
+  - mẫu khác → bỏ qua.
+- Giao diện xem trước màu của phiên kế tiếp trong nến live hiện tại.
+- Cloud chốt kết quả phiên vừa xong trước, sau đó mới xác định tiền Lệnh 1/Lệnh 2 x2 và gửi lệnh cho phiên mới.
+- Telegram hiển thị 4 màu trước của dãy mục tiêu, 3 màu quyết định, MỐC CHẴN/MỐC LẺ, màu mua và kết quả gần nhất của hai dãy.
+- Không dùng đảo màu, AUTO Binance hoặc các bộ chọn màu trước đây.
 
 ## Quản lý tiền
 
 - Lệnh 1 dùng `CLOUD_BET1`.
 - Nếu **Lệnh 1 thắng**, lệnh thực tế kế tiếp dùng **Lệnh 2 x2** với `CLOUD_BET2`.
 - Sau Lệnh 2, dù thắng hay thua, quay về Lệnh 1.
-- Nếu Lệnh 1 thua, quay/giữ ở Lệnh 1.
-- Tool chờ lệnh thực tế trước có kết quả rồi mới gán Lệnh 1 hay Lệnh 2 x2 cho lệnh tiếp theo.
-- Khi kết quả gần nhất của GIỜ CHẴN và GIỜ LẺ đều là THUA, tool dừng 30 phút; hết thời gian nghỉ sẽ bắt đầu lại từ Lệnh 1.
+- Nếu Lệnh 1 thua, tiếp tục Lệnh 1.
+- Khi kết quả gần nhất của MỐC CHẴN và MỐC LẺ đều là THUA, tool dừng 30 phút; hết thời gian nghỉ bắt đầu lại từ Lệnh 1.
 
 ## Cấu hình
 
@@ -47,4 +48,3 @@ Worker dùng **Cloudflare Workers Builds** kết nối trực tiếp với GitHu
 - Root directory trên Cloudflare: `cloudflare-worker`
 - Production branch: `main`
 - Mỗi lần push lên `main`, Cloudflare tự build và deploy Worker.
-- Không cần GitHub Actions token riêng cho Cloudflare.
