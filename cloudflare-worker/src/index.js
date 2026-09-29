@@ -2,11 +2,11 @@ const API="https://api.predict.fun";
 const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
-const SIGNAL_STEP=600;       // mốc màu: :00/:10/:20/:30/:40/:50
-const ALERT_LEAD=420;         // báo trước 7 phút, ví dụ 16:23 cho phiên 16:30
-const PAUSE_SECONDS=1800;     // giờ CHẴN và giờ LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="even-odd-hour-3color-v2";
-// Strategy: even/odd local hour + 3-color pattern + win x2.
+const SIGNAL_STEP=600;       // mỗi dãy cách nhau 10 phút
+const ALERT_LEAD=420;         // báo trước 7 phút: 16:23 -> 16:30, 16:28 -> 16:35
+const PAUSE_SECONDS=1800;     // dãy CHẴN và dãy LẺ cùng thua gần nhất => nghỉ 30 phút
+const STRATEGY_VERSION="even-odd-minute-3color-v3";
+// CHẴN = phút 00/10/20/30/40/50; LẺ = phút 05/15/25/35/45/55.
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -290,17 +290,17 @@ function localTimeParts(ts){
 }
 
 function laneForTarget(targetStart){
-  const {hour}=localTimeParts(targetStart);
-  return hour%2===0?"EVEN":"ODD";
+  const {minute}=localTimeParts(targetStart);
+  return minute%10===0?"EVEN":"ODD";
 }
 
 function laneText(lane){
-  return lane==="EVEN"?"GIỜ CHẴN":"GIỜ LẺ";
+  return lane==="EVEN"?"MỐC CHẴN":"MỐC LẺ";
 }
 
 function isPatternTarget(targetStart){
   const {minute}=localTimeParts(targetStart);
-  return minute===30||minute===40||minute===50;
+  return minute%5===0;
 }
 
 function patternMarksForTarget(targetStart){
@@ -490,7 +490,7 @@ async function settleDueOrders(env,payload,nowSec,state){
         Number(state.pauseUntil||0),
         Number(pending.targetStart)+INTERVAL+PAUSE_SECONDS
       );
-      state.pauseReason="CHẴN và LẺ đều có kết quả gần nhất là THUA";
+      state.pauseReason="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA";
       pauseTriggered=true;
     }
 
@@ -606,7 +606,7 @@ async function maybePrepare(env,payload,nowSec){
     "➡️ "+buy+"\n"+
     "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>\n"+
     "<b>"+pending.planLabel+" • "+amountText(pending.amount)+"</b>\n"+
-    "Lệnh gần nhất CHẴN: <b>"+laneResultText(previousEven)+"</b> • LẺ: <b>"+laneResultText(previousOdd)+"</b>"
+    "Lệnh gần nhất MỐC CHẴN: <b>"+laneResultText(previousEven)+"</b> • MỐC LẺ: <b>"+laneResultText(previousOdd)+"</b>"
   );
 
   pending.entrySent=true;
@@ -629,7 +629,7 @@ function resultMessagePart(result,settings){
     ?Number(result.balanceAfter)
     :settings.startBalance+Number(result.pnlAfter||0);
   const pauseLine=result.pauseTriggered
-    ?"\n⏸ <b>CHẴN + LẺ ĐỀU THUA → DỪNG 30 PHÚT</b> • xét lại sau "+timeText(result.pauseUntil)
+    ?"\n⏸ <b>MỐC CHẴN + MỐC LẺ ĐỀU THUA → DỪNG 30 PHÚT</b> • xét lại sau "+timeText(result.pauseUntil)
     :"";
   const laneEven=result.laneResultsAfter?.EVEN||null;
   const laneOdd=result.laneResultsAfter?.ODD||null;
@@ -638,7 +638,7 @@ function resultMessagePart(result,settings){
     title+"\n"+
     "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
-    "Kết quả gần nhất CHẴN: <b>"+laneResultText(laneEven)+"</b> • LẺ: <b>"+laneResultText(laneOdd)+"</b>\n"+
+    "Kết quả gần nhất MỐC CHẴN: <b>"+laneResultText(laneEven)+"</b> • MỐC LẺ: <b>"+laneResultText(laneOdd)+"</b>\n"+
     "Đã dùng: <b>Lệnh "+Number(result.step||1)+"</b> • lệnh kế tiếp: <b>Lệnh "+Number(result.nextStep||1)+(Number(result.nextStep||1)===2?" x2":"")+"</b>\n"+
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
@@ -706,11 +706,10 @@ export default {
         service:"Boss Moc Chan Cloud",
         strategyVersion:STRATEGY_VERSION,
         signalStepMinutes:SIGNAL_STEP/60,
-        evenOddByLocalHour:true,
-        evenHours:[0,2,4,6,8,10,12,14,16,18,20,22],
-        oddHours:[1,3,5,7,9,11,13,15,17,19,21,23],
-        colorMarks:["00","10","20","30","40","50"],
-        entryMinutes:["30","40","50"],
+        evenOddByMinute:true,
+        evenMinuteMarks:["00","10","20","30","40","50"],
+        oddMinuteMarks:["05","15","25","35","45","55"],
+        entryEveryMinutes:5,
         alertLeadMinutes:ALERT_LEAD/60,
         patternRules:["AAA->A","ABA->B"],
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
