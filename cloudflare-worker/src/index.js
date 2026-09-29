@@ -2,10 +2,10 @@ const API="https://api.predict.fun";
 const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
-const SIGNAL_STEP=600;       // mỗi dãy cách nhau 10 phút
-const ALERT_LEAD=420;         // báo trước 7 phút: 16:23 -> 16:30, 16:28 -> 16:35
+const SIGNAL_STEP=600;       // mỗi dãy CHẴN/LẺ cách nhau 10 phút
+const ENTRY_GRACE_SECONDS=70; // gửi lệnh trong khoảng đầu phiên mới sau khi phiên trước được chốt
 const PAUSE_SECONDS=1800;     // dãy CHẴN và dãy LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="even-odd-minute-3color-v3";
+const STRATEGY_VERSION="continuous-even-odd-minute-v4";
 // CHẴN = phút 00/10/20/30/40/50; LẺ = phút 05/15/25/35/45/55.
 
 function numericEnv(value,fallback){
@@ -366,14 +366,10 @@ async function patternSignalForTarget(env,payload,targetStart){
   };
 }
 
-function alertTargetForNow(nowSec){
-  const base=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
-  for(let i=1;i<=16;i++){
-    const target=base+i*INTERVAL;
-    const remain=target-Number(nowSec);
-    if(isPatternTarget(target)&&remain<=450&&remain>=390)return target;
-  }
-  return null;
+function entryTargetForNow(nowSec){
+  const target=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
+  const elapsed=Number(nowSec)-target;
+  return elapsed>=0&&elapsed<=ENTRY_GRACE_SECONDS?target:null;
 }
 
 function laneResultText(value){
@@ -553,7 +549,7 @@ async function maybePrepare(env,payload,nowSec){
     await writeTradeState(env,state);
   }
 
-  const targetStart=alertTargetForNow(nowSec);
+  const targetStart=entryTargetForNow(nowSec);
   if(!targetStart)return;
   if((state.pendingOrders||[]).length)return;
   if((state.pendingOrders||[]).some(p=>Number(p.targetStart)===targetStart))return;
@@ -604,7 +600,7 @@ async function maybePrepare(env,payload,nowSec){
     "3 màu quyết định: <b>"+threeLine+"</b>\n"+
     "Quy tắc: <b>"+rule+"</b>\n"+
     "➡️ "+buy+"\n"+
-    "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>\n"+
+    "Phiên mua liên tục: <b>"+frameText(pending.targetStart)+"</b> • "+pending.laneText+"\n"+
     "<b>"+pending.planLabel+" • "+amountText(pending.amount)+"</b>\n"+
     "Lệnh gần nhất MỐC CHẴN: <b>"+laneResultText(previousEven)+"</b> • MỐC LẺ: <b>"+laneResultText(previousOdd)+"</b>"
   );
@@ -710,7 +706,9 @@ export default {
         evenMinuteMarks:["00","10","20","30","40","50"],
         oddMinuteMarks:["05","15","25","35","45","55"],
         entryEveryMinutes:5,
-        alertLeadMinutes:ALERT_LEAD/60,
+        continuousEntry:true,
+        entryGraceSeconds:ENTRY_GRACE_SECONDS,
+        previewUsesNextFiveMinuteLane:true,
         patternRules:["AAA->A","ABA->B"],
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
         winDoubleRule:true,
@@ -753,16 +751,9 @@ export default {
     if(u.pathname==="/pattern-signal"){
       const nowSec=Math.floor(Date.now()/1000);
       const targetParam=Number(u.searchParams.get("target"));
-      let targetStart=Number.isFinite(targetParam)&&targetParam>0
+      const targetStart=Number.isFinite(targetParam)&&targetParam>0
         ?Math.floor(targetParam/INTERVAL)*INTERVAL
-        :null;
-      if(!targetStart){
-        const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
-        for(let i=1;i<=24;i++){
-          const candidate=base+i*INTERVAL;
-          if(isPatternTarget(candidate)){targetStart=candidate;break}
-        }
-      }
+        :Math.floor(nowSec/INTERVAL)*INTERVAL+INTERVAL;
       const payload=await readHistory(env);
       const signal=await patternSignalForTarget(env,payload,targetStart);
       const state=await readTradeState(env,nowSec);
