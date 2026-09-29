@@ -6,6 +6,7 @@ const SIGNAL_STEP=600;       // mốc màu: :00/:10/:20/:30/:40/:50
 const ALERT_LEAD=420;         // báo trước 7 phút, ví dụ 16:23 cho phiên 16:30
 const PAUSE_SECONDS=1800;     // giờ CHẴN và giờ LẺ cùng thua gần nhất => nghỉ 30 phút
 const STRATEGY_VERSION="even-odd-hour-3color-v2";
+// Strategy: even/odd local hour + 3-color pattern + win x2.
 
 function numericEnv(value,fallback){
   const n=Number(value);
