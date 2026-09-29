@@ -1,7 +1,7 @@
 name = "boss-vao-lenh"
 main = "src/index.js"
 compatibility_date = "2026-09-25"
-# Strategy deployment: v6 T-7 lanes + consecutive-loss pause + exact 30m resume
+# Strategy deployment: v6 resume from live candle after exact 30m pause
 
 [triggers]
 crons = ["* * * * *"]
