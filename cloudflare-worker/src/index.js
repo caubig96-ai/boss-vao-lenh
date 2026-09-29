@@ -5,7 +5,7 @@ const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-con
 const SIGNAL_STEP=600;       // mỗi dãy CHẴN/LẺ cách nhau 10 phút
 const ALERT_LEAD=420;         // báo trước 7 phút: :18 báo cho nến đóng :25
 const PAUSE_SECONDS=1800;     // dãy CHẴN và dãy LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="alternating-lane-tminus7-v5";
+const STRATEGY_VERSION="alternating-lane-tminus7-v6";
 // CHẴN = phút 00/10/20/30/40/50; LẺ = phút 05/15/25/35/45/55.
 // targetStart là MỐC ĐÓNG nến. Ví dụ targetStart=:25 nghĩa là nến :20-:25.
 
@@ -52,6 +52,7 @@ function freshTradeState(day){
     unsentResults:[],
     laneResults:{EVEN:null,ODD:null},
     laneLastResultTarget:{EVEN:0,ODD:0},
+    consecutiveLosses:0,
     pauseUntil:0,
     pauseReason:null,
     updatedAt:new Date().toISOString()
@@ -83,6 +84,7 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
   if(!Array.isArray(state.unsentResults))state.unsentResults=[];
   if(!state.laneResults||typeof state.laneResults!=="object")state.laneResults={EVEN:null,ODD:null};
   if(!state.laneLastResultTarget||typeof state.laneLastResultTarget!=="object")state.laneLastResultTarget={EVEN:0,ODD:0};
+  if(!Number.isFinite(Number(state.consecutiveLosses)))state.consecutiveLosses=0;
   if(!Number.isFinite(Number(state.pauseUntil)))state.pauseUntil=0;
   if(!state.day)state.day=dayTextFromSeconds(nowSec);
   return state;
@@ -492,15 +494,16 @@ async function settleDueOrders(env,payload,nowSec,state){
     const nextStep=nextStepAfter(pending.step,win);
     state.laneSteps[lane]=nextStep;
 
-    const bothLanesLost=state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS";
+    state.consecutiveLosses=win?0:Number(state.consecutiveLosses||0)+1;
     let pauseTriggered=false;
-    if(bothLanesLost){
+    if(state.consecutiveLosses>=2){
       state.pauseUntil=Math.max(
         Number(state.pauseUntil||0),
         Number(pending.targetStart)+PAUSE_SECONDS
       );
-      state.pauseReason="MỐC CHẴN và MỐC LẺ đều có kết quả gần nhất là THUA";
+      state.pauseReason="2 lệnh thực tế liên tiếp đều THUA";
       pauseTriggered=true;
+      state.consecutiveLosses=0;
     }
 
     const balanceBase=state.balanceBase===null?settings.startBalance:Number(state.balanceBase);
@@ -525,6 +528,7 @@ async function settleDueOrders(env,payload,nowSec,state){
       step:Number(pending.step||1),
       nextStep,
       laneResultsAfter:{...state.laneResults},
+      consecutiveLossesAfter:Number(state.consecutiveLosses||0),
       pauseTriggered,
       pauseUntil:Number(state.pauseUntil||0),
       settledAt:new Date().toISOString(),
@@ -556,6 +560,7 @@ async function maybePrepare(env,payload,nowSec){
     state.pauseUntil=0;
     state.pauseReason=null;
     state.laneSteps={EVEN:1,ODD:1};
+    state.consecutiveLosses=0;
     state.laneResults={EVEN:null,ODD:null};
     state.laneLastResultTarget={EVEN:0,ODD:0};
     await writeTradeState(env,state);
@@ -643,7 +648,7 @@ function resultMessagePart(result,settings){
     ?Number(result.balanceAfter)
     :settings.startBalance+Number(result.pnlAfter||0);
   const pauseLine=result.pauseTriggered
-    ?"\n⏸ <b>MỐC CHẴN + MỐC LẺ ĐỀU THUA → DỪNG 30 PHÚT</b> • xét lại sau "+timeText(result.pauseUntil)
+    ?"\n⏸ <b>2 LỆNH LIÊN TIẾP THUA → DỪNG 30 PHÚT</b> • xét lại sau "+timeText(result.pauseUntil)
     :"";
   const laneEven=result.laneResultsAfter?.EVEN||null;
   const laneOdd=result.laneResultsAfter?.ODD||null;
@@ -730,7 +735,8 @@ export default {
         exampleOdd:{alert:"16:18",liveClose:"16:20",decisionMarks:["15:55","16:05","16:15"],targetClose:"16:25"},
         exampleEven:{alert:"16:23",decisionMarks:["16:00","16:10","16:20"],targetClose:"16:30"},
         patternRules:["AAA->A","ABA->B"],
-        pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
+        pauseAfterConsecutiveLosses:2,
+        pauseMinutes:PAUSE_SECONDS/60,
         winDoubleRule:true,
         moneyRule:"Mỗi dãy CHẴN/LẺ quản lý riêng: Lệnh 1 thắng -> lần cùng dãy kế tiếp dùng Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> Lệnh 1",
         kvConfigured:!!env.BOSS_KV,
