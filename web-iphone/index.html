@@ -996,7 +996,9 @@ function render(){
   const info=nextTimeSignalInfo();
   const now=Date.now()/1000;
   const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
-  const paused=pauseUntil>now;
+  const paused=patternSnapshot&&Number(patternSnapshot.targetStart)===Number(info?.targetStart)
+    ?!!patternSnapshot.paused
+    :(pauseUntil>0&&(Number(info?.targetStart||0)-INTERVAL)<pauseUntil);
 
   if(info){
     $("laneText").textContent=info.laneText||laneText(info.lane);
