@@ -2,10 +2,10 @@ const API="https://api.predict.fun";
 const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
 
-const LANE_STEP=600;         // CHẴN: :00/:10/... | LẺ: :05/:15/...
+const SIGNAL_STEP=600;       // mốc màu: :00/:10/:20/:30/:40/:50
 const ALERT_LEAD=420;         // báo trước 7 phút, ví dụ 16:23 cho phiên 16:30
-const PAUSE_SECONDS=1800;     // cả CHẴN và LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="even-odd-3color-v1";
+const PAUSE_SECONDS=1800;     // giờ CHẴN và giờ LẺ cùng thua gần nhất => nghỉ 30 phút
+const STRATEGY_VERSION="even-odd-hour-3color-v2";
 
 function numericEnv(value,fallback){
   const n=Number(value);
@@ -279,23 +279,37 @@ function internalRounds(payload){
     .sort((a,b)=>a.t-b.t);
 }
 
+function localTimeParts(ts){
+  const parts=new Intl.DateTimeFormat("en-GB",{
+    timeZone:"Asia/Ho_Chi_Minh",
+    hour:"2-digit",minute:"2-digit",hourCycle:"h23"
+  }).formatToParts(new Date(Number(ts)*1000));
+  const get=type=>Number(parts.find(p=>p.type===type)?.value);
+  return {hour:get("hour"),minute:get("minute")};
+}
+
 function laneForTarget(targetStart){
-  const mod=((Math.floor(Number(targetStart))%LANE_STEP)+LANE_STEP)%LANE_STEP;
-  return mod===0?"EVEN":"ODD";
+  const {hour}=localTimeParts(targetStart);
+  return hour%2===0?"EVEN":"ODD";
 }
 
 function laneText(lane){
-  return lane==="EVEN"?"CHẴN":"LẺ";
+  return lane==="EVEN"?"GIỜ CHẴN":"GIỜ LẺ";
+}
+
+function isPatternTarget(targetStart){
+  const {minute}=localTimeParts(targetStart);
+  return minute===30||minute===40||minute===50;
 }
 
 function patternMarksForTarget(targetStart){
   const t=Number(targetStart);
-  return [t-3*LANE_STEP,t-2*LANE_STEP,t-LANE_STEP];
+  return [t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP];
 }
 
 function fourPreviousMarksForTarget(targetStart){
   const t=Number(targetStart);
-  return [t-4*LANE_STEP,t-3*LANE_STEP,t-2*LANE_STEP,t-LANE_STEP];
+  return [t-4*SIGNAL_STEP,t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP];
 }
 
 function roundStartForMark(markTs){
@@ -315,7 +329,6 @@ async function resolvedColorAt(env,payload,ts){
   const rounds=internalRounds(payload);
   const cached=rounds.find(x=>x.t===Number(ts))?.c||null;
   if(cached)return cached;
-
   try{
     const raw=await apiCategory(Number(ts),env.PREDICT_API_KEY);
     const normalized=normalizeCategory(raw);
@@ -333,7 +346,7 @@ async function colorAtMark(env,payload,markTs){
 
 async function patternSignalForTarget(env,payload,targetStart){
   const target=Number(targetStart);
-  if(!Number.isFinite(target)||target%INTERVAL!==0)return null;
+  if(!Number.isFinite(target)||target%INTERVAL!==0||!isPatternTarget(target))return null;
   const lane=laneForTarget(target);
   const marks=fourPreviousMarksForTarget(target);
   const colors=await Promise.all(marks.map(m=>colorAtMark(env,payload,m)));
@@ -354,10 +367,10 @@ async function patternSignalForTarget(env,payload,targetStart){
 
 function alertTargetForNow(nowSec){
   const base=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
-  for(let i=1;i<=4;i++){
+  for(let i=1;i<=16;i++){
     const target=base+i*INTERVAL;
     const remain=target-Number(nowSec);
-    if(remain<=450&&remain>=390)return target;
+    if(isPatternTarget(target)&&remain<=450&&remain>=390)return target;
   }
   return null;
 }
@@ -691,8 +704,12 @@ export default {
         ok:true,
         service:"Boss Moc Chan Cloud",
         strategyVersion:STRATEGY_VERSION,
-        laneStepMinutes:LANE_STEP/60,
-        lanes:{EVEN:["00","10","20","30","40","50"],ODD:["05","15","25","35","45","55"]},
+        signalStepMinutes:SIGNAL_STEP/60,
+        evenOddByLocalHour:true,
+        evenHours:[0,2,4,6,8,10,12,14,16,18,20,22],
+        oddHours:[1,3,5,7,9,11,13,15,17,19,21,23],
+        colorMarks:["00","10","20","30","40","50"],
+        entryMinutes:["30","40","50"],
         alertLeadMinutes:ALERT_LEAD/60,
         patternRules:["AAA->A","ABA->B"],
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
@@ -738,9 +755,16 @@ export default {
     if(u.pathname==="/pattern-signal"){
       const nowSec=Math.floor(Date.now()/1000);
       const targetParam=Number(u.searchParams.get("target"));
-      const targetStart=Number.isFinite(targetParam)&&targetParam>0
+      let targetStart=Number.isFinite(targetParam)&&targetParam>0
         ?Math.floor(targetParam/INTERVAL)*INTERVAL
-        :(alertTargetForNow(nowSec)||Math.ceil((nowSec+ALERT_LEAD)/INTERVAL)*INTERVAL);
+        :null;
+      if(!targetStart){
+        const base=Math.floor(nowSec/INTERVAL)*INTERVAL;
+        for(let i=1;i<=24;i++){
+          const candidate=base+i*INTERVAL;
+          if(isPatternTarget(candidate)){targetStart=candidate;break}
+        }
+      }
       const payload=await readHistory(env);
       const signal=await patternSignalForTarget(env,payload,targetStart);
       const state=await readTradeState(env,nowSec);
