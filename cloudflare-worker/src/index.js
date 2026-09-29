@@ -14,9 +14,10 @@ function numericEnv(value,fallback){
 
 function tradeSettings(env){
   const bet1=Math.max(0,numericEnv(env.CLOUD_BET1,1));
+  const bet2=Math.max(0,numericEnv(env.CLOUD_BET2,2));
   const payoutPct=Math.max(0,numericEnv(env.CLOUD_PAYOUT_PERCENT,80));
   const startBalance=numericEnv(env.CLOUD_START_BALANCE,0);
-  return {bet1,payout:payoutPct/100,payoutPct,startBalance};
+  return {bet1,bet2,payout:payoutPct/100,payoutPct,startBalance};
 }
 
 function money(value){
@@ -39,6 +40,7 @@ function freshTradeState(day){
   return {
     day,
     strategyVersion:STRATEGY_VERSION,
+    step:1,
     pnl:0,
     wins:0,
     losses:0,
@@ -67,6 +69,8 @@ async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
     await writeTradeState(env,state);
   }
 
+  if(!Number.isFinite(Number(state.step)))state.step=1;
+  state.step=Number(state.step)===2?2:1;
   if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
   if(!Number.isFinite(Number(state.wins)))state.wins=0;
   if(!Number.isFinite(Number(state.losses)))state.losses=0;
@@ -87,8 +91,15 @@ async function writeTradeState(env,state){
   return state;
 }
 
-function tradePlan(settings){
-  return {step:1,capitalStage:0,amount:Number(settings.bet1),label:"Lệnh cố định"};
+function nextStepAfter(step,win){
+  return Number(step)===1&&win?2:1;
+}
+
+function tradePlan(settings,state){
+  const step=Number(state.step)===2?2:1;
+  return step===2
+    ?{step:2,capitalStage:0,amount:Number(settings.bet2),label:"Lệnh 2 x2"}
+    :{step:1,capitalStage:0,amount:Number(settings.bet1),label:"Lệnh 1"};
 }
 
 function json(data,status=200){
@@ -455,6 +466,9 @@ async function settleDueOrders(env,payload,nowSec,state){
     state.laneResults[lane]=win?"WIN":"LOSS";
     state.laneLastResultTarget[lane]=Number(pending.targetStart);
 
+    const nextStep=nextStepAfter(pending.step,win);
+    state.step=nextStep;
+
     const bothLanesLost=state.laneResults.EVEN==="LOSS"&&state.laneResults.ODD==="LOSS";
     let pauseTriggered=false;
     if(bothLanesLost){
@@ -484,6 +498,8 @@ async function settleDueOrders(env,payload,nowSec,state){
       balanceAfter:balanceBase+Number(state.pnl||0),
       winsAfter:Number(state.wins||0),
       lossesAfter:Number(state.losses||0),
+      step:Number(pending.step||1),
+      nextStep,
       laneResultsAfter:{...state.laneResults},
       pauseTriggered,
       pauseUntil:Number(state.pauseUntil||0),
@@ -498,6 +514,7 @@ async function settleDueOrders(env,payload,nowSec,state){
     results.push(result);
 
     if(pauseTriggered){
+      state.step=1;
       state.laneResults={EVEN:null,ODD:null};
       state.laneLastResultTarget={EVEN:0,ODD:0};
     }
@@ -516,6 +533,7 @@ async function maybePrepare(env,payload,nowSec){
   if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil)<=Number(nowSec)){
     state.pauseUntil=0;
     state.pauseReason=null;
+    state.step=1;
     state.laneResults={EVEN:null,ODD:null};
     state.laneLastResultTarget={EVEN:0,ODD:0};
     await writeTradeState(env,state);
@@ -523,13 +541,14 @@ async function maybePrepare(env,payload,nowSec){
 
   const targetStart=alertTargetForNow(nowSec);
   if(!targetStart)return;
+  if((state.pendingOrders||[]).length)return;
   if((state.pendingOrders||[]).some(p=>Number(p.targetStart)===targetStart))return;
 
   const signal=await patternSignalForTarget(env,payload,targetStart);
   if(!signal?.direction)return;
 
   const settings=tradeSettings(env);
-  const plan=tradePlan(settings);
+  const plan=tradePlan(settings,state);
   const previousEven=state.laneResults?.EVEN||null;
   const previousOdd=state.laneResults?.ODD||null;
 
@@ -546,6 +565,7 @@ async function maybePrepare(env,payload,nowSec){
     patternType:signal.patternType,
     direction:signal.direction,
     strategy:"EVEN_ODD_3COLOR",
+    step:plan.step,
     amount:plan.amount,
     planLabel:plan.label,
     payoutRate:settings.payout,
@@ -571,7 +591,7 @@ async function maybePrepare(env,payload,nowSec){
     "Quy tắc: <b>"+rule+"</b>\n"+
     "➡️ "+buy+"\n"+
     "Phiên mua: <b>"+frameText(pending.targetStart)+"</b>\n"+
-    "Tiền lệnh: <b>"+amountText(pending.amount)+"</b>\n"+
+    "<b>"+pending.planLabel+" • "+amountText(pending.amount)+"</b>\n"+
     "Lệnh gần nhất CHẴN: <b>"+laneResultText(previousEven)+"</b> • LẺ: <b>"+laneResultText(previousOdd)+"</b>"
   );
 
@@ -605,6 +625,7 @@ function resultMessagePart(result,settings){
     "Phiên vừa xong: <b>"+frameText(result.targetStart)+"</b>\n"+
     "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
     "Kết quả gần nhất CHẴN: <b>"+laneResultText(laneEven)+"</b> • LẺ: <b>"+laneResultText(laneOdd)+"</b>\n"+
+    "Đã dùng: <b>Lệnh "+Number(result.step||1)+"</b> • lệnh kế tiếp: <b>Lệnh "+Number(result.nextStep||1)+(Number(result.nextStep||1)===2?" x2":"")+"</b>\n"+
     "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
     "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
     "Số dư theo dõi: <b>"+money(balance)+"</b>"+
@@ -675,7 +696,8 @@ export default {
         alertLeadMinutes:ALERT_LEAD/60,
         patternRules:["AAA->A","ABA->B"],
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
-        flatStake:true,
+        winDoubleRule:true,
+        moneyRule:"Lệnh 1 thắng -> Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> về Lệnh 1",
         autoStrategy24h:false,
         reverseColorModeSupported:false,
         kvConfigured:!!env.BOSS_KV,
@@ -727,7 +749,9 @@ export default {
         ...signal,
         paused:Number(state.pauseUntil||0)>nowSec,
         pauseUntil:Number(state.pauseUntil||0),
-        laneResults:state.laneResults||{EVEN:null,ODD:null}
+        laneResults:state.laneResults||{EVEN:null,ODD:null},
+        step:Number(state.step||1),
+        amount:tradePlan(tradeSettings(env),state).amount
       });
     }
 
