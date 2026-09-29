@@ -555,7 +555,6 @@ async function maybePrepare(env,payload,nowSec){
   if(!telegramConfigured(env))return;
 
   let state=await readTradeState(env,nowSec);
-  if(Number(state.pauseUntil||0)>Number(nowSec))return;
   if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil)<=Number(nowSec)){
     state.pauseUntil=0;
     state.pauseReason=null;
@@ -568,6 +567,8 @@ async function maybePrepare(env,payload,nowSec){
 
   const targetStart=alertTargetForNow(nowSec);
   if(!targetStart)return;
+  const targetMarketStart=targetStart-INTERVAL;
+  if(Number(state.pauseUntil||0)>0&&targetMarketStart<Number(state.pauseUntil))return;
   if((state.pendingOrders||[]).some(p=>Number(p.targetStart)===targetStart))return;
 
   const signal=await patternSignalForTarget(env,payload,targetStart);
@@ -737,6 +738,7 @@ export default {
         patternRules:["AAA->A","ABA->B"],
         pauseAfterConsecutiveLosses:2,
         pauseMinutes:PAUSE_SECONDS/60,
+        resumeRule:"Lệnh mới được vào khi thời điểm bắt đầu nến mục tiêu >= pauseUntil",
         winDoubleRule:true,
         moneyRule:"Mỗi dãy CHẴN/LẺ quản lý riêng: Lệnh 1 thắng -> lần cùng dãy kế tiếp dùng Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> Lệnh 1",
         kvConfigured:!!env.BOSS_KV,
