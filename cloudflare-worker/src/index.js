@@ -715,8 +715,6 @@ export default {
         pauseAfterBothLaneLossesMinutes:PAUSE_SECONDS/60,
         winDoubleRule:true,
         moneyRule:"Lệnh 1 thắng -> Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> về Lệnh 1",
-        autoStrategy24h:false,
-        reverseColorModeSupported:false,
         kvConfigured:!!env.BOSS_KV,
         apiKeyConfigured:!!env.PREDICT_API_KEY,
         telegramConfigured:telegramConfigured(env),
