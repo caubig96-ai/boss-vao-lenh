@@ -1,835 +1,371 @@
-const API="https://api.predict.fun";
-const INTERVAL=300;
 const JSON_HEADERS={"content-type":"application/json; charset=utf-8","access-control-allow-origin":"*"};
+const BINANCE="https://fapi.binance.com";
+const SYMBOL="BTCUSDT";
+const STRATEGY_VERSION="binance-15m-hedge-v1";
+const CYCLE_SECONDS=900;
 
-const SIGNAL_STEP=600;       // mỗi dãy CHẴN/LẺ cách nhau 10 phút
-const ALERT_LEAD=420;         // báo trước 7 phút: :18 báo cho nến đóng :25
-const PAUSE_SECONDS=1800;     // dãy CHẴN và dãy LẺ cùng thua gần nhất => nghỉ 30 phút
-const STRATEGY_VERSION="alternating-lane-tminus7-v6";
-// CHẴN = phút 00/10/20/30/40/50; LẺ = phút 05/15/25/35/45/55.
-// targetStart là MỐC ĐÓNG nến. Ví dụ targetStart=:25 nghĩa là nến :20-:25.
-
-function numericEnv(value,fallback){
-  const n=Number(value);
-  return Number.isFinite(n)?n:fallback;
-}
-
-function tradeSettings(env){
-  const bet1=Math.max(0,numericEnv(env.CLOUD_BET1,1));
-  const bet2=Math.max(0,numericEnv(env.CLOUD_BET2,2));
-  const payoutPct=Math.max(0,numericEnv(env.CLOUD_PAYOUT_PERCENT,80));
-  const startBalance=numericEnv(env.CLOUD_START_BALANCE,0);
-  return {bet1,bet2,payout:payoutPct/100,payoutPct,startBalance};
-}
-
-function money(value){
-  const n=Number(value)||0;
-  return (n>=0?"+":"")+n.toFixed(2)+" USDT";
-}
-
-function amountText(value){
-  return Number(value||0).toFixed(2)+" USDT";
-}
-
-function dayTextFromSeconds(ts){
-  return new Intl.DateTimeFormat("en-CA",{
-    timeZone:"Asia/Ho_Chi_Minh",
-    year:"numeric",month:"2-digit",day:"2-digit"
-  }).format(new Date(ts*1000));
-}
-
-function freshTradeState(day){
+function nenv(v,f){const n=Number(v);return Number.isFinite(n)?n:f}
+function benv(v,f=false){if(v===undefined||v===null||v==="")return f;return String(v).toLowerCase()==="true"}
+function cfg(env){
   return {
-    day,
-    strategyVersion:STRATEGY_VERSION,
-    laneSteps:{EVEN:1,ODD:1},
-    pnl:0,
-    wins:0,
-    losses:0,
-    balanceBase:null,
-    pendingOrders:[],
-    completed:[],
-    unsentResults:[],
-    laneResults:{EVEN:null,ODD:null},
-    laneLastResultTarget:{EVEN:0,ODD:0},
-    consecutiveLosses:0,
-    pauseUntil:0,
-    pauseReason:null,
-    updatedAt:new Date().toISOString()
+    symbol:SYMBOL,
+    notional:Math.max(5,nenv(env.HEDGE_NOTIONAL_USDT,10)),
+    leverage:Math.max(1,Math.min(125,Math.floor(nenv(env.HEDGE_LEVERAGE,1)))),
+    ka:Math.max(.01,nenv(env.HEDGE_KA,1.5)),
+    kb:Math.max(.01,nenv(env.HEDGE_KB,.5)),
+    be:benv(env.HEDGE_BE,true),
+    fee:Math.max(0,nenv(env.HEDGE_FEE,.0005)),
+    slip:Math.max(0,nenv(env.HEDGE_SLIP,.0001)),
+    filter:benv(env.HEDGE_FILTER,true),
+    live:benv(env.BINANCE_LIVE_TRADING,false)
   };
 }
-
-async function readTradeState(env,nowSec=Math.floor(Date.now()/1000)){
-  const raw=await env.BOSS_KV.get("telegram:trade_state");
-  let state=null;
-  try{state=raw?JSON.parse(raw):null}catch(_){}
-  if(!state||typeof state!=="object")state=freshTradeState(dayTextFromSeconds(nowSec));
-
-  if(state.strategyVersion!==STRATEGY_VERSION){
-    const balanceBase=state.balanceBase===null||state.balanceBase===undefined?null:Number(state.balanceBase);
-    state=freshTradeState(dayTextFromSeconds(nowSec));
-    state.balanceBase=Number.isFinite(balanceBase)?balanceBase:null;
-    await writeTradeState(env,state);
-  }
-
-  if(!state.laneSteps||typeof state.laneSteps!=="object")state.laneSteps={EVEN:1,ODD:1};
-  state.laneSteps.EVEN=Number(state.laneSteps.EVEN)===2?2:1;
-  state.laneSteps.ODD=Number(state.laneSteps.ODD)===2?2:1;
-  if(!Number.isFinite(Number(state.pnl)))state.pnl=0;
-  if(!Number.isFinite(Number(state.wins)))state.wins=0;
-  if(!Number.isFinite(Number(state.losses)))state.losses=0;
-  if(state.balanceBase!==null&&!Number.isFinite(Number(state.balanceBase)))state.balanceBase=null;
-  if(!Array.isArray(state.pendingOrders))state.pendingOrders=[];
-  if(!Array.isArray(state.completed))state.completed=[];
-  if(!Array.isArray(state.unsentResults))state.unsentResults=[];
-  if(!state.laneResults||typeof state.laneResults!=="object")state.laneResults={EVEN:null,ODD:null};
-  if(!state.laneLastResultTarget||typeof state.laneLastResultTarget!=="object")state.laneLastResultTarget={EVEN:0,ODD:0};
-  if(!Number.isFinite(Number(state.consecutiveLosses)))state.consecutiveLosses=0;
-  if(!Number.isFinite(Number(state.pauseUntil)))state.pauseUntil=0;
-  if(!state.day)state.day=dayTextFromSeconds(nowSec);
-  return state;
-}
-
-async function writeTradeState(env,state){
-  state.updatedAt=new Date().toISOString();
-  await env.BOSS_KV.put("telegram:trade_state",JSON.stringify(state));
-  return state;
-}
-
-function nextStepAfter(step,win){
-  return Number(step)===1&&win?2:1;
-}
-
-function tradePlan(settings,state,lane){
-  const key=lane==="ODD"?"ODD":"EVEN";
-  const step=Number(state.laneSteps?.[key])===2?2:1;
-  return step===2
-    ?{step:2,capitalStage:0,amount:Number(settings.bet2),label:"Lệnh 2 x2"}
-    :{step:1,capitalStage:0,amount:Number(settings.bet1),label:"Lệnh 1"};
-}
-
-function json(data,status=200){
-  return new Response(JSON.stringify(data),{status,headers:JSON_HEADERS});
-}
-
-async function api(path,key){
-  const r=await fetch(API+path,{headers:{"x-api-key":key,"accept":"application/json"}});
-  if(!r.ok)throw new Error("Predict API "+r.status+": "+(await r.text()).slice(0,180));
-  return r.json();
-}
-
-async function apiCategory(ts,key){
-  const r=await fetch(API+"/v1/categories/btc-updown-5m-"+Math.floor(ts),{
-    headers:{"x-api-key":key,"accept":"application/json"}
-  });
-  if(r.status===404)return null;
-  if(!r.ok)throw new Error("Predict API "+r.status+": "+(await r.text()).slice(0,180));
-  return r.json();
-}
-
-function pick(obj,...paths){
-  for(const p of paths){
-    let v=obj;
-    for(const k of p.split("."))v=v?.[k];
-    if(v!==undefined&&v!==null)return v;
-  }
-}
-
-function outcomeFromMarket(m){
-  if(!m||typeof m!=="object")return "";
-  const outcomes=Array.isArray(m.outcomes)?m.outcomes:[];
-  const wonOutcome=outcomes.find(o=>String(o?.status||"").toUpperCase()==="WON");
-  if(wonOutcome?.name)return String(wonOutcome.name);
-  const resolution=m.resolution;
-  if(resolution&&typeof resolution==="object"){
-    if(String(resolution.status||"").toUpperCase()==="WON"&&resolution.name){
-      return String(resolution.name);
-    }
-    if(resolution.name)return String(resolution.name);
-  }
-  return "";
-}
-
-function normalizeColor(outcome){
-  const s=String(outcome||"").trim().toUpperCase();
-  if(!s)return null;
-  if(s==="UP"||s==="YES"||s==="GREEN"||s==="TRUE"||/(^|\W)UP($|\W)/.test(s))return "V";
-  if(s==="DOWN"||s==="NO"||s==="RED"||s==="FALSE"||/(^|\W)DOWN($|\W)/.test(s))return "X";
-  return null;
-}
-
-function normalizeCategory(input){
-  const x=input?.data||input||{};
-  const slug=String(pick(x,"slug","market.slug","category.slug")||"");
-  if(!/btc-updown-5m-/i.test(slug))return null;
-  const ts=Number((slug.match(/(\d{10,13})$/)||[])[1]||0);
-  const markets=Array.isArray(x?.markets)?x.markets:[];
-
-  let outcome="";
-  for(const market of markets){
-    outcome=outcomeFromMarket(market);
-    if(normalizeColor(outcome))break;
-  }
-  if(!outcome){
-    outcome=String(
-      pick(x,"outcome","result","resolution.name","market.outcome","market.result","market.resolution.name")||""
-    );
-  }
-
-  return {
-    slug,
-    ts:ts>1e12?Math.floor(ts/1000):ts,
-    color:normalizeColor(outcome),
-    outcome
-  };
-}
-
-function finitePrice(...values){
-  for(const value of values){
-    const n=Number(value);
-    if(Number.isFinite(n)&&n>0)return n;
-  }
-  return null;
-}
-
-function liveColorFromCategory(payload){
-  const d=payload?.data||payload||{};
-  const m=(d.markets||[])[0]||{};
-  const categoryCrypto=d?.variantDetails?.crypto||d?.variantData||{};
-  const marketCrypto=m?.variantData||{};
-  const startPrice=finitePrice(categoryCrypto.startPrice,marketCrypto.startPrice,d.startPrice,m.startPrice);
-  const currentPrice=finitePrice(
-    categoryCrypto.currentPrice,categoryCrypto.lastPrice,categoryCrypto.indexPrice,
-    categoryCrypto.markPrice,categoryCrypto.endPrice,
-    marketCrypto.currentPrice,marketCrypto.lastPrice,marketCrypto.indexPrice,
-    marketCrypto.markPrice,marketCrypto.endPrice,
-    d.currentPrice,d.lastPrice,d.indexPrice,d.markPrice
-  );
-  if(startPrice&&currentPrice&&currentPrice!==startPrice)return currentPrice>startPrice?"G":"R";
-  return null;
-}
-
-async function readHistory(env){
-  const raw=await env.BOSS_KV.get("history");
-  if(!raw)return {updatedAt:null,count:0,rawMatched:0,skippedWithoutOutcome:0,rounds:[]};
-  try{return JSON.parse(raw)}catch(_){return {updatedAt:null,count:0,rawMatched:0,skippedWithoutOutcome:0,rounds:[]}}
-}
-
-async function writeHistory(env,rounds,extra={}){
-  const unique=[...new Map(rounds.filter(x=>x?.slug&&x?.color).map(x=>[x.slug,x])).values()]
-    .sort((a,b)=>a.ts-b.ts)
-    .slice(-500);
-  const payload={
-    updatedAt:new Date().toISOString(),
-    count:unique.length,
-    rawMatched:Number(extra.rawMatched??unique.length),
-    skippedWithoutOutcome:Number(extra.skippedWithoutOutcome??0),
-    rounds:unique
-  };
-  await env.BOSS_KV.put("history",JSON.stringify(payload));
-  return payload;
-}
-
-async function sync(env){
-  if(!env.PREDICT_API_KEY)throw new Error("Chưa cấu hình PREDICT_API_KEY");
-  if(!env.BOSS_KV)throw new Error("Chưa cấu hình binding BOSS_KV");
-
-  let after="",pages=0,found=[],rawMatched=0;
-  while(pages<8&&found.length<500){
-    const q=new URLSearchParams({first:"100",status:"RESOLVED",marketVariant:"CRYPTO_UP_DOWN"});
-    if(after)q.set("after",after);
-    const d=await api("/v1/categories?"+q,env.PREDICT_API_KEY);
-    const items=d?.data?.items||d?.items||d?.data||[];
-    if(!Array.isArray(items))break;
-
-    const normalized=items.map(normalizeCategory).filter(Boolean);
-    rawMatched+=normalized.length;
-    found.push(...normalized.filter(x=>!!x.color));
-
-    after=d?.data?.pageInfo?.endCursor||d?.pageInfo?.endCursor||d?.cursor||"";
-    pages++;
-    if(!after||items.length===0)break;
-  }
-
-  return writeHistory(env,found,{
-    rawMatched,
-    skippedWithoutOutcome:Math.max(0,rawMatched-found.length)
-  });
-}
-
-async function refreshRecent(env){
-  const history=await readHistory(env);
-  const now=Math.floor(Date.now()/1000);
-  const currentStart=Math.floor(now/INTERVAL)*INTERVAL;
-  const additions=[];
-
-  for(const ts of [currentStart-INTERVAL,currentStart-2*INTERVAL]){
-    try{
-      const raw=await apiCategory(ts,env.PREDICT_API_KEY);
-      const item=normalizeCategory(raw);
-      if(item?.color)additions.push(item);
-    }catch(_){}
-  }
-
-  if(!additions.length)return history;
-  return writeHistory(env,[...(history.rounds||[]),...additions],{
-    rawMatched:Math.max(Number(history.rawMatched||0),Number(history.count||0)+additions.length),
-    skippedWithoutOutcome:Number(history.skippedWithoutOutcome||0)
-  });
-}
-
-function internalRounds(payload){
-  return (payload?.rounds||[])
-    .map(x=>({t:Number(x.ts),c:x.color==="V"?"G":x.color==="X"?"R":null}))
-    .filter(x=>Number.isFinite(x.t)&&x.c)
-    .sort((a,b)=>a.t-b.t);
-}
-
-function localTimeParts(ts){
-  const parts=new Intl.DateTimeFormat("en-GB",{
-    timeZone:"Asia/Ho_Chi_Minh",
-    hour:"2-digit",minute:"2-digit",hourCycle:"h23"
-  }).formatToParts(new Date(Number(ts)*1000));
-  const get=type=>Number(parts.find(p=>p.type===type)?.value);
-  return {hour:get("hour"),minute:get("minute")};
-}
-
-function laneForTarget(targetStart){
-  const {minute}=localTimeParts(targetStart);
-  return minute%10===0?"EVEN":"ODD";
-}
-
-function laneText(lane){
-  return lane==="EVEN"?"MỐC CHẴN":"MỐC LẺ";
-}
-
-function isPatternTarget(targetStart){
-  const {minute}=localTimeParts(targetStart);
-  return minute%5===0;
-}
-
-function patternMarksForTarget(targetStart){
-  const t=Number(targetStart);
-  return [t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP];
-}
-
-function fourPreviousMarksForTarget(targetStart){
-  const t=Number(targetStart);
-  return [t-4*SIGNAL_STEP,t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP];
-}
-
-function roundStartForMark(markTs){
-  return Number(markTs)-INTERVAL;
-}
-
-function directionFromThree(colors){
-  if(!Array.isArray(colors)||colors.length!==3)return null;
-  const [a,b,d]=colors;
-  if(!["G","R"].includes(a)||!["G","R"].includes(b)||!["G","R"].includes(d))return null;
-  if(a===b&&b===d)return {direction:a,patternType:"SAME"};
-  if(a===d&&a!==b)return {direction:b,patternType:"ALTERNATE"};
-  return null;
-}
-
-async function resolvedColorAt(env,payload,ts){
-  const rounds=internalRounds(payload);
-  const cached=rounds.find(x=>x.t===Number(ts))?.c||null;
-  if(cached)return cached;
-  try{
-    const raw=await apiCategory(Number(ts),env.PREDICT_API_KEY);
-    const normalized=normalizeCategory(raw);
-    let color=normalized?.color==="V"?"G":normalized?.color==="X"?"R":null;
-    if(!color)color=liveColorFromCategory(raw);
-    return color||null;
-  }catch(_){
-    return null;
-  }
-}
-
-async function colorAtMark(env,payload,markTs){
-  return resolvedColorAt(env,payload,roundStartForMark(markTs));
-}
-
-async function patternSignalForTarget(env,payload,targetStart){
-  const target=Number(targetStart);
-  if(!Number.isFinite(target)||target%INTERVAL!==0||!isPatternTarget(target))return null;
-  const lane=laneForTarget(target);
-  const marks=fourPreviousMarksForTarget(target);
-  const colors=await Promise.all(marks.map(m=>colorAtMark(env,payload,m)));
-  const decisionColors=colors.slice(1);
-  const decision=directionFromThree(decisionColors);
-  return {
-    targetStart:target,
-    marketStart:target-INTERVAL,
-    liveCloseMark:target-INTERVAL,
-    lane,
-    laneText:laneText(lane),
-    marks,
-    colors,
-    decisionMarks:marks.slice(1),
-    decisionColors,
-    direction:decision?.direction||null,
-    patternType:decision?.patternType||null
-  };
-}
-
-function alertTargetForNow(nowSec){
-  const base=Math.floor(Number(nowSec)/INTERVAL)*INTERVAL;
-  for(let i=1;i<=4;i++){
-    const target=base+i*INTERVAL;
-    const remain=target-Number(nowSec);
-    if(isPatternTarget(target)&&remain<=450&&remain>=390)return target;
-  }
-  return null;
-}
-
-function targetCandleFrame(ts){
-  return timeText(Number(ts)-INTERVAL)+"–"+timeText(Number(ts));
-}
-
-function laneResultText(value){
-  return value==="WIN"?"THẮNG":value==="LOSS"?"THUA":"CHƯA CÓ";
-}
-
 function tgToken(env){return String(env.CLOUD_TELEGRAM_BOT_TOKEN||env.TELEGRAM_BOT_TOKEN||"").trim()}
 function tgChat(env){return String(env.CLOUD_TELEGRAM_CHAT_ID||env.TELEGRAM_CHAT_ID||"").trim()}
-function telegramConfigured(env){return !!(tgToken(env)&&tgChat(env))}
-
+function tgOK(env){return !!(tgToken(env)&&tgChat(env))}
 async function sendTelegram(env,text){
-  if(!telegramConfigured(env))return false;
+  if(!tgOK(env))return false;
   const r=await fetch("https://api.telegram.org/bot"+tgToken(env)+"/sendMessage",{
-    method:"POST",
-    headers:{"content-type":"application/json"},
-    body:JSON.stringify({
-      chat_id:tgChat(env),
-      text,
-      parse_mode:"HTML",
-      disable_web_page_preview:true
-    })
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({chat_id:tgChat(env),text,parse_mode:"HTML",disable_web_page_preview:true})
   });
-  const data=await r.json().catch(()=>({}));
-  if(!r.ok||!data?.ok)throw new Error("Telegram: "+String(data?.description||r.status));
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j?.ok)throw new Error("Telegram: "+String(j?.description||r.status));
   return true;
 }
-
-function timeText(ts){
-  return new Intl.DateTimeFormat("vi-VN",{
-    timeZone:"Asia/Ho_Chi_Minh",
-    hour:"2-digit",
-    minute:"2-digit",
-    hour12:false
-  }).format(new Date(ts*1000));
+function money(v){const n=Number(v)||0;return (n>=0?"+":"")+n.toFixed(4)+" USDT"}
+function pct(v){return (Number(v||0)*100).toFixed(3)+"%"}
+function nowIso(){return new Date().toISOString()}
+function cycleStartSec(ms=Date.now()){return Math.floor(ms/1000/CYCLE_SECONDS)*CYCLE_SECONDS}
+function timeText(sec){return new Intl.DateTimeFormat("vi-VN",{timeZone:"Asia/Ho_Chi_Minh",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(sec*1000))}
+function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:JSON_HEADERS})}
+async function kvGet(env,key,fallback=null){
+  try{const raw=await env.BOSS_KV.get(key);return raw?JSON.parse(raw):fallback}catch(_){return fallback}
 }
-
-function frameText(ts){
-  return timeText(ts)+"–"+timeText(ts+INTERVAL);
-}
-
-async function sendReadyOnce(env){
-  if(!telegramConfigured(env))return;
-  const key="telegram:ready:v1";
-  if(await env.BOSS_KV.get(key))return;
-  await sendTelegram(env,
-    "✅ <b>BOSS CLOUD ĐÃ CHẠY TELEGRAM</b>\n"+
-    "iPhone có thể khóa màn hình. Khi có tín hiệu đạt điều kiện, Boss Cloud sẽ gửi thông báo Telegram."
-  );
-  await env.BOSS_KV.put(key,new Date().toISOString());
-}
-
-
-async function settleDueOrders(env,payload,nowSec,state){
-  const settings=tradeSettings(env);
-  const stillPending=[];
-  const results=[];
-
-  for(const pending of (state.pendingOrders||[]).slice().sort((a,b)=>Number(a.targetStart)-Number(b.targetStart))){
-    if(Number(nowSec)<Number(pending.targetStart)){
-      stillPending.push(pending);
-      continue;
-    }
-
-    const marketStart=Number(pending.marketStart??(Number(pending.targetStart)-INTERVAL));
-    const rounds=internalRounds(payload);
-    let actual=rounds.find(x=>x.t===marketStart)?.c||null;
-    if(!actual){
-      try{
-        const raw=await apiCategory(marketStart,env.PREDICT_API_KEY);
-        const normalized=normalizeCategory(raw);
-        actual=normalized?.color==="V"?"G":normalized?.color==="X"?"R":null;
-        if(!actual)actual=liveColorFromCategory(raw);
-        if(actual){
-          const existing=await readHistory(env);
-          const synthetic={
-            slug:"btc-updown-5m-"+marketStart,
-            ts:marketStart,
-            color:actual==="G"?"V":"X",
-            outcome:actual==="G"?"UP":"DOWN"
-          };
-          await writeHistory(env,[...(existing.rounds||[]),synthetic],{
-            rawMatched:Math.max(Number(existing.rawMatched||0),Number(existing.count||0)+1),
-            skippedWithoutOutcome:Number(existing.skippedWithoutOutcome||0)
-          }).catch(()=>{});
-        }
-      }catch(_){}
-    }
-
-    if(!actual){
-      stillPending.push(pending);
-      continue;
-    }
-
-    const win=String(pending.direction)===actual;
-    const amount=Number(pending.amount)||0;
-    const payout=Number(pending.payoutRate);
-    const effectivePayout=Number.isFinite(payout)?payout:settings.payout;
-    const delta=win?amount*effectivePayout:-amount;
-    state.pnl=Number(state.pnl||0)+delta;
-    if(win)state.wins=Number(state.wins||0)+1;
-    else state.losses=Number(state.losses||0)+1;
-
-    const lane=pending.lane==="ODD"?"ODD":"EVEN";
-    state.laneResults[lane]=win?"WIN":"LOSS";
-    state.laneLastResultTarget[lane]=Number(pending.targetStart);
-
-    const nextStep=nextStepAfter(pending.step,win);
-    state.laneSteps[lane]=nextStep;
-
-    state.consecutiveLosses=win?0:Number(state.consecutiveLosses||0)+1;
-    let pauseTriggered=false;
-    if(state.consecutiveLosses>=2){
-      state.pauseUntil=Math.max(
-        Number(state.pauseUntil||0),
-        Number(pending.targetStart)+PAUSE_SECONDS
-      );
-      state.pauseReason="2 lệnh thực tế liên tiếp đều THUA";
-      pauseTriggered=true;
-      state.consecutiveLosses=0;
-    }
-
-    const balanceBase=state.balanceBase===null?settings.startBalance:Number(state.balanceBase);
-    const result={
-      id:pending.id,
-      targetStart:Number(pending.targetStart),
-      marketStart,
-      lane,
-      laneText:laneText(lane),
-      marks:pending.marks||[],
-      colors:pending.colors||[],
-      decisionColors:pending.decisionColors||[],
-      direction:pending.direction,
-      actual,
-      amount,
-      win,
-      delta,
-      pnlAfter:Number(state.pnl||0),
-      balanceAfter:balanceBase+Number(state.pnl||0),
-      winsAfter:Number(state.wins||0),
-      lossesAfter:Number(state.losses||0),
-      step:Number(pending.step||1),
-      nextStep,
-      laneResultsAfter:{...state.laneResults},
-      consecutiveLossesAfter:Number(state.consecutiveLosses||0),
-      pauseTriggered,
-      pauseUntil:Number(state.pauseUntil||0),
-      settledAt:new Date().toISOString(),
-      sent:false
-    };
-
-    state.completed.push({...result});
-    state.completed=state.completed.slice(-300);
-    state.unsentResults.push({...result});
-    state.unsentResults=state.unsentResults.slice(-20);
-    results.push(result);
-
-    if(pauseTriggered){
-      state.laneSteps={EVEN:1,ODD:1};
-    }
-  }
-
-  state.pendingOrders=stillPending;
-  await writeTradeState(env,state);
-  return {state,results};
-}
-
-async function maybePrepare(env,payload,nowSec){
-  if(!telegramConfigured(env))return;
-
-  let state=await readTradeState(env,nowSec);
-
-  // Trong 30 phút nghỉ không chuẩn bị lệnh trước.
-  // Ví dụ thua tại 16:10 -> pauseUntil 16:40.
-  // Đến 16:40 mới quan sát nến live 16:40-16:45; khoảng 16:43 mới báo cho nến đóng 16:50.
-  if(Number(state.pauseUntil||0)>Number(nowSec))return;
-
-  if(Number(state.pauseUntil||0)>0&&Number(state.pauseUntil)<=Number(nowSec)){
-    state.pauseUntil=0;
-    state.pauseReason=null;
-    state.laneSteps={EVEN:1,ODD:1};
-    state.consecutiveLosses=0;
-    state.laneResults={EVEN:null,ODD:null};
-    state.laneLastResultTarget={EVEN:0,ODD:0};
-    await writeTradeState(env,state);
-  }
-
-  const targetStart=alertTargetForNow(nowSec);
-  if(!targetStart)return;
-  if((state.pendingOrders||[]).some(p=>Number(p.targetStart)===targetStart))return;
-
-  const signal=await patternSignalForTarget(env,payload,targetStart);
-  if(!signal?.direction)return;
-
-  // Hai dãy chạy độc lập. Ở :18, lệnh LẺ :25 chỉ phụ thuộc kết quả LẺ :15,
-  // nên có thể chuẩn bị dù lệnh CHẴN :20 vẫn đang chạy.
-  const sameLanePending=(state.pendingOrders||[]).find(p=>p.lane===signal.lane&&Number(p.targetStart)<targetStart);
-  if(sameLanePending)return;
-
-  const settings=tradeSettings(env);
-  const plan=tradePlan(settings,state,signal.lane);
-  const previousEven=state.laneResults?.EVEN||null;
-  const previousOdd=state.laneResults?.ODD||null;
-
-  const pending={
-    id:String(targetStart)+"-"+signal.lane,
-    day:dayTextFromSeconds(targetStart),
-    targetStart,
-    marketStart:signal.marketStart,
-    liveCloseMark:signal.liveCloseMark,
-    lane:signal.lane,
-    laneText:signal.laneText,
-    marks:signal.marks,
-    colors:signal.colors,
-    decisionMarks:signal.decisionMarks,
-    decisionColors:signal.decisionColors,
-    patternType:signal.patternType,
-    direction:signal.direction,
-    strategy:"EVEN_ODD_3COLOR",
-    step:plan.step,
-    amount:plan.amount,
-    planLabel:plan.label,
-    payoutRate:settings.payout,
-    previousEven,
-    previousOdd,
-    entrySent:false,
-    createdAt:new Date().toISOString()
+async function kvPut(env,key,value){await env.BOSS_KV.put(key,JSON.stringify(value))}
+function freshState(){
+  return {
+    strategyVersion:STRATEGY_VERSION,
+    active:null,
+    history:[],
+    skipped:[],
+    lastCycleStart:0,
+    lastError:null,
+    lastTick:null,
+    updatedAt:nowIso()
   };
-  state.pendingOrders.push(pending);
-  state.pendingOrders=state.pendingOrders.slice(-12);
-  await writeTradeState(env,state);
-
-  const icon=color=>color==="G"?"🟢":color==="R"?"🔴":"⚪";
-  const fourLine=pending.marks.map((m,i)=>timeText(m)+" "+icon(pending.colors[i])).join(" • ");
-  const threeLine=pending.decisionColors.map(icon).join(" ");
-  const buy=pending.direction==="G"?"🟢 <b>MUA XANH</b>":"🔴 <b>MUA ĐỎ</b>";
-  const rule=pending.patternType==="SAME"?"3 màu giống nhau → theo cùng màu":"mẫu xen kẽ A-B-A → tiếp tục màu B";
-
-  await sendTelegram(env,
-    "🚨 <b>BÁO LỆNH "+pending.laneText+" • NẾN "+timeText(pending.targetStart)+"</b>\n"+
-    "Nến live đang chạy đóng lúc: <b>"+timeText(pending.liveCloseMark)+"</b>\n"+
-    "4 màu trước: "+fourLine+"\n"+
-    "3 mốc chọn màu: <b>"+pending.decisionMarks.map((m,i)=>timeText(m)+" "+icon(pending.decisionColors[i])).join(" • ")+"</b>\n"+
-    "Quy tắc: <b>"+rule+"</b>\n"+
-    "➡️ "+buy+" cho nến <b>"+timeText(pending.targetStart)+"</b> ("+targetCandleFrame(pending.targetStart)+")\n"+
-    "<b>"+pending.planLabel+" • "+amountText(pending.amount)+"</b>\n"+
-    "Lệnh gần nhất MỐC CHẴN: <b>"+laneResultText(previousEven)+"</b> • MỐC LẺ: <b>"+laneResultText(previousOdd)+"</b>"
-  );
-
-  pending.entrySent=true;
-  pending.entrySentAt=new Date().toISOString();
-  await writeTradeState(env,state);
-  await env.BOSS_KV.put("telegram:last_prepare",String(targetStart));
+}
+async function readState(env){
+  let s=await kvGet(env,"hedge:state",null);
+  if(!s||s.strategyVersion!==STRATEGY_VERSION)s=freshState();
+  if(!Array.isArray(s.history))s.history=[];
+  if(!Array.isArray(s.skipped))s.skipped=[];
+  return s;
+}
+async function writeState(env,s){
+  s.updatedAt=nowIso();
+  await kvPut(env,"hedge:state",s);
+  return s;
 }
 
-async function schedulePatternAlert(env,payload){
-  const nowSec=Math.floor(Date.now()/1000);
-  await maybePrepare(env,payload,nowSec);
+async function publicGet(path,params={}){
+  const q=new URLSearchParams(Object.entries(params).filter(([,v])=>v!==undefined&&v!==null).map(([k,v])=>[k,String(v)]));
+  const r=await fetch(BINANCE+path+(q.size?"?"+q:""),{headers:{"accept":"application/json"}});
+  const text=await r.text();
+  if(!r.ok)throw new Error("Binance "+r.status+": "+text.slice(0,300));
+  return text?JSON.parse(text):{};
+}
+function hex(buf){return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("")}
+async function hmac(secret,msg){
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  return hex(await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(msg)));
+}
+function binanceConfigured(env){return !!(String(env.BINANCE_API_KEY||"").trim()&&String(env.BINANCE_API_SECRET||"").trim())}
+async function signed(env,method,path,params={}){
+  const key=String(env.BINANCE_API_KEY||"").trim();
+  const secret=String(env.BINANCE_API_SECRET||"").trim();
+  if(!key||!secret)throw new Error("Chưa cấu hình BINANCE_API_KEY/BINANCE_API_SECRET");
+  const entries={...params,recvWindow:5000,timestamp:Date.now()};
+  const qs=new URLSearchParams(Object.entries(entries).filter(([,v])=>v!==undefined&&v!==null).map(([k,v])=>[k,String(v)])).toString();
+  const signature=await hmac(secret,qs);
+  const r=await fetch(BINANCE+path+"?"+qs+"&signature="+signature,{
+    method,headers:{"X-MBX-APIKEY":key,"accept":"application/json"}
+  });
+  const text=await r.text();
+  if(!r.ok)throw new Error("Binance signed "+r.status+": "+text.slice(0,500));
+  return text?JSON.parse(text):{};
+}
+async function signedSafe(env,method,path,params={}){
+  try{return await signed(env,method,path,params)}catch(e){return {__error:String(e.message||e)}}
 }
 
-function resultMessagePart(result,settings){
-  if(!result)return "";
-  const title=result.win?"✅ <b>THẮNG LỆNH "+result.laneText+"</b>":"❌ <b>THUA LỆNH "+result.laneText+"</b>";
-  const actualText=result.actual==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const entered=result.direction==="G"?"🟢 XANH":"🔴 ĐỎ";
-  const balance=Number.isFinite(Number(result.balanceAfter))
-    ?Number(result.balanceAfter)
-    :settings.startBalance+Number(result.pnlAfter||0);
-  const pauseLine=result.pauseTriggered
-    ?"\n⏸ <b>2 LỆNH LIÊN TIẾP THUA → DỪNG 30 PHÚT</b> • xét lại sau "+timeText(result.pauseUntil)
-    :"";
-  const laneEven=result.laneResultsAfter?.EVEN||null;
-  const laneOdd=result.laneResultsAfter?.ODD||null;
-
-  return (
-    title+"\n"+
-    "Nến vừa xong: <b>"+timeText(result.targetStart)+"</b> ("+targetCandleFrame(result.targetStart)+")\n"+
-    "Đã mua: "+entered+" • Kết quả: "+actualText+"\n"+
-    "Kết quả gần nhất MỐC CHẴN: <b>"+laneResultText(laneEven)+"</b> • MỐC LẺ: <b>"+laneResultText(laneOdd)+"</b>\n"+
-    "Dãy "+result.laneText+": đã dùng <b>Lệnh "+Number(result.step||1)+"</b> • lần "+result.laneText+" kế tiếp: <b>Lệnh "+Number(result.nextStep||1)+(Number(result.nextStep||1)===2?" x2":"")+"</b>\n"+
-    "Lãi/lỗ lệnh này: <b>"+money(result.delta)+"</b>\n"+
-    "Tổng lãi/lỗ sau reset: <b>"+money(result.pnlAfter)+"</b>\n"+
-    "Số dư theo dõi: <b>"+money(balance)+"</b>"+
-    pauseLine
-  );
+function stepFloor(v,step){
+  const s=Number(step);if(!s)return Number(v);
+  const p=Math.max(0,(String(step).split(".")[1]||"").length);
+  return Number((Math.floor((Number(v)+1e-12)/s)*s).toFixed(p));
+}
+function tickRound(v,tick){
+  const t=Number(tick);if(!t)return Number(v);
+  const p=Math.max(0,(String(tick).split(".")[1]||"").length);
+  return Number((Math.round(Number(v)/t)*t).toFixed(p));
+}
+async function symbolRules(){
+  const x=await publicGet("/fapi/v1/exchangeInfo");
+  const s=(x.symbols||[]).find(z=>z.symbol===SYMBOL);
+  if(!s)throw new Error("Không tìm thấy "+SYMBOL+" trong exchangeInfo");
+  const lot=(s.filters||[]).find(z=>z.filterType==="MARKET_LOT_SIZE")||(s.filters||[]).find(z=>z.filterType==="LOT_SIZE")||{};
+  const price=(s.filters||[]).find(z=>z.filterType==="PRICE_FILTER")||{};
+  return {stepSize:Number(lot.stepSize||.001),minQty:Number(lot.minQty||.001),tickSize:Number(price.tickSize||.1)};
+}
+async function ensureHedgeMode(env){
+  const mode=await signed(env,"GET","/fapi/v1/positionSide/dual");
+  if(mode?.dualSidePosition!==true)throw new Error("Tài khoản Binance Futures chưa bật Hedge Mode");
+  return true;
+}
+async function setLeverage(env,lev){
+  return signed(env,"POST","/fapi/v1/leverage",{symbol:SYMBOL,leverage:lev});
 }
 
-async function maybeSendSettlement(env,payload,nowSec){
-  if(!telegramConfigured(env))return;
-  let state=await readTradeState(env,nowSec);
-  const settled=await settleDueOrders(env,payload,nowSec,state);
-  state=settled.state;
+async function closed15mBodies(){
+  const raw=await publicGet("/fapi/v1/klines",{symbol:SYMBOL,interval:"15m",limit:110});
+  const now=Date.now();
+  const closed=raw.filter(k=>Number(k[6])<now).slice(-100);
+  if(closed.length<100)throw new Error("Chưa đủ 100 nến 15m đã đóng");
+  const bodies=closed.map(k=>Math.abs(Number(k[4])-Number(k[1]))/Number(k[1]));
+  const b20=bodies.slice(-20).reduce((a,b)=>a+b,0)/20;
+  const b100=bodies.reduce((a,b)=>a+b,0)/100;
+  return {b20,b100,lastClose:Number(closed[closed.length-1][4]),lastCloseTime:Number(closed[closed.length-1][6])};
+}
+async function tickerPrice(){const x=await publicGet("/fapi/v1/ticker/price",{symbol:SYMBOL});return Number(x.price)}
+async function placeOrder(env,params){return signed(env,"POST","/fapi/v1/order",{symbol:SYMBOL,...params})}
+async function cancelOrder(env,orderId){return signedSafe(env,"DELETE","/fapi/v1/order",{symbol:SYMBOL,orderId})}
+async function getOrder(env,orderId){return signedSafe(env,"GET","/fapi/v1/order",{symbol:SYMBOL,orderId})}
+async function positions(env){return signed(env,"GET","/fapi/v3/positionRisk",{symbol:SYMBOL})}
 
-  const queue=Array.isArray(state.unsentResults)?state.unsentResults.slice():[];
-  if(!queue.length)return;
+async function conditionClose(env,positionSide,type,stopPrice,tickSize){
+  const side=positionSide==="LONG"?"SELL":"BUY";
+  return placeOrder(env,{side,positionSide,type,stopPrice:tickRound(stopPrice,tickSize),closePosition:"true",workingType:"CONTRACT_PRICE",priceProtect:"false"});
+}
+function entryPrice(order,fallback){
+  const avg=Number(order?.avgPrice);
+  if(avg>0)return avg;
+  const qty=Number(order?.executedQty),quote=Number(order?.cumQuote);
+  if(qty>0&&quote>0)return quote/qty;
+  return Number(fallback);
+}
+async function closePositionMarket(env,positionSide){
+  const p=await positions(env);
+  const row=(Array.isArray(p)?p:[]).find(x=>x.symbol===SYMBOL&&x.positionSide===positionSide);
+  const amt=Math.abs(Number(row?.positionAmt||0));
+  if(!(amt>0))return null;
+  const side=positionSide==="LONG"?"SELL":"BUY";
+  return placeOrder(env,{side,positionSide,type:"MARKET",quantity:amt,newOrderRespType:"RESULT"});
+}
+async function cancelLegOrders(env,leg){
+  if(leg?.slOrderId)await cancelOrder(env,leg.slOrderId);
+  if(leg?.tpOrderId)await cancelOrder(env,leg.tpOrderId);
+}
+async function cyclePnl(env,startMs,endMs){
+  const j=await signedSafe(env,"GET","/fapi/v1/userTrades",{symbol:SYMBOL,startTime:startMs,endTime:endMs,limit:1000});
+  if(!Array.isArray(j))return {pnl:null,realized:null,commission:null};
+  let realized=0,commission=0;
+  for(const t of j){realized+=Number(t.realizedPnl||0);commission+=Number(t.commission||0)}
+  return {pnl:realized-commission,realized,commission};
+}
 
-  const settings=tradeSettings(env);
-  const sentIds=new Set();
-  for(const result of queue){
-    await sendTelegram(env,resultMessagePart(result,settings));
-    sentIds.add(result.id);
+async function openCycle(env,state,cycleStart){
+  const c=cfg(env);
+  const body=await closed15mBodies();
+  const a=c.ka*body.b20,b=c.kb*body.b20;
+  const ratio=body.b100>0?body.b20/body.b100:0;
+  const filterPass=!c.filter||(ratio>=.8&&ratio<=2&&(a-b)>4*c.fee);
+  const id=String(cycleStart);
+
+  if(!filterPass){
+    state.lastCycleStart=cycleStart;
+    state.skipped.push({id,cycleStart,reason:"FILTER",b20:body.b20,b100:body.b100,ratio,a,b,at:nowIso()});
+    state.skipped=state.skipped.slice(-192);
+    await writeState(env,state);
+    return state;
   }
-  state.unsentResults=(state.unsentResults||[]).filter(r=>!sentIds.has(r.id));
-  await writeTradeState(env,state);
+  if(!c.live){
+    state.lastCycleStart=cycleStart;
+    state.skipped.push({id,cycleStart,reason:"LIVE_OFF",b20:body.b20,b100:body.b100,ratio,a,b,at:nowIso()});
+    state.skipped=state.skipped.slice(-192);
+    await writeState(env,state);
+    return state;
+  }
+  if(!binanceConfigured(env))throw new Error("Chưa có Binance API key/secret trong Cloudflare Secret");
+  await ensureHedgeMode(env);
+  await setLeverage(env,c.leverage);
+  const rules=await symbolRules();
+  const px=await tickerPrice();
+  const qty=Math.max(rules.minQty,stepFloor(c.notional/px,rules.stepSize));
+
+  let lo=null,so=null;
+  try{
+    lo=await placeOrder(env,{side:"BUY",positionSide:"LONG",type:"MARKET",quantity:qty,newOrderRespType:"RESULT"});
+    so=await placeOrder(env,{side:"SELL",positionSide:"SHORT",type:"MARKET",quantity:qty,newOrderRespType:"RESULT"});
+  }catch(e){
+    await closePositionMarket(env,"LONG").catch(()=>{});
+    await closePositionMarket(env,"SHORT").catch(()=>{});
+    throw e;
+  }
+
+  const eL=entryPrice(lo,px),eS=entryPrice(so,px);
+  const legs={
+    L:{positionSide:"LONG",entry:eL,tp:eL*(1+a),sl:eL*(1-b),slKind:"sl",done:false},
+    S:{positionSide:"SHORT",entry:eS,tp:eS*(1-a),sl:eS*(1+b),slKind:"sl",done:false}
+  };
+  try{
+    const lsl=await conditionClose(env,"LONG","STOP_MARKET",legs.L.sl,rules.tickSize);
+    const ltp=await conditionClose(env,"LONG","TAKE_PROFIT_MARKET",legs.L.tp,rules.tickSize);
+    const ssl=await conditionClose(env,"SHORT","STOP_MARKET",legs.S.sl,rules.tickSize);
+    const stp=await conditionClose(env,"SHORT","TAKE_PROFIT_MARKET",legs.S.tp,rules.tickSize);
+    legs.L.slOrderId=lsl.orderId;legs.L.tpOrderId=ltp.orderId;
+    legs.S.slOrderId=ssl.orderId;legs.S.tpOrderId=stp.orderId;
+  }catch(e){
+    await cancelLegOrders(env,legs.L);await cancelLegOrders(env,legs.S);
+    await closePositionMarket(env,"LONG").catch(()=>{});
+    await closePositionMarket(env,"SHORT").catch(()=>{});
+    throw e;
+  }
+
+  state.active={
+    id,cycleStart,cycleEnd:cycleStart+CYCLE_SECONDS,openedAt:nowIso(),
+    config:c,b20:body.b20,b100:body.b100,ratio,a,b,qty,rules,legs,beMoved:false
+  };
+  state.lastCycleStart=cycleStart;
+  await writeState(env,state);
+  await sendTelegram(env,
+    "🟦 <b>HEDGE 15M ĐÃ MỞ</b>\n"+
+    "BTCUSDT • "+timeText(cycleStart)+"–"+timeText(cycleStart+CYCLE_SECONDS)+"\n"+
+    "LONG + SHORT • "+qty+" BTC mỗi chiều\n"+
+    "ka "+c.ka+" • kb "+c.kb+" • BE "+(c.be?"BẬT":"TẮT")+"\n"+
+    "b20 "+pct(body.b20)+" • b100 "+pct(body.b100)+"\n"+
+    "TP "+pct(a)+" • SL "+pct(b)+" • đòn bẩy "+c.leverage+"x"
+  ).catch(()=>{});
+  return state;
+}
+
+async function refreshLeg(env,leg){
+  if(leg.done)return leg;
+  const sl=leg.slOrderId?await getOrder(env,leg.slOrderId):null;
+  const tp=leg.tpOrderId?await getOrder(env,leg.tpOrderId):null;
+  if(sl?.status==="FILLED"){leg.done=true;leg.why=leg.slKind||"sl";leg.closedAt=nowIso()}
+  else if(tp?.status==="FILLED"){leg.done=true;leg.why="tp";leg.closedAt=nowIso()}
+  return leg;
+}
+async function moveOtherToBE(env,active,stoppedKey){
+  const c=active.config;
+  if(!c.be||active.beMoved)return;
+  const otherKey=stoppedKey==="L"?"S":"L";
+  const g=active.legs[otherKey];
+  if(!g||g.done||g.slKind!=="sl")return;
+  await cancelOrder(env,g.slOrderId);
+  const bePrice=otherKey==="L"?g.entry*(1+2*c.fee):g.entry*(1-2*c.fee);
+  const o=await conditionClose(env,g.positionSide,"STOP_MARKET",bePrice,active.rules.tickSize);
+  g.sl=bePrice;g.slOrderId=o.orderId;g.slKind="be";
+  active.beMoved=true;
+  active.beMovedAt=nowIso();
+}
+async function finishCycle(env,state,reason="time"){
+  const a=state.active;if(!a)return state;
+  for(const k of ["L","S"])await cancelLegOrders(env,a.legs[k]);
+  await closePositionMarket(env,"LONG").catch(()=>{});
+  await closePositionMarket(env,"SHORT").catch(()=>{});
+  const p=await cyclePnl(env,a.cycleStart*1000-60000,Date.now()+60000);
+  const row={...a,closedAt:nowIso(),closeReason:reason,pnl:p.pnl,realized:p.realized,commission:p.commission};
+  state.history.push(row);state.history=state.history.slice(-192);state.active=null;
+  await writeState(env,state);
+  await sendTelegram(env,
+    "⬛ <b>HEDGE 15M ĐÃ ĐÓNG</b>\n"+
+    timeText(a.cycleStart)+"–"+timeText(a.cycleEnd)+" • "+reason+"\n"+
+    "LONG: "+String(a.legs.L.why||"time").toUpperCase()+" • SHORT: "+String(a.legs.S.why||"time").toUpperCase()+"\n"+
+    "PnL thực tế: <b>"+(p.pnl===null?"chưa đọc được":money(p.pnl))+"</b>"
+  ).catch(()=>{});
+  return state;
+}
+async function manageActive(env,state,nowSec){
+  const a=state.active;if(!a)return state;
+  await refreshLeg(env,a.legs.L);await refreshLeg(env,a.legs.S);
+  if(a.config.be&&!a.beMoved){
+    if(a.legs.L.done&&a.legs.L.why==="sl"&&!a.legs.S.done)await moveOtherToBE(env,a,"L");
+    else if(a.legs.S.done&&a.legs.S.why==="sl"&&!a.legs.L.done)await moveOtherToBE(env,a,"S");
+  }
+  if(a.legs.L.done&&a.legs.S.done)return finishCycle(env,state,"orders");
+  if(nowSec>=a.cycleEnd)return finishCycle(env,state,"time");
+  await writeState(env,state);return state;
 }
 
 async function scheduledTick(env){
   const nowSec=Math.floor(Date.now()/1000);
-  const minute=Math.floor(nowSec/60);
-  let payload=await readHistory(env);
-
-  await sendReadyOnce(env).catch(()=>{});
-
-  // Settle first. This prevents a slow full-history sync at the 5-minute
-  // boundary from delaying or skipping the win/loss Telegram message.
-  await maybeSendSettlement(env,payload,nowSec).catch(()=>{});
-
+  let state=await readState(env);
+  state.lastTick=nowIso();
   try{
-    payload=(!payload.rounds?.length||minute%5===0)
-      ?await sync(env)
-      :await refreshRecent(env);
-  }catch(_){
-    payload=await readHistory(env);
+    state=await manageActive(env,state,nowSec);
+    const cs=cycleStartSec();
+    if(!state.active&&state.lastCycleStart!==cs){
+      state=await openCycle(env,state,cs);
+    }
+    state.lastError=null;
+  }catch(e){
+    state.lastError=String(e.message||e);
+    await sendTelegram(env,"⚠️ <b>HEDGE BOT LỖI</b>\n"+state.lastError).catch(()=>{});
   }
+  await writeState(env,state);
+}
 
-  await schedulePatternAlert(env,payload).catch(()=>{});
+function summarize24h(state){
+  const since=Date.now()-24*3600*1000;
+  const rows=(state.history||[]).filter(x=>new Date(x.closedAt||0).getTime()>=since);
+  const pnl=rows.reduce((s,x)=>s+(Number.isFinite(Number(x.pnl))?Number(x.pnl):0),0);
+  const wins=rows.filter(x=>Number(x.pnl)>0).length;
+  const losses=rows.filter(x=>Number(x.pnl)<0).length;
+  return {cycles:rows.length,wins,losses,pnl,rows};
 }
 
 export default {
   async fetch(req,env){
     const u=new URL(req.url);
-
-    if(req.method==="OPTIONS"){
-      return new Response(null,{headers:{
-        ...JSON_HEADERS,
-        "access-control-allow-methods":"GET,POST,OPTIONS",
-        "access-control-allow-headers":"content-type"
-      }});
-    }
-
+    if(req.method==="OPTIONS")return new Response(null,{headers:{...JSON_HEADERS,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type"}});
     if(u.pathname==="/health"){
+      const c=cfg(env);
       return json({
-        ok:true,
-        service:"Boss Moc Chan Cloud",
-        strategyVersion:STRATEGY_VERSION,
-        signalStepMinutes:SIGNAL_STEP/60,
-        evenOddByMinute:true,
-        evenMinuteMarks:["00","10","20","30","40","50"],
-        oddMinuteMarks:["05","15","25","35","45","55"],
-        entryEveryMinutes:5,
-        alertLeadMinutes:ALERT_LEAD/60,
-        targetLabelsAreCandleCloseMinutes:true,
-        independentLaneMoneySteps:true,
-        exampleOdd:{alert:"16:18",liveClose:"16:20",decisionMarks:["15:55","16:05","16:15"],targetClose:"16:25"},
-        exampleEven:{alert:"16:23",decisionMarks:["16:00","16:10","16:20"],targetClose:"16:30"},
-        patternRules:["AAA->A","ABA->B"],
-        pauseAfterConsecutiveLosses:2,
-        pauseMinutes:PAUSE_SECONDS/60,
-        resumeRule:"Trong thời gian nghỉ không báo trước. Khi pauseUntil kết thúc, lấy nến live lúc đó để chọn dãy của nến kế tiếp và báo theo T-7.",
-        winDoubleRule:true,
-        moneyRule:"Mỗi dãy CHẴN/LẺ quản lý riêng: Lệnh 1 thắng -> lần cùng dãy kế tiếp dùng Lệnh 2 x2; sau Lệnh 2 hoặc Lệnh 1 thua -> Lệnh 1",
-        kvConfigured:!!env.BOSS_KV,
-        apiKeyConfigured:!!env.PREDICT_API_KEY,
-        telegramConfigured:telegramConfigured(env),
-        moneySettings:tradeSettings(env),
-        time:new Date().toISOString()
+        ok:true,service:"Boss Binance Hedge",strategyVersion:STRATEGY_VERSION,
+        symbol:SYMBOL,interval:"15m",entry:"LONG+SHORT",binanceConfigured:binanceConfigured(env),
+        liveTrading:c.live,hedgeModeRequired:true,telegramConfigured:tgOK(env),config:c,time:nowIso()
       });
     }
-
-    if(u.pathname==="/category"){
-      const ts=Number(u.searchParams.get("ts"));
-      if(!Number.isFinite(ts)||ts<=0)return json({ok:false,error:"Thiếu hoặc sai ts"},400);
+    if(u.pathname==="/state"){
+      const s=await readState(env);return json({...s,summary24h:summarize24h(s),config:cfg(env),binanceConfigured:binanceConfigured(env)});
+    }
+    if(u.pathname==="/ticker"){
+      try{return json({ok:true,price:await tickerPrice(),time:Date.now()})}catch(e){return json({ok:false,error:String(e.message||e)},502)}
+    }
+    if(u.pathname==="/klines"){
+      const interval=String(u.searchParams.get("interval")||"1m");
+      const limit=Math.max(1,Math.min(1500,Number(u.searchParams.get("limit")||1500)));
+      const startTime=Number(u.searchParams.get("startTime")||0)||undefined;
+      const endTime=Number(u.searchParams.get("endTime")||0)||undefined;
+      try{return json(await publicGet("/fapi/v1/klines",{symbol:SYMBOL,interval,limit,startTime,endTime}))}
+      catch(e){return json({ok:false,error:String(e.message||e)},502)}
+    }
+    if(u.pathname==="/mode"){
       try{
-        const data=await apiCategory(Math.floor(ts),env.PREDICT_API_KEY);
-        return data?json(data):json({ok:false,error:"Không tìm thấy vòng"},404);
-      }catch(e){
-        return json({ok:false,error:String(e.message||e)},502);
-      }
+        if(!binanceConfigured(env))return json({ok:false,error:"Chưa có Binance API key/secret"},400);
+        return json({ok:true,mode:await signed(env,"GET","/fapi/v1/positionSide/dual")});
+      }catch(e){return json({ok:false,error:String(e.message||e)},502)}
     }
-
-    if(u.pathname==="/history"){
-      return json(await readHistory(env));
+    if(u.pathname==="/reset"&&req.method==="POST"){
+      const old=await readState(env);
+      if(old.active)return json({ok:false,error:"Đang có chu kỳ hedge mở; không reset khi còn vị thế."},409);
+      const s=freshState();await writeState(env,s);return json({ok:true,state:s});
     }
-
-    if(u.pathname==="/trade-state"){
-      const state=await readTradeState(env);
-      const settings=tradeSettings(env);
-      return json({
-        ...state,
-        settings,
-        balance:(state.balanceBase===null?settings.startBalance:Number(state.balanceBase))+Number(state.pnl||0),
-        total:Number(state.wins||0)+Number(state.losses||0)
-      });
+    if(u.pathname==="/tick"&&req.method==="POST"){
+      await scheduledTick(env);return json({ok:true,state:await readState(env)});
     }
-
-
-    if(u.pathname==="/pattern-signal"){
-      const nowSec=Math.floor(Date.now()/1000);
-      const targetParam=Number(u.searchParams.get("target"));
-      const targetStart=Number.isFinite(targetParam)&&targetParam>0
-        ?Math.floor(targetParam/INTERVAL)*INTERVAL
-        :Math.floor(nowSec/INTERVAL)*INTERVAL+2*INTERVAL;
-      const payload=await readHistory(env);
-      const signal=await patternSignalForTarget(env,payload,targetStart);
-      const state=await readTradeState(env,nowSec);
-      return json({
-        ok:true,
-        ...signal,
-        paused:Number(state.pauseUntil||0)>nowSec,
-        pauseActiveNow:Number(state.pauseUntil||0)>nowSec,
-        pauseUntil:Number(state.pauseUntil||0),
-        laneResults:state.laneResults||{EVEN:null,ODD:null},
-        laneSteps:state.laneSteps||{EVEN:1,ODD:1},
-        step:Number(state.laneSteps?.[signal?.lane]||1),
-        amount:tradePlan(tradeSettings(env),state,signal?.lane).amount
-      });
-    }
-
-
-    if(u.pathname==="/trade-reset"){
-      if(req.method!=="POST")return json({ok:false,error:"Chỉ chấp nhận POST"},405);
-      let body={};
-      try{body=await req.json()}catch(_){}
-      if(body?.confirm!=="RESET")return json({ok:false,error:"Thiếu xác nhận RESET"},400);
-
-      const nowSec=Math.floor(Date.now()/1000);
-      const state=freshTradeState(dayTextFromSeconds(nowSec));
-      state.balanceBase=0;
-      await writeTradeState(env,state);
-
-      return json({
-        ok:true,
-        message:"Đã reset lệnh thực tế, thắng/thua, lãi/lỗ, trạng thái hai dãy CHẴN/LẺ và thời gian nghỉ về 0.",
-        state
-      });
-    }
-
-    if(u.pathname==="/sync"){
-      try{return json(await sync(env))}
-      catch(e){return json({ok:false,error:String(e.message||e)},500)}
-    }
-
-    return json({ok:true,endpoints:["/health","/category?ts=...","/history","/trade-state","/pattern-signal?target=...","/trade-reset","/sync"]});
+    return json({ok:true,endpoints:["/health","/state","/ticker","/klines","/mode","/reset","/tick"]});
   },
-
-  async scheduled(controller,env,ctx){
-    ctx.waitUntil(scheduledTick(env));
-  }
+  async scheduled(controller,env,ctx){ctx.waitUntil(scheduledTick(env))}
 };
