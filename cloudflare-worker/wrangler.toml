@@ -1,7 +1,7 @@
 name = "boss-vao-lenh"
 main = "src/index.js"
 compatibility_date = "2026-09-25"
-# Strategy deployment: v6 resume from live candle after exact 30m pause
+# Strategy: BTCUSDT USD-M Futures hedge LONG+SHORT every 15m
 
 [triggers]
 crons = ["* * * * *"]
@@ -10,13 +10,21 @@ crons = ["* * * * *"]
 binding = "BOSS_KV"
 id = "843ba5a3a1cf434da559ea21e59d87c7"
 
-# Runtime secrets:
-# PREDICT_API_KEY
+# Required Cloudflare Secrets for live trading:
+# BINANCE_API_KEY
+# BINANCE_API_SECRET
+#
+# Optional Telegram Secrets:
 # CLOUD_TELEGRAM_BOT_TOKEN
 # CLOUD_TELEGRAM_CHAT_ID
 #
-# Optional runtime variables (defaults shown):
-# CLOUD_BET1 = 1
-# CLOUD_BET2 = 2
-# CLOUD_PAYOUT_PERCENT = 80
-# CLOUD_START_BALANCE = 0
+# Runtime variables:
+# BINANCE_LIVE_TRADING = false
+# HEDGE_NOTIONAL_USDT = 10
+# HEDGE_LEVERAGE = 1
+# HEDGE_KA = 1.5
+# HEDGE_KB = 0.5
+# HEDGE_BE = true
+# HEDGE_FILTER = true
+# HEDGE_FEE = 0.0005
+# HEDGE_SLIP = 0.0001
