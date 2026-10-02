@@ -4,1065 +4,249 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0e1217">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<link rel="manifest" href="manifest.webmanifest">
-<title>Boss Mốc Chẵn — iPhone</title>
+<title>Boss Binance Hedge</title>
 <style>
 :root{color-scheme:dark;--bg:#0e1217;--panel:#171d24;--line:#29323d;--txt:#f4f7f9;--muted:#96a3b0;--g:#09c878;--r:#ff4b4b;--b:#4ca5ff}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 main{max-width:620px;margin:auto;padding:calc(14px + env(safe-area-inset-top)) 13px calc(30px + env(safe-area-inset-bottom))}
 h1{font-size:23px;margin:0}.sub,.note{color:var(--muted);font-size:12px;line-height:1.45}.card{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:15px;margin:11px 0}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}.big{font-size:28px;font-weight:900}.label{font-size:12px;color:var(--muted)}.green{color:var(--g)}.red{color:var(--r)}.blue{color:var(--b)}
-.g{color:var(--g)}.r{color:var(--r)}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:19px;margin-top:4px}
-.calendarSummary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.calendarSummary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.calendarSummary b{display:block;font-size:18px;margin-top:3px}.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar24{min-width:1040px;display:grid;grid-template-columns:48px repeat(12,1fr) 205px;gap:3px;align-items:center}.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:right;padding-right:4px}.calHead{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center;padding:3px 0}.calCell{height:27px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace;color:#5c6875}.calCell.win{background:#103b2b;color:#50e99d}.calCell.loss{background:#452020;color:#ff7979}.calCell.wait{background:#3b3219;color:#ffd36b}.calCell.skip{background:#2d253f;color:#c7a9ff}.calCell.pause{background:#243447;color:#7fc1ff}.calCell.future{opacity:.35}.calCell.signal{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}.calHourSum{font:700 9px ui-monospace,monospace;color:var(--muted);white-space:nowrap;padding-left:4px}
-input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800;transition:.18s ease}.secondary{background:#303944}.danger{background:#642b2b}button.working{background:#d99a18!important;color:#111!important;box-shadow:0 0 0 3px rgba(255,193,77,.22)}button.success{background:var(--g)!important;color:#06140e!important;box-shadow:0 0 0 3px rgba(9,200,120,.22)}button.fail{background:var(--r)!important;color:white!important}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px}.stat{background:#10161c;border-radius:12px;padding:11px}.stat b{display:block;font-size:18px;margin-top:4px}
+.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:11px}.summary>div{background:#10161c;border-radius:11px;padding:9px;text-align:center}.summary b{display:block;font-size:17px;margin-top:3px}
+input,button{border:0;border-radius:11px;padding:11px 12px;font-size:14px}input{width:100%;background:#0e1217;color:var(--txt);border:1px solid var(--line)}button{background:var(--b);color:white;font-weight:800}.secondary{background:#303944}.danger{background:#642b2b}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}.wide{grid-column:1/-1}.field .label{margin-bottom:5px}.status{font-size:12px;white-space:pre-wrap}.err{color:#ff8d8d}.ok{color:#62dda5}
-details summary{cursor:pointer;font-weight:800}.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
-.livebox{display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:center}.liveorb{width:72px;height:72px;border-radius:22px;background:#10161c;display:grid;place-items:center;font-size:48px}.countdown{font:900 32px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:1px}.liveMeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.liveMeta>div{background:#10161c;border-radius:11px;padding:9px}.liveMeta b{display:block;margin-top:3px;font-size:14px}
-.alertbox{display:none;border:2px solid var(--b);background:#112235;border-radius:16px;padding:14px;margin:11px 0}.alertbox.show{display:block}.alertbox.prepare{border-color:#ffc14d;background:#2a220f}.alertbox.green{border-color:var(--g);background:#0d2c20}.alertbox.red{border-color:var(--r);background:#321515}.alertTitle{font-size:22px;font-weight:900}.alertDetail{margin-top:5px;font-size:13px;color:#d4dbe2}.alertActions{display:flex;gap:8px;margin-top:10px}.alertActions button{flex:1}
-@keyframes flashPrepare{0%,100%{box-shadow:inset 0 0 0 0 rgba(255,193,77,0)}50%{box-shadow:inset 0 0 0 8px rgba(255,193,77,.38)}}@keyframes flashGreen{0%,100%{box-shadow:inset 0 0 0 0 rgba(9,200,120,0)}50%{box-shadow:inset 0 0 0 10px rgba(9,200,120,.36)}}@keyframes flashRed{0%,100%{box-shadow:inset 0 0 0 0 rgba(255,75,75,0)}50%{box-shadow:inset 0 0 0 10px rgba(255,75,75,.36)}}body.flash-prepare{animation:flashPrepare .35s 6}body.flash-green{animation:flashGreen .3s 8}body.flash-red{animation:flashRed .3s 8}
+.progress{height:6px;background:#10161c;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;background:var(--b);width:0}
+.livebox{display:grid;grid-template-columns:auto 1fr;gap:13px;align-items:center}.liveorb{width:72px;height:72px;border-radius:22px;background:#10161c;display:grid;place-items:center;font-size:42px}.countdown{font:900 30px ui-monospace,monospace}
+.calendarWrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}.calendar{min-width:570px;display:grid;grid-template-columns:48px repeat(4,1fr) 200px;gap:3px;align-items:center}.calHead,.calTime{font:700 9px ui-monospace,monospace;color:var(--muted);text-align:center}.calCell{height:28px;border-radius:5px;background:#10161c;display:grid;place-items:center;font:800 9px ui-monospace,monospace}.win{color:#50e99d}.loss{color:#ff7979}.skip{color:#ffd36b}.sum{font:700 9px ui-monospace,monospace;color:var(--muted);padding-left:4px}
+table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:6px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
 </style>
 </head>
 <body><main>
 <div class="row">
-  <div><h1>Boss Mốc Chẵn/Lẻ</h1><div class="sub">CHẴN/LẺ xen kẽ • báo trước 7 phút • thống kê chiến lược 24h</div></div>
-  <button class="secondary" onclick="refreshNow()">↻</button>
+  <div><h1>Boss Binance Hedge</h1><div class="sub">BTCUSDT Futures • LONG + SHORT mỗi 15 phút</div></div>
+  <button class="secondary" onclick="refreshAll()">↻</button>
 </div>
 
 <section class="card">
-  <div class="row">
-    <div>
-      <b>Cảnh báo trước lệnh 7 phút</b>
-      <div id="alertPermissionText" class="label">Bấm một lần để Safari phát bíp khoảng 7 phút trước nến mục tiêu</div>
-    </div>
-    <button id="enableAlertBtn" onclick="enableAlerts()">🔔 BẬT CẢNH BÁO</button>
-  </div>
+  <div class="row"><div><b>Trạng thái tự động</b><div id="modeText" class="label">Đang tải...</div></div><b id="liveFlag">--</b></div>
+  <div id="warning" class="note" style="margin-top:8px"></div>
 </section>
 
-<section id="tradeAlert" class="alertbox">
-  <div id="tradeAlertTitle" class="alertTitle">CHỜ</div>
-  <div id="tradeAlertDetail" class="alertDetail"></div>
-</section>
-
-<section class="card" id="setupCard">
+<section class="card">
   <b>Boss Cloud</b>
-  <div class="note" style="margin:6px 0 12px">API key được giữ trong Cloudflare Secret. iPhone không cần lưu API key; lịch sử được lấy từ Boss Cloud.</div>
-  <div style="display:none"><input id="apiKey" type="password"><input id="rememberKey" type="checkbox"></div>
-  <button id="connectBtn" style="width:100%" onclick="refreshHistory()">ĐỒNG BỘ BOSS CLOUD</button>
-  <button id="historyBtn" class="secondary" style="width:100%;margin-top:8px" onclick="refreshHistory()">↻ CẬP NHẬT LỊCH SỬ</button>
-  <button id="resetBtn" class="danger" style="width:100%;margin-top:8px" onclick="resetTradeStateAndHistory()">RESET LÃI/LỖ + SỐ DƯ + LỆNH</button>
-  <div class="note" style="margin-top:7px">Reset xoá thống kê lệnh thực tế trên Cloud, đưa số dư theo dõi và lãi/lỗ về 0, đồng thời xoá kết quả tham chiếu của lệnh trước.</div>
+  <div class="note" style="margin:6px 0 12px">API key/secret Binance chỉ nằm trong Cloudflare Secret, không lưu trên iPhone.</div>
+  <button id="historyBtn" style="width:100%" onclick="runBacktest90()">BACKTEST 90 NGÀY</button>
+  <button class="secondary" style="width:100%;margin-top:8px" onclick="refreshAll()">↻ CẬP NHẬT TRẠNG THÁI</button>
+  <button class="danger" style="width:100%;margin-top:8px" onclick="resetState()">RESET THỐNG KÊ BOT</button>
   <div class="progress"><div class="bar" id="bar"></div></div>
   <div id="loadText" class="status" style="margin-top:7px"></div>
 </section>
 
 <section class="card">
-  <div class="label">Chiến lược 3 màu CHẴN / LẺ</div>
+  <div class="label">Chiến lược Hedge 15m</div>
   <div class="note" style="margin-top:6px">
-    MỐC CHẴN: :00, :10, :20, :30, :40, :50 • MỐC LẺ: :05, :15, :25, :35, :45, :55.
-    Ví dụ lúc 16:18, nến live đang chạy sẽ đóng ở 16:20. Tool lấy 3 nến LẺ đã đóng 15:55 – 16:05 – 16:15 để chọn màu cho nến 16:25 và báo Telegram ngay khoảng 16:18.
-    Khi đến chu kỳ LẺ thì làm ngược lại: lấy 3 nến CHẴN gần nhất để chọn màu cho nến CHẴN kế tiếp.
-    AAA → mua A; ABA → mua B. Hai dãy CHẴN/LẺ quản lý Lệnh 1 → Lệnh 2 x2 độc lập.
+    Mỗi nến 15m mở đồng thời LONG + SHORT. TP = ka × trung bình thân 20 nến đã đóng; SL = kb × trung bình thân 20 nến.
+    Bộ lọc dùng b20/b100 và điều kiện TP−SL > 4×phí. Khi một chiều dính SL gốc, SL chiều còn lại dời về hòa vốn khi BE bật.
   </div>
   <div class="stats" style="margin-top:12px">
-    <div class="stat"><span class="label">Dãy của lệnh kế tiếp</span><b id="laneText">--</b></div>
-    <div class="stat"><span class="label">3 màu quyết định</span><b id="pattern3">--</b></div>
-    <div class="stat"><span class="label">Phiên đặt lệnh</span><b id="targetFrame">--:--–--:--</b></div>
-    <div class="stat"><span class="label">Lệnh dự kiến</span><b id="buy">CHỜ</b></div>
+    <div class="stat"><span class="label">Chu kỳ hiện tại</span><b id="cycle">--</b></div>
+    <div class="stat"><span class="label">Trạng thái</span><b id="cycleState">CHỜ</b></div>
+    <div class="stat"><span class="label">b20 / b100</span><b id="bodyStats">--</b></div>
+    <div class="stat"><span class="label">TP / SL</span><b id="tpSl">--</b></div>
   </div>
-  <div id="fourColorsInfo" class="note" style="margin-top:9px">Đang tải 4 màu trước...</div>
-  <div id="laneResultInfo" class="note" style="margin-top:5px"></div>
-  <div id="bet" class="note" style="margin-top:5px">--</div>
-  <div id="freshness" class="note" style="margin-top:5px"></div>
+  <div id="legInfo" class="note" style="margin-top:9px">Chưa có chu kỳ mở.</div>
 </section>
 
 <section class="card">
-  <div class="row">
-    <div>
-      <b>Nến live hiện tại</b>
-      <div class="label">BTC Up/Down 5m đang chạy</div>
-    </div>
-    <div id="liveFrame" class="label">--:--–--:--</div>
-  </div>
+  <div class="row"><div><b>BTCUSDT Futures live</b><div class="label">Binance USDⓈ-M</div></div><div id="liveFrame" class="label">--</div></div>
   <div class="livebox" style="margin-top:12px">
-    <div id="liveOrb" class="liveorb">⚪</div>
-    <div>
-      <div class="label">Màu hiện tại</div>
-      <div id="liveColorText" class="big">CHỜ DỮ LIỆU</div>
-      <div class="label" style="margin-top:7px">Còn lại</div>
-      <div id="countdown" class="countdown">--:--</div>
-    </div>
+    <div class="liveorb">₿</div>
+    <div><div class="label">Giá hiện tại</div><div id="price" class="big">--</div><div class="label" style="margin-top:7px">Còn lại nến 15m</div><div id="countdown" class="countdown">--:--</div></div>
   </div>
-  <div class="liveMeta">
-    <div><span class="label">Giá mở vòng</span><b id="liveStartPrice">--</b></div>
-    <div><span class="label">Giá live</span><b id="liveCurrentPrice">--</b></div>
-  </div>
-  <div id="liveSource" class="note" style="margin-top:8px">Màu live chỉ hiện khi Predict API cung cấp giá hiện tại của vòng đang mở.</div>
 </section>
 
 <section class="card">
-  <details>
-    <summary>Cài đặt tiền lệnh</summary>
+  <details open>
+    <summary>Cài đặt giao dịch đang dùng</summary>
     <div class="grid2" style="margin-top:12px">
-      <div class="field"><div class="label">Lệnh 1</div><input id="bet1" inputmode="decimal"></div>
-      <div class="field"><div class="label">Lệnh 2 x2</div><input id="bet2" inputmode="decimal"></div>
-      <div class="field"><div class="label">Vốn bắt đầu</div><input id="startBalance" inputmode="decimal"></div>
-      <div class="field"><div class="label">Trả thưởng %</div><input id="payout" inputmode="decimal"></div>
-      <button class="wide" onclick="saveMoney()">LƯU CÀI ĐẶT</button>
+      <div class="field"><div class="label">Notional / chiều</div><input id="notional" disabled></div>
+      <div class="field"><div class="label">Đòn bẩy</div><input id="leverage" disabled></div>
+      <div class="field"><div class="label">ka</div><input id="ka" disabled></div>
+      <div class="field"><div class="label">kb</div><input id="kb" disabled></div>
+      <div class="field"><div class="label">BE</div><input id="be" disabled></div>
+      <div class="field"><div class="label">Filter</div><input id="filter" disabled></div>
     </div>
+    <div class="note" style="margin-top:8px">Các giá trị live lấy từ Cloudflare Vars/Secrets để người ngoài không thể đổi cấu hình giao dịch qua trang web.</div>
   </details>
 </section>
 
 <section class="card">
-  <div class="row">
-    <div>
-      <b>Backtest 24 giờ theo chiến lược CHẴN/LẺ</b>
-      <div class="label">Tự dựng lại từng lệnh từ màu nến lịch sử • AAA→A / ABA→B • x2 riêng từng dãy • 2 lệnh thua liên tiếp nghỉ 30 phút</div>
-    </div>
-    <span id="calendar24Updated" class="label">--:--</span>
+  <div class="row"><div><b>24 giờ giao dịch thực tế</b><div class="label">4 chu kỳ 15m mỗi giờ</div></div><span id="updated" class="label">--</span></div>
+  <div class="summary">
+    <div><span class="label">Chu kỳ</span><b id="cycles24">0</b></div>
+    <div><span class="label">Lãi</span><b class="green" id="wins24">0</b></div>
+    <div><span class="label">Lỗ</span><b class="red" id="loss24">0</b></div>
+    <div><span class="label">PnL</span><b id="pnl24">$0</b></div>
   </div>
-  <div class="calendarSummary">
-    <div><span class="label">Lệnh</span><b id="calendar24Signals">0</b></div>
-    <div><span class="label">Thắng</span><b class="green" id="calendar24Wins">0</b></div>
-    <div><span class="label">Thua</span><b class="red" id="calendar24Losses">0</b></div>
-    <div><span class="label">Bỏ qua</span><b id="calendar24NoOrders">0</b></div>
-    <div><span class="label">Lần nghỉ</span><b id="calendar24Pauses">0</b></div>
-    <div><span class="label">Phút nghỉ</span><b id="calendar24PauseMinutes">0</b></div>
-    <div><span class="label">Tiền thắng 24h</span><b class="green" id="calendar24GrossWin">$0.00</b></div>
-    <div><span class="label">Tiền thua 24h</span><b class="red" id="calendar24GrossLoss">$0.00</b></div>
-    <div><span class="label">Lãi/lỗ 24h</span><b id="calendar24Net">$0.00</b></div>
-    <div><span class="label">Tỷ lệ</span><b id="calendar24Rate">--</b></div>
-  </div>
-  <div class="note" style="margin-top:9px">V = thắng • X = thua • ⏸ = đang trong 30 phút nghỉ • – = mẫu không phải AAA/ABA • … = chưa tới/chưa đủ dữ liệu. Bảng này backtest trực tiếp từ nến lịch sử, không dùng danh sách lệnh đã gửi trước đây.</div>
-  <div class="calendarWrap">
-    <div id="calendar24" class="calendar24"></div>
-  </div>
+  <div class="calendarWrap"><div id="calendar" class="calendar"></div></div>
 </section>
 
 <section class="card">
-  <div class="label">Trạng thái</div>
-  <div id="status" class="status"></div>
+  <div class="row"><div><b>Backtest 90 ngày</b><div class="label">1m → mô phỏng từng chu kỳ 15m • train 70% / test 30%</div></div></div>
+  <div id="backtestSummary" class="note" style="margin-top:8px">Chưa chạy.</div>
+  <div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>ka/kb/BE</th><th>Train bp</th><th>Thô bp</th><th>Test bp</th><th>Test %</th><th>DD %</th></tr></thead><tbody id="backtestRows"></tbody></table></div>
 </section>
 
-<div class="note">Boss Cloud theo dõi chiến lược 3 màu CHẴN/LẺ ngay cả khi iPhone đóng web. Cảnh báo âm thanh trong trang chỉ hoạt động khi trang đang mở.</div>
+<section class="card"><div class="label">Trạng thái</div><div id="status" class="status"></div></section>
+<div class="note">Giao dịch Futures dùng đòn bẩy có rủi ro cao. Backtest chỉ mô tả dữ liệu quá khứ và không bảo đảm kết quả tương lai.</div>
 </main>
 <script>
-const SIGNAL_STEP=600;
-const PREVIEW_ALERT_LEAD=420;
-const STRATEGY_VERSION="alternating-lane-tminus7-v6";
 const CLOUD="https://boss-vao-lenh.caubig96.workers.dev";
-const INTERVAL=300;
+const INTERVAL=900;
 const $=id=>document.getElementById(id);
-let runtimeKey="cloud";
-let rounds=JSON.parse(localStorage.getItem("boss_rounds")||"[]");
-let pollTimer=null;
-let liveTimer=null;
-let countdownTimer=null;
-let calendarSyncTimer=null;
-let busy=false;
-let liveMarket={start:0,end:0,startPrice:null,currentPrice:null,color:null,source:""};
-let audioContext=null;
-let alertsWanted=localStorage.getItem("boss_alerts_enabled")==="1";
-let alertsEnabled=false;
-let wakeLock=null;
-let preparedTarget=Number(sessionStorage.getItem("pattern_prepared_target")||0);
-let finalizedLiveStart=Number(sessionStorage.getItem("finalized_live_start")||0);
-let finalizingStart=0;
-let historyLoading=false;
-let cloudTradeState=null;
-let cloudMoneySettings=null;
-let patternSnapshot=null;
-
-async function enableAlerts(){
+let state=null,health=null,ticker=null;
+function setStatus(t,ok=true){$("status").textContent=t;$("status").className="status "+(ok?"ok":"err")}
+function usd(v){const n=Number(v||0);return (n>=0?"+":"-")+"$"+Math.abs(n).toFixed(4)}
+function clock(sec){return new Date(sec*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
+function cycleFrame(sec){return clock(sec)+"–"+clock(sec+INTERVAL)}
+async function jget(path,opt){const r=await fetch(CLOUD+path,{cache:"no-store",...opt});const j=await r.json().catch(()=>({}));if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));return j}
+async function refreshAll(){
   try{
-    const AC=window.AudioContext||window.webkitAudioContext;
-    if(AC){
-      if(!audioContext)audioContext=new AC();
-      if(audioContext.state==="suspended")await audioContext.resume();
-      beepSequence([880],0.09,0.03);
-    }
-    alertsEnabled=true;
-    alertsWanted=true;
-    localStorage.setItem("boss_alerts_enabled","1");
-    $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
-    $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
-    try{
-      if("wakeLock" in navigator)wakeLock=await navigator.wakeLock.request("screen");
-    }catch(_){}
-  }catch(e){
-    $("alertPermissionText").textContent="Không bật được âm thanh: "+(e.message||e);
-  }
+    const [h,s,t]=await Promise.all([jget("/health"),jget("/state"),jget("/ticker")]);
+    health=h;state=s;ticker=t;render();setStatus("Đã cập nhật "+new Date().toLocaleTimeString(),true);
+  }catch(e){setStatus(String(e.message||e),false)}
 }
-function beepSequence(freqs,duration=0.12,gap=0.08){
-  if(!alertsEnabled||!audioContext)return;
-  let t=audioContext.currentTime+0.02;
-  freqs.forEach(freq=>{
-    const osc=audioContext.createOscillator();
-    const gain=audioContext.createGain();
-    osc.type="sine";osc.frequency.value=freq;
-    gain.gain.setValueAtTime(0.0001,t);
-    gain.gain.exponentialRampToValueAtTime(0.28,t+0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001,t+duration);
-    osc.connect(gain);gain.connect(audioContext.destination);
-    osc.start(t);osc.stop(t+duration+0.02);
-    t+=duration+gap;
-  });
-}
-function tryVibrate(pattern){
-  try{if(alertsEnabled&&navigator.vibrate)navigator.vibrate(pattern)}catch(_){}
-}
-function threeSecondAlert(kind="prepare"){
-  if(!alertsEnabled)return;
-  const prepareFreq=kind==="prepare"?880:(kind==="green"?1250:520);
-  const freqs=[];
-  for(let i=0;i<7;i++)freqs.push(prepareFreq);
-  beepSequence(freqs,0.20,0.22);
-  // ~3 seconds total vibration pattern where supported.
-  tryVibrate([300,150,300,150,300,150,300,150,300,150,300,150,300]);
-}
-function flash(kind){
-  document.body.classList.remove("flash-prepare","flash-green","flash-red");
-  void document.body.offsetWidth;
-  document.body.classList.add("flash-"+kind);
-  setTimeout(()=>document.body.classList.remove("flash-"+kind),3000);
-}
-function showTradeAlert(kind,title,detail){
-  const box=$("tradeAlert");
-  box.className="alertbox show "+kind;
-  $("tradeAlertTitle").textContent=title;
-  $("tradeAlertDetail").textContent=detail;
-}
-function colorIcon(c){return c==="G"?"🟢":c==="R"?"🔴":"⚪"}
-function laneResultLabel(v){return v==="WIN"?"THẮNG":v==="LOSS"?"THUA":"CHƯA CÓ"}
-
-function firePrepareAlert(){
-  const s=patternSnapshot;
-  if(!s?.targetStart||preparedTarget===Number(s.targetStart))return;
-  if(!isEntryAlertWindow(s.targetStart))return;
-  if(s.paused||!s.direction)return;
-
-  preparedTarget=Number(s.targetStart);
-  sessionStorage.setItem("pattern_prepared_target",String(preparedTarget));
-  const buyText=s.direction==="G"?"XANH":"ĐỎ";
-  const colors=(s.decisionColors||[]).map(colorIcon).join(" ");
-  showTradeAlert(
-    "prepare",
-    "⚠️ BÁO TRƯỚC LỆNH KẾ TIẾP • "+String(s.laneText||""),
-    colors+" → MUA "+buyText+" • nến "+shortClock(Number(s.targetStart))+" ("+targetCandleFrame(Number(s.targetStart))+")"
-  );
-  threeSecondAlert("prepare");
-  flash("prepare");
-}
-
-async function finalizeLiveRound(liveStart){
-  if(finalizingStart===liveStart||finalizedLiveStart===liveStart)return;
-  finalizingStart=liveStart;
-  try{
-    let closed=null;
-    for(let attempt=0;attempt<12;attempt++){
-      closed=await fetchRound(liveStart);
-      if(closed?.c)break;
-      await new Promise(r=>setTimeout(r,1000));
-    }
-    if(closed?.c)mergeRounds([closed]);
-    finalizedLiveStart=liveStart;
-    sessionStorage.setItem("finalized_live_start",String(liveStart));
-    render();
-  }catch(e){
-    setStatus("Lỗi cập nhật nến vừa đóng: "+(e.message||e),"err");
-  }finally{
-    finalizingStart=0;
-  }
-}
-function updateAlertPermissionUI(){
-  if(alertsEnabled){
-    $("enableAlertBtn").textContent="🔔 ĐÃ BẬT";
-    $("alertPermissionText").textContent=("vibrate" in navigator)?"Âm thanh + rung trình duyệt đã bật":"Âm thanh đã bật • iPhone Safari có thể không hỗ trợ rung web";
-  }else if(alertsWanted){
-    $("enableAlertBtn").textContent="🔔 CHẠM ĐỂ KÍCH HOẠT";
-    $("alertPermissionText").textContent="iOS yêu cầu chạm lại sau khi mở trang để phát bíp.";
-  }else{
-    $("enableAlertBtn").textContent="🔔 BẬT CẢNH BÁO";
-    $("alertPermissionText").textContent="Bấm một lần để Safari cho phép phát bíp.";
-  }
-}
-function loadPrefs(){
-  localStorage.removeItem("predict_api_key");
-  sessionStorage.removeItem("predict_api_key");
-  localStorage.removeItem("boss_tool_orders");
-  localStorage.removeItem("last_final_signal");
-  runtimeKey="cloud";
-  $("bet1").value=localStorage.getItem("bet1")||"1";
-  $("bet2").value=localStorage.getItem("bet2")||"2";
-  $("startBalance").value=localStorage.getItem("startBalance")||"0";
-  $("payout").value=localStorage.getItem("payout")||"80";
-}
-function n(id,fallback=0){const v=Number(String($(id).value).replace(",","."));return Number.isFinite(v)?v:fallback}
-function saveMoney(){
-  localStorage.setItem("bet1",n("bet1",1));localStorage.setItem("bet2",n("bet2",2));
-  localStorage.setItem("startBalance",n("startBalance",0));localStorage.setItem("payout",n("payout",80));
-  render();setStatus("Đã lưu cài đặt tiền lệnh.","ok")
-}
-function setStatus(text,type=""){ $("status").className="status "+type;$("status").textContent=text }
-function progress(done,total,text){$("bar").style.width=(total?Math.round(done/total*100):0)+"%";$("loadText").textContent=text||""}
-function side(v){
-  const x=String(v||"").trim().toUpperCase();
-  if(["UP","YES","GREEN","HIGHER","ABOVE"].includes(x))return"G";
-  if(["DOWN","NO","RED","LOWER","BELOW"].includes(x))return"R";
-  return null
-}
-function parseColor(payload){
-  const d=payload?.data||payload||{};const markets=d.markets||[];const m=markets[0]||{};
-  let c=side(m?.resolution?.name||m?.resolution?.winner||m?.resolution?.winningOutcome);if(c)return c;
-  for(const o of (m.outcomes||[])){if(String(o?.status||"").toUpperCase()==="WON"){c=side(o?.name);if(c)return c}}
-  const crypto=d?.variantDetails?.crypto||d?.variantData||m?.variantData||{};
-  const a=Number(crypto.startPrice),b=Number(crypto.endPrice);
-  if(Number.isFinite(a)&&Number.isFinite(b)&&a>0&&b>0&&a!==b)return b>a?"G":"R";
-  return null
-}
-function finitePrice(...values){
-  for(const value of values){const n=Number(value);if(Number.isFinite(n)&&n>0)return n}
-  return null
-}
-function extractLive(payload,startTs){
-  const d=payload?.data||payload||{};
-  const m=(d.markets||[])[0]||{};
-  const categoryCrypto=d?.variantDetails?.crypto||d?.variantData||{};
-  const marketCrypto=m?.variantData||{};
-  const startPrice=finitePrice(
-    categoryCrypto.startPrice,marketCrypto.startPrice,d.startPrice,m.startPrice
-  );
-  const currentPrice=finitePrice(
-    categoryCrypto.currentPrice,categoryCrypto.lastPrice,categoryCrypto.indexPrice,
-    categoryCrypto.markPrice,categoryCrypto.endPrice,
-    marketCrypto.currentPrice,marketCrypto.lastPrice,marketCrypto.indexPrice,
-    marketCrypto.markPrice,marketCrypto.endPrice,
-    d.currentPrice,d.lastPrice,d.indexPrice,d.markPrice
-  );
-  let color=null;
-  if(startPrice&&currentPrice&&currentPrice!==startPrice)color=currentPrice>startPrice?"G":"R";
-  return{
-    start:startTs,
-    end:startTs+INTERVAL,
-    startPrice,
-    currentPrice,
-    color,
-    source:color?"Predict API live price":"Predict API chưa trả giá live"
-  }
-}
-async function fetchLiveMarket(){
-  const now=Math.floor(Date.now()/1000);
-  const start=Math.floor(now/INTERVAL)*INTERVAL;
-  try{
-    const r=await fetch(CLOUD+"/category?ts="+start,{cache:"no-store"});
-    if(!r.ok)return;
-    const j=await r.json();
-    liveMarket=extractLive(j,start);
-    renderLive();
-    render();
-  }catch(e){
-    liveMarket={start,end:start+INTERVAL,startPrice:null,currentPrice:null,color:null,source:"Không lấy được dữ liệu live từ Boss Cloud"};
-    renderLive();
-    render();
-  }
-}
-async function fetchRound(ts){
-  const r=await fetch(CLOUD+"/category?ts="+ts,{cache:"no-store"});
-  if(!r.ok)return null;
-  const j=await r.json();
-  const c=parseColor(j);
-  return c?{t:ts,c}:null
-}
-async function fetchTradeState(){
-  try{
-    const r=await fetch(CLOUD+"/trade-state",{cache:"no-store"});
-    if(!r.ok)throw new Error("Boss Cloud trade-state HTTP "+r.status);
-    const j=await r.json();
-    cloudTradeState=j;
-    cloudMoneySettings=j?.settings||null;
-
-    if(cloudMoneySettings){
-      if(document.activeElement!==$("bet1"))$("bet1").value=String(cloudMoneySettings.bet1??1);
-      if(document.activeElement!==$("bet2"))$("bet2").value=String(cloudMoneySettings.bet2??2);
-      if(document.activeElement!==$("startBalance"))$("startBalance").value=String(cloudMoneySettings.startBalance??0);
-      if(document.activeElement!==$("payout"))$("payout").value=String(cloudMoneySettings.payoutPct??80);
-    }
-
-    render();
-    return j;
-  }catch(e){
-    return null;
-  }
-}
-
-async function fetchPatternSignal(){
-  try{
-    const targetStart=upcomingTargetStart();
-    if(targetStart===null)return null;
-    const r=await fetch(CLOUD+"/pattern-signal?target="+targetStart,{cache:"no-store"});
-    if(!r.ok)throw new Error("Boss Cloud pattern-signal HTTP "+r.status);
-    const j=await r.json();
-    if(j?.ok===false)throw new Error(j.error||"Không lấy được mẫu 3 màu");
-    patternSnapshot=j;
-    render();
-    return j;
-  }catch(e){
-    return null;
-  }
-}
-
-async function resetTradeStateAndHistory(){
-  const btn=$("resetBtn");
-  const ok=confirm("Reset toàn bộ lệnh thực tế, thắng/thua, lãi/lỗ, số dư theo dõi và trạng thái chờ thắng về 0?");
-  if(!ok)return;
-
-  if(btn){
-    btn.disabled=true;
-    btn.classList.add("working");
-    btn.textContent="⏳ ĐANG RESET...";
-  }
-
-  try{
-    const r=await fetch(CLOUD+"/trade-reset",{
-      method:"POST",
-      cache:"no-store",
-      headers:{"content-type":"application/json"},
-      body:JSON.stringify({confirm:"RESET"})
-    });
-    const j=await r.json().catch(()=>({}));
-    if(!r.ok||j?.ok===false)throw new Error(j?.error||("HTTP "+r.status));
-
-    cloudTradeState=null;
-    sessionStorage.removeItem("pattern_prepared_target");
-    preparedTarget=0;
-    await Promise.allSettled([fetchTradeState(),fetchCloudHistory(true)]);
-    render();
-    setStatus("Đã reset về 0 và tải lại lịch sử mốc chẵn.","ok");
-
-    if(btn){
-      btn.classList.remove("working","fail");
-      btn.classList.add("success");
-      btn.textContent="✓ ĐÃ RESET";
-    }
-  }catch(e){
-    setStatus("Reset lỗi: "+String(e.message||e),"err");
-    if(btn){
-      btn.classList.remove("working","success");
-      btn.classList.add("fail");
-      btn.textContent="✕ RESET LỖI";
-    }
-  }finally{
-    if(btn){
-      btn.disabled=false;
-      setTimeout(()=>{
-        btn.classList.remove("working","success","fail");
-        btn.textContent="RESET LÃI/LỖ + SỐ DƯ + LỆNH";
-      },3000);
-    }
-  }
-}
-
-async function fetchCloudHistory(forceSync=false){
-  const r=await fetch(CLOUD+(forceSync?"/sync":"/history"),{cache:"no-store"});
-  if(!r.ok)throw new Error("Boss Cloud HTTP "+r.status);
-  const j=await r.json();
-  if(j?.ok===false)throw new Error(j.error||"Boss Cloud sync lỗi");
-  const cloudRounds=Array.isArray(j?.rounds)?j.rounds:[];
-  const mapped=cloudRounds.map(x=>{
-    const t=Number(x?.ts);
-    const c=x?.color==="V"?"G":x?.color==="X"?"R":null;
-    return Number.isFinite(t)&&c?{t,c}:null;
-  }).filter(Boolean);
-  if(mapped.length)mergeRounds(mapped);
-  return {cloudCount:mapped.length,updatedAt:j?.updatedAt||null};
-}
-function historyRoundCount(){
-  return rounds.length;
-}
-async function refreshHistory(){
-  if(historyLoading)return;
-  historyLoading=true;
-  const btn=$("historyBtn");
-  if(btn){
-    btn.disabled=true;
-    btn.classList.add("working");
-    btn.textContent="⏳ ĐANG CẬP NHẬT...";
-  }
-  try{
-    progress(0,1,"Đang đồng bộ lịch sử Boss Cloud...");
-    const cloud=await fetchCloudHistory(true);
-    await fetchPatternSignal();
-    render();
-    progress(1,1,"Đã tải "+cloud.cloudCount+" nến đã đóng.");
-    setStatus("Đã cập nhật lịch sử CHẴN/LẺ từ Boss Cloud.","ok");
-    if(btn){
-      btn.classList.remove("working","fail");
-      btn.classList.add("success");
-      btn.textContent="✓ ĐÃ CẬP NHẬT";
-    }
-  }catch(e){
-    setStatus("Lỗi Boss Cloud: "+String(e.message||e),"err");
-    if(btn){
-      btn.classList.remove("working","success");
-      btn.classList.add("fail");
-      btn.textContent="✕ CẬP NHẬT LỖI";
-    }
-  }finally{
-    historyLoading=false;
-    if(btn){
-      btn.disabled=false;
-      setTimeout(()=>{
-        btn.classList.remove("working","success","fail");
-        btn.textContent="↻ CẬP NHẬT LỊCH SỬ";
-      },2500);
-    }
-  }
-}
-async function autoStart(){
-  startPolling();
-  await Promise.allSettled([fetchCloudHistory(false),fetchLiveMarket(),refreshNow(),fetchTradeState()]);
-  await fetchPatternSignal();
-  render();
-}
-
-function mergeRounds(items){
-  const map=new Map(rounds.map(x=>[x.t,x]));items.filter(Boolean).forEach(x=>map.set(x.t,x));
-  rounds=[...map.values()].sort((a,b)=>a.t-b.t).slice(-6000);
-  localStorage.setItem("boss_rounds",JSON.stringify(rounds));
-}
-async function mapLimit(values,limit,fn,onProgress){
-  let i=0,done=0,out=new Array(values.length);
-  async function worker(){while(true){const k=i++;if(k>=values.length)return;try{out[k]=await fn(values[k])}catch(e){out[k]={error:e}}done++;onProgress?.(done,values.length)}}
-  await Promise.all(Array.from({length:limit},worker));return out
-}
-async function connect(){
-  return refreshHistory();
-}
-async function refreshNow(){
-  try{
-    const now=Math.floor(Date.now()/1000);const latest=Math.floor(now/INTERVAL)*INTERVAL-INTERVAL;
-    const starts=Array.from({length:10},(_,k)=>latest-(9-k)*INTERVAL);
-    const res=await mapLimit(starts,4,fetchRound);
-    mergeRounds(res.filter(x=>x&&x.c));
-    render();
-    setStatus("Đã cập nhật qua Boss Cloud "+new Date().toLocaleTimeString(),"ok");
-    fetchTradeState();
-  }catch(e){setStatus(String(e.message||e),"err")}
-}
-function startPolling(){
-  if(pollTimer)clearInterval(pollTimer);
-  if(liveTimer)clearInterval(liveTimer);
-  if(countdownTimer)clearInterval(countdownTimer);
-  if(calendarSyncTimer)clearInterval(calendarSyncTimer);
-  pollTimer=setInterval(()=>{if(document.visibilityState==="visible"){refreshNow();fetchTradeState();fetchPatternSignal()}},20000);
-  liveTimer=setInterval(()=>{if(document.visibilityState==="visible")fetchLiveMarket()},5000);
-  calendarSyncTimer=setInterval(async()=>{
-    if(document.visibilityState!=="visible")return;
-    try{
-      await fetchCloudHistory(false);
-      await fetchPatternSignal();
-      render();
-    }catch(_){}
-  },INTERVAL*1000);
-  countdownTimer=setInterval(()=>{renderLive();alertTick()},250);
-  fetchLiveMarket();
-}
-function localTimeParts(ts){
-  const parts=new Intl.DateTimeFormat("en-GB",{
-    timeZone:"Asia/Ho_Chi_Minh",
-    hour:"2-digit",minute:"2-digit",hourCycle:"h23"
-  }).formatToParts(new Date(Number(ts)*1000));
-  const get=type=>Number(parts.find(p=>p.type===type)?.value);
-  return {hour:get("hour"),minute:get("minute")};
-}
-function laneForTarget(targetStart){
-  const minute=localTimeParts(targetStart).minute;
-  return minute%10===0?"EVEN":"ODD";
-}
-function laneText(lane){return lane==="EVEN"?"MỐC CHẴN":"MỐC LẺ"}
-function isPatternTarget(targetStart){
-  return localTimeParts(targetStart).minute%5===0;
-}
-function upcomingTargetStart(nowSec=Date.now()/1000){
-  // targetStart là mốc ĐÓNG nến. Lúc 16:18: base=16:15 -> target=16:25.
-  return Math.floor(Number(nowSec)/INTERVAL)*INTERVAL+2*INTERVAL;
-}
-function alertStartForTarget(targetStart){return Number(targetStart)-PREVIEW_ALERT_LEAD}
-function isEntryAlertWindow(targetStart,nowSec=Date.now()/1000){
-  const remain=Number(targetStart)-Number(nowSec);
-  return remain<=450&&remain>=390;
-}
-
-function historicalMoneySettings(){
-  const bet1=Number(cloudMoneySettings?.bet1??n("bet1",1));
-  const bet2=Number(cloudMoneySettings?.bet2??n("bet2",2));
-  const payout=Number(cloudMoneySettings?.payoutPct??n("payout",80))/100;
-  return {
-    bet1:Number.isFinite(bet1)?bet1:1,
-    bet2:Number.isFinite(bet2)?bet2:2,
-    payout:Number.isFinite(payout)?payout:.8
-  };
-}
-function usd24(value,forceSign=false){
-  const n=Number(value)||0;
-  const sign=forceSign?(n>0?"+":n<0?"-":""):"";
-  return sign+"$"+Math.abs(n).toFixed(2);
-}
-
-function historicalColorMap(){
-  return new Map(
-    (rounds||[])
-      .filter(x=>Number.isFinite(Number(x.t))&&(x.c==="G"||x.c==="R"))
-      .map(x=>[Number(x.t),x.c])
-  );
-}
-
-function historicalColorAtClose(closeMark,colorMap){
-  return colorMap.get(Number(closeMark)-INTERVAL)||null;
-}
-
-function historicalDirectionFromThree(colors){
-  if(!Array.isArray(colors)||colors.length!==3)return null;
-  const [a,b,d]=colors;
-  if(!["G","R"].includes(a)||!["G","R"].includes(b)||!["G","R"].includes(d))return null;
-  if(a===b&&b===d)return {direction:a,patternType:"SAME"};
-  if(a===d&&a!==b)return {direction:b,patternType:"ALTERNATE"};
-  return null;
-}
-
-function historicalPatternForTarget(targetT,colorMap){
-  const marks=[targetT-3*SIGNAL_STEP,targetT-2*SIGNAL_STEP,targetT-SIGNAL_STEP];
-  const colors=marks.map(m=>historicalColorAtClose(m,colorMap));
-  const decision=historicalDirectionFromThree(colors);
-  const actual=historicalColorAtClose(targetT,colorMap);
-  return {
-    targetT,
-    marketStart:targetT-INTERVAL,
-    lane:laneForTarget(targetT),
-    marks,
-    colors,
-    direction:decision?.direction||null,
-    patternType:decision?.patternType||null,
-    actual
-  };
-}
-
-function overlapSeconds(aStart,aEnd,bStart,bEnd){
-  return Math.max(0,Math.min(aEnd,bEnd)-Math.max(aStart,bStart));
-}
-
-function backtestStrategy24h(){
-  const now=Math.floor(Date.now()/1000);
-  const lastClosedMark=Math.floor(now/INTERVAL)*INTERVAL;
-  const currentHour=Math.floor(now/3600)*3600;
-  const first=currentHour-23*3600;
-  const last=currentHour+55*60;
-  const warmupStart=first-2*3600;
-  const colorMap=historicalColorMap();
-  const money=historicalMoneySettings();
-  const laneSteps={EVEN:1,ODD:1};
-  const slots=[];
-  const signalMap=new Map();
-  const pauseIntervals=[];
-  let pauseUntil=0;
-  let consecutiveLosses=0;
-
-  // Warm up two hours so Lệnh 2 x2 / nghỉ 30 phút can carry naturally into the 24h window.
-  for(let t=warmupStart;t<=lastClosedMark;t+=INTERVAL){
-    const signal=historicalPatternForTarget(t,colorMap);
-    const inWindow=t>=first;
-    const marketStart=t-INTERVAL;
-
-    // Không chuẩn bị lệnh trong thời gian nghỉ.
-    // Dùng thời điểm báo T-7 để quyết định lệnh nào bị bỏ qua.
-    // Ví dụ pause đến 16:40: target 16:45 có giờ báo 16:38 nên bỏ;
-    // target 16:50 có giờ báo 16:43 nên được xét lại từ nến live sau khi nghỉ.
-    const alertAt=t-PREVIEW_ALERT_LEAD;
-    if(pauseUntil>0&&alertAt<pauseUntil){
-      if(inWindow){
-        const item={...signal,status:"PAUSE",pauseUntil,step:null,amount:0,delta:0};
-        slots.push(item);signalMap.set(t,item);
-      }
-      continue;
-    }
-
-    if(!signal.actual){
-      if(inWindow){
-        const item={...signal,status:"NODATA",step:null,amount:0,delta:0};
-        slots.push(item);signalMap.set(t,item);
-      }
-      continue;
-    }
-
-    if(!signal.direction){
-      if(inWindow){
-        const item={...signal,status:"SKIP",step:null,amount:0,delta:0};
-        slots.push(item);signalMap.set(t,item);
-      }
-      continue;
-    }
-
-    const lane=signal.lane;
-    const step=laneSteps[lane]===2?2:1;
-    const amount=step===2?money.bet2:money.bet1;
-    const win=signal.direction===signal.actual;
-    const delta=win?amount*money.payout:-amount;
-
-    laneSteps[lane]=step===1&&win?2:1;
-    consecutiveLosses=win?0:consecutiveLosses+1;
-
-    const item={
-      ...signal,
-      status:win?"WIN":"LOSS",
-      win,step,amount,delta,
-      pauseTriggered:false
-    };
-
-    if(consecutiveLosses>=2){
-      const pauseStart=t;
-      const pauseEnd=t+1800;
-      pauseIntervals.push({start:pauseStart,end:pauseEnd});
-      pauseUntil=pauseEnd;
-      consecutiveLosses=0;
-      laneSteps.EVEN=1;
-      laneSteps.ODD=1;
-      item.pauseTriggered=true;
-      item.pauseUntil=pauseEnd;
-    }
-
-    if(inWindow){
-      slots.push(item);
-      signalMap.set(t,item);
-    }
-  }
-
-  // Add future cells in the current displayed hour.
-  for(let t=Math.max(first,lastClosedMark+INTERVAL);t<=last;t+=INTERVAL){
-    if(!signalMap.has(t)){
-      const item={
-        targetT:t,marketStart:t-INTERVAL,lane:laneForTarget(t),
-        marks:[t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP],
-        colors:[],direction:null,actual:null,status:"FUTURE",step:null,amount:0,delta:0
-      };
-      slots.push(item);signalMap.set(t,item);
-    }
-  }
-
-  // Ensure all 24 x 12 cells exist even if history has gaps.
-  for(let hour=0;hour<24;hour++){
-    const hourStart=first+hour*3600;
-    for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
-      const t=hourStart+minute*60;
-      if(signalMap.has(t))continue;
-      const status=t>lastClosedMark?"FUTURE":"NODATA";
-      const item={
-        targetT:t,marketStart:t-INTERVAL,lane:laneForTarget(t),
-        marks:[t-3*SIGNAL_STEP,t-2*SIGNAL_STEP,t-SIGNAL_STEP],
-        colors:[],direction:null,actual:null,status,step:null,amount:0,delta:0
-      };
-      slots.push(item);signalMap.set(t,item);
-    }
-  }
-
-  slots.sort((a,b)=>a.targetT-b.targetT);
-
-  const settled=slots.filter(x=>x.status==="WIN"||x.status==="LOSS");
-  const wins=settled.filter(x=>x.status==="WIN").length;
-  const losses=settled.filter(x=>x.status==="LOSS").length;
-  const skips=slots.filter(x=>x.status==="SKIP").length;
-  const grossWin=settled.reduce((s,x)=>s+Math.max(0,Number(x.delta||0)),0);
-  const grossLoss=settled.reduce((s,x)=>s+Math.abs(Math.min(0,Number(x.delta||0))),0);
-  const net=settled.reduce((s,x)=>s+Number(x.delta||0),0);
-  const pauseSeconds=pauseIntervals.reduce((s,p)=>s+overlapSeconds(p.start,p.end,first,Math.min(now,last+INTERVAL)),0);
-
-  return {
-    first,last,lastClosedMark,slots,signalMap,pauseIntervals,
-    wins,losses,signals:settled.length,skips,
-    grossWin,grossLoss,net,
-    pauseCount:pauseIntervals.filter(p=>p.end>first&&p.start<Math.min(now,last+INTERVAL)).length,
-    pauseMinutes:Math.round(pauseSeconds/60),
-    rate:settled.length?wins/settled.length*100:null
-  };
-}
-
-function nextTimeSignalInfo(){
-  const now=Date.now()/1000;
-  const targetStart=upcomingTargetStart(now);
-  if(!targetStart)return null;
-  const snap=patternSnapshot&&Number(patternSnapshot.targetStart)===targetStart?patternSnapshot:null;
-  const pendingOrders=(Array.isArray(cloudTradeState?.pendingOrders)?cloudTradeState.pendingOrders:[])
-    .slice().sort((a,b)=>Number(a.targetStart)-Number(b.targetStart));
-  const currentPending=pendingOrders.find(p=>Number(p.targetStart)<targetStart)||null;
-  const targetPending=pendingOrders.find(p=>Number(p.targetStart)===targetStart)||null;
-  return{
-    targetStart,
-    lane:targetPending?.lane||snap?.lane||laneForTarget(targetStart),
-    laneText:targetPending?.laneText||snap?.laneText||laneText(laneForTarget(targetStart)),
-    direction:targetPending?.direction||snap?.direction||null,
-    colors:targetPending?.colors||snap?.colors||[],
-    marks:targetPending?.marks||snap?.marks||[],
-    decisionColors:targetPending?.decisionColors||snap?.decisionColors||[],
-    patternType:targetPending?.patternType||snap?.patternType||null,
-    pending:targetPending,
-    currentPending,
-    paused:Number(cloudTradeState?.pauseUntil||0)>now,
-    pauseUntil:Number(cloudTradeState?.pauseUntil||0)
-  };
-}
-
-function compute(){
-  const bet1=cloudMoneySettings?.bet1??n("bet1",1);
-  const bet2=cloudMoneySettings?.bet2??n("bet2",2);
-  const payout=(cloudMoneySettings?.payoutPct??n("payout",80))/100;
-  const start=cloudMoneySettings?.startBalance??n("startBalance",0);
-  if(cloudTradeState){
-    const wins=Number(cloudTradeState.wins||0);
-    const losses=Number(cloudTradeState.losses||0);
-    const pnl=Number(cloudTradeState.pnl||0);
-    const laneSteps={
-      EVEN:Number(cloudTradeState?.laneSteps?.EVEN)===2?2:1,
-      ODD:Number(cloudTradeState?.laneSteps?.ODD)===2?2:1
-    };
-    const completed=Array.isArray(cloudTradeState.completed)?cloudTradeState.completed:[];
-    const pending=Array.isArray(cloudTradeState.pendingOrders)?cloudTradeState.pendingOrders:[];
-    const orders=[
-      ...completed.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,win:typeof o.win==="boolean"?o.win:null,cloud:true})),
-      ...pending.map(o=>({...o,placedAt:Number(o.targetStart||0)*1000,actual:null,win:null,cloud:true}))
-    ].sort((a,b)=>Number(a.targetStart||0)-Number(b.targetStart||0));
-    return{bet1,bet2,payout,start,laneSteps,pnl,wins,losses,settled:orders.filter(o=>o.win!==null),orders,hasOrders:(wins+losses+pending.length)>0,cloud:true};
-  }
-  return{bet1,bet2,payout,start,laneSteps:{EVEN:1,ODD:1},pnl:0,wins:0,losses:0,settled:[],orders:[],hasOrders:false,cloud:false};
-}
-function fmtFrame(t){const a=new Date(t*1000),b=new Date((t+INTERVAL)*1000);return a.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})+"–"+b.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}
-function targetCandleFrame(mark){return fmtFrame(Number(mark)-INTERVAL)}
-function priceText(value){return value?Number(value).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--"}
-function alertTick(){
-  const now=Date.now()/1000;
-  const start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
-  const end=liveMarket.end||start+INTERVAL;
-  firePrepareAlert();
-  if(now>=end&&start>0)finalizeLiveRound(start);
-}
-function renderLive(){
-  const now=Date.now()/1000;
-  let start=liveMarket.start||Math.floor(now/INTERVAL)*INTERVAL;
-  let end=liveMarket.end||start+INTERVAL;
-  if(now>=end){
-    const closedStart=start;
-    finalizeLiveRound(closedStart);
-    const currentStart=Math.floor(now/INTERVAL)*INTERVAL;
-    start=currentStart;end=currentStart+INTERVAL;
-    if(liveMarket.start!==currentStart)fetchLiveMarket();
-  }
-  const remain=Math.max(0,Math.ceil(end-now));
-  const mm=String(Math.floor(remain/60)).padStart(2,"0");
-  const ss=String(remain%60).padStart(2,"0");
-  $("countdown").textContent=mm+":"+ss;
-  $("liveFrame").textContent=fmtFrame(start);
-  $("liveStartPrice").textContent=priceText(liveMarket.startPrice);
-  $("liveCurrentPrice").textContent=priceText(liveMarket.currentPrice);
-  const c=liveMarket.color;
-  $("liveOrb").textContent=c==="G"?"🟢":c==="R"?"🔴":"⚪";
-  $("liveColorText").textContent=c==="G"?"XANH":c==="R"?"ĐỎ":"CHƯA CÓ GIÁ LIVE";
-  $("liveColorText").className="big "+(c==="G"?"green":c==="R"?"red":"");
-  $("liveSource").textContent=(liveMarket.source||"Đang chờ dữ liệu Prediction")+" • kết quả cuối cùng chỉ xác nhận sau khi vòng đóng.";
-}
-function buildCalendar24h(){
-  return backtestStrategy24h();
-}
-
-function shortClock(ts){
-  return new Date(ts*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-}
-
-function renderCalendar24h(){
-  const root=$("calendar24");
-  if(!root)return;
-  const cal=buildCalendar24h();
-  root.innerHTML="";
-
-  const headHour=document.createElement("div");
-  headHour.className="calHead";
-  headHour.textContent="Giờ";
-  root.appendChild(headHour);
-
-  for(const minute of [0,5,10,15,20,25,30,35,40,45,50,55]){
-    const d=document.createElement("div");
-    d.className="calHead";
-    d.textContent=String(minute).padStart(2,"0");
-    root.appendChild(d);
-  }
-
-  const headSum=document.createElement("div");
-  headSum.className="calHead";
-  headSum.textContent="Thống kê 1 giờ";
-  root.appendChild(headSum);
-
-  for(let row=23;row>=0;row--){
-    const hourStart=cal.first+row*3600;
-    const hourEnd=hourStart+3600;
-    const rowSlots=[0,5,10,15,20,25,30,35,40,45,50,55]
-      .map(minute=>cal.signalMap.get(hourStart+minute*60))
-      .filter(Boolean);
-
-    const label=document.createElement("div");
-    label.className="calTime";
-    const rowHour=localTimeParts(hourStart).hour;
-    label.textContent=String(rowHour).padStart(2,"0")+":00";
-    root.appendChild(label);
-
-    let rowW=0,rowL=0,rowSkip=0,rowGrossWin=0,rowGrossLoss=0,rowNet=0;
-    rowSlots.forEach(slot=>{
-      const d=document.createElement("div");
-      d.className="calCell signal";
-
-      if(slot.status==="WIN"){
-        rowW++;
-        rowGrossWin+=Math.max(0,Number(slot.delta||0));
-        rowNet+=Number(slot.delta||0);
-        d.classList.add("win");d.textContent="V";
-      }else if(slot.status==="LOSS"){
-        rowL++;
-        rowGrossLoss+=Math.abs(Math.min(0,Number(slot.delta||0)));
-        rowNet+=Number(slot.delta||0);
-        d.classList.add("loss");d.textContent="X";
-      }else if(slot.status==="PAUSE"){
-        d.classList.add("pause");d.textContent="⏸";
-      }else if(slot.status==="SKIP"){
-        rowSkip++;d.classList.add("skip");d.textContent="–";
-      }else if(slot.status==="FUTURE"){
-        d.classList.add("future");d.textContent="…";
-      }else{
-        d.classList.add("wait");d.textContent="?";
-      }
-
-      let detail=shortClock(slot.targetT)+" • "+laneText(slot.lane)+" • ";
-      if(slot.status==="WIN"||slot.status==="LOSS"){
-        detail+="3 màu "+(slot.colors||[]).map(colorIcon).join(" ")+" • "+
-          (slot.direction==="G"?"🟢 MUA XANH":"🔴 MUA ĐỎ")+" • "+
-          "kết quả "+(slot.actual==="G"?"XANH":"ĐỎ")+" • "+
-          (slot.status==="WIN"?"THẮNG":"THUA")+" • "+
-          "Lệnh "+Number(slot.step||1)+(Number(slot.step||1)===2?" x2":"")+
-          " • "+usd24(slot.amount)+" • "+usd24(slot.delta,true)+
-          (slot.pauseTriggered?" • THUA LIÊN TIẾP LẦN 2 → NGHỈ 30 PHÚT":"");
-      }else if(slot.status==="PAUSE"){
-        detail+="ĐANG NGHỈ 30 PHÚT • không vào lệnh";
-      }else if(slot.status==="SKIP"){
-        detail+="mẫu không phải AAA/ABA • bỏ qua";
-      }else if(slot.status==="FUTURE"){
-        detail+="chưa tới";
-      }else{
-        detail+="chưa đủ dữ liệu lịch sử";
-      }
-      d.title=detail;
-      d.setAttribute("aria-label",detail);
-      root.appendChild(d);
-    });
-
-    const rowPauseSeconds=cal.pauseIntervals.reduce(
-      (s,p)=>s+overlapSeconds(p.start,p.end,hourStart,Math.min(hourEnd,Date.now()/1000)),0
-    );
-    const rowPauseMinutes=Math.round(rowPauseSeconds/60);
-
-    const sum=document.createElement("div");
-    sum.className="calHourSum";
-    sum.textContent=
-      "L "+(rowW+rowL)+" • V "+rowW+" • X "+rowL+
-      " • Nghỉ "+rowPauseMinutes+"p"+
-      " • T+ "+usd24(rowGrossWin)+
-      " • T- $"+rowGrossLoss.toFixed(2)+
-      " • Net "+usd24(rowNet,true)+
-      (rowSkip?" • Bỏ "+rowSkip:"");
-    root.appendChild(sum);
-  }
-
-  $("calendar24Signals").textContent=String(cal.signals);
-  $("calendar24Wins").textContent=String(cal.wins);
-  $("calendar24Losses").textContent=String(cal.losses);
-  $("calendar24NoOrders").textContent=String(cal.skips);
-  $("calendar24Pauses").textContent=String(cal.pauseCount);
-  $("calendar24PauseMinutes").textContent=String(cal.pauseMinutes);
-  $("calendar24GrossWin").textContent=usd24(cal.grossWin);
-  $("calendar24GrossLoss").textContent="-$"+Number(cal.grossLoss||0).toFixed(2);
-  $("calendar24Net").textContent=usd24(cal.net,true);
-  $("calendar24Net").className=cal.net>0?"green":cal.net<0?"red":"";
-  $("calendar24Rate").textContent=cal.rate===null?"--":cal.rate.toFixed(1)+"%";
-  $("calendar24Rate").className=cal.rate===null?"":cal.rate>=60?"green":"red";
-  $("calendar24Updated").textContent="Backtest đến "+shortClock(cal.lastClosedMark);
-}
-
 function render(){
-  const calc=compute();
-  const info=nextTimeSignalInfo();
-  const now=Date.now()/1000;
-  const pauseUntil=Number(cloudTradeState?.pauseUntil||0);
-  const paused=patternSnapshot&&Number(patternSnapshot.targetStart)===Number(info?.targetStart)
-    ?!!patternSnapshot.paused
-    :pauseUntil>now;
+  const c=state?.config||health?.config||{};
+  $("notional").value=(c.notional??"--")+" USDT";
+  $("leverage").value=(c.leverage??"--")+"x";
+  $("ka").value=c.ka??"--";$("kb").value=c.kb??"--";
+  $("be").value=c.be?"BẬT":"TẮT";$("filter").value=c.filter?"BẬT":"TẮT";
+  const configured=!!state?.binanceConfigured||!!health?.binanceConfigured;
+  const live=!!c.live;
+  $("liveFlag").textContent=live?"LIVE":"PAPER/OFF";
+  $("liveFlag").className=live?"green":"red";
+  $("modeText").textContent=(configured?"Đã có Binance API • ":"Chưa có Binance API • ")+(live?"cho phép gửi lệnh thật":"LIVE_TRADING đang tắt");
+  $("warning").textContent=!configured?"Cần BINANCE_API_KEY + BINANCE_API_SECRET trong Cloudflare Secret.":live?"Bot chỉ vào lệnh khi tài khoản Futures đang Hedge Mode.":"Đang không gửi lệnh thật.";
 
-  if(info){
-    $("laneText").textContent=info.laneText||laneText(info.lane);
-    $("targetFrame").textContent=shortClock(info.targetStart)+" • "+targetCandleFrame(info.targetStart);
-    $("pattern3").textContent=(info.decisionColors||[]).map(colorIcon).join(" ")||"--";
-
-    const four=(info.colors||[]).map((color,i)=>{
-      const mark=Number((info.marks||[])[i]);
-      return (Number.isFinite(mark)?shortClock(mark)+" ":"")+colorIcon(color);
-    }).join(" • ");
-    $("fourColorsInfo").textContent=four?"4 màu trước: "+four:"Chưa đủ 4 màu lịch sử.";
-
-    const lr=cloudTradeState?.laneResults||patternSnapshot?.laneResults||{};
-    $("laneResultInfo").textContent="Kết quả gần nhất • MỐC CHẴN: "+laneResultLabel(lr.EVEN)+" • MỐC LẺ: "+laneResultLabel(lr.ODD);
-
-    const inWindow=isEntryAlertWindow(info.targetStart);
-    const direction=info.direction;
-    $("buy").textContent=paused
-      ?"DỪNG 30 PHÚT"
-      :!direction
-        ?"BỎ QUA"
-        :!inWindow&&!info.pending
-          ?"CHỜ "+shortClock(alertStartForTarget(info.targetStart))
-          :direction==="G"?"MUA XANH":"MUA ĐỎ";
-    $("buy").className=!paused&&direction==="G"&&(inWindow||info.pending)?"green":!paused&&direction==="R"&&(inWindow||info.pending)?"red":"";
-
-    const laneStep=Number(info.pending?.step||calc.laneSteps?.[info.lane]||1)===2?2:1;
-    const amount=Number(info.pending?.amount??(laneStep===2?calc.bet2:calc.bet1));
-    $("bet").textContent=(laneStep===2?"Lệnh 2 x2":"Lệnh 1")+" của "+info.laneText+" • "+amount.toFixed(2)+" USDT";
-
-    const liveClose=Math.floor(now/INTERVAL)*INTERVAL+INTERVAL;
-    if(paused){
-      $("freshness").textContent="2 lệnh thực tế liên tiếp đều THUA • nghỉ đến "+shortClock(pauseUntil)+" • hết nghỉ sẽ lấy nến live lúc đó để chọn dãy CHẴN/LẺ của lệnh kế tiếp.";
-    }else if(!direction){
-      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • dãy "+info.laneText+" không có mẫu AAA hoặc ABA cho nến "+shortClock(info.targetStart)+" • bỏ qua.";
-    }else if(inWindow||info.pending){
-      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" → dùng "+info.laneText+" để đánh nến "+shortClock(info.targetStart)+" • "+(info.patternType==="SAME"?"AAA → theo cùng màu":"ABA → lấy màu giữa")+" • "+(laneStep===2?"LỆNH 2 x2":"LỆNH 1")+" • MUA "+(direction==="G"?"XANH":"ĐỎ")+".";
-    }else{
-      $("freshness").textContent="Nến live đóng "+shortClock(liveClose)+" • mục tiêu "+shortClock(info.targetStart)+" dùng "+info.laneText+" • Telegram báo khoảng "+shortClock(alertStartForTarget(info.targetStart))+".";
-    }
+  const a=state?.active;
+  if(a){
+    $("cycle").textContent=cycleFrame(a.cycleStart);
+    $("cycleState").textContent="ĐANG MỞ";
+    $("cycleState").className="green";
+    $("bodyStats").textContent=(a.b20*100).toFixed(3)+"% / "+(a.b100*100).toFixed(3)+"%";
+    $("tpSl").textContent=(a.a*100).toFixed(3)+"% / "+(a.b*100).toFixed(3)+"%";
+    $("legInfo").textContent="LONG "+String(a.legs?.L?.why||"OPEN").toUpperCase()+" • SHORT "+String(a.legs?.S?.why||"OPEN").toUpperCase()+(a.beMoved?" • BE đã dời":"");
   }else{
-    $("laneText").textContent="--";
-    $("pattern3").textContent="--";
-    $("targetFrame").textContent="--:--–--:--";
-    $("buy").textContent="CHỜ";
-    $("buy").className="";
-    $("fourColorsInfo").textContent="Đang tải 4 màu trước...";
-    $("laneResultInfo").textContent="";
-    $("bet").textContent="--";
-    $("freshness").textContent="Đang xác định phiên kế tiếp.";
+    $("cycle").textContent="--";$("cycleState").textContent="CHỜ";$("cycleState").className="";
+    $("bodyStats").textContent="--";$("tpSl").textContent="--";
+    $("legInfo").textContent=state?.lastError?"Lỗi gần nhất: "+state.lastError:"Chưa có chu kỳ mở.";
   }
-  renderCalendar24h();
+  $("price").textContent=ticker?.price?Number(ticker.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}):"--";
+  const now=Math.floor(Date.now()/1000),cs=Math.floor(now/INTERVAL)*INTERVAL,remain=cs+INTERVAL-now;
+  $("liveFrame").textContent=cycleFrame(cs);
+  $("countdown").textContent=String(Math.floor(remain/60)).padStart(2,"0")+":"+String(remain%60).padStart(2,"0");
+  render24h();
 }
-document.addEventListener("visibilitychange",async()=>{
-  if(document.visibilityState==="visible"){
-    if(alertsEnabled&&"wakeLock" in navigator){try{wakeLock=await navigator.wakeLock.request("screen")}catch(_){}}
-    fetchCloudHistory(false).finally(()=>render());refreshNow();fetchLiveMarket();fetchTradeState();fetchPatternSignal()
+function render24h(){
+  const s=state?.summary24h||{rows:[],cycles:0,wins:0,losses:0,pnl:0};
+  $("cycles24").textContent=s.cycles||0;$("wins24").textContent=s.wins||0;$("loss24").textContent=s.losses||0;
+  $("pnl24").textContent=usd(s.pnl||0);$("pnl24").className=Number(s.pnl)>0?"green":Number(s.pnl)<0?"red":"";
+  $("updated").textContent=new Date().toLocaleTimeString();
+  const root=$("calendar");root.innerHTML="";
+  ["Giờ","00","15","30","45","Tổng 1 giờ"].forEach(x=>{const d=document.createElement("div");d.className="calHead";d.textContent=x;root.appendChild(d)});
+  const map=new Map((s.rows||[]).map(x=>[Number(x.cycleStart),x]));
+  const now=Math.floor(Date.now()/1000),h0=Math.floor(now/3600)*3600-23*3600;
+  for(let r=23;r>=0;r--){
+    const hs=h0+r*3600;const lab=document.createElement("div");lab.className="calTime";lab.textContent=clock(hs);root.appendChild(lab);
+    let cnt=0,pnl=0;
+    for(const m of [0,15,30,45]){
+      const row=map.get(hs+m*60);const d=document.createElement("div");d.className="calCell";
+      if(row){cnt++;pnl+=Number(row.pnl||0);d.textContent=Number(row.pnl)>0?"V":Number(row.pnl)<0?"X":"0";d.classList.add(Number(row.pnl)>0?"win":Number(row.pnl)<0?"loss":"skip");d.title="PnL "+usd(row.pnl||0)+" • LONG "+String(row.legs?.L?.why||"")+" • SHORT "+String(row.legs?.S?.why||"")}
+      else d.textContent="…";
+      root.appendChild(d);
+    }
+    const sum=document.createElement("div");sum.className="sum";sum.textContent="L "+cnt+" • Net "+usd(pnl);root.appendChild(sum);
   }
-});
-loadPrefs();updateAlertPermissionUI();render();renderLive();setTimeout(autoStart,100)
+}
+function progress(done,total,text){$("bar").style.width=(total?Math.round(done/total*100):0)+"%";$("loadText").textContent=text||""}
+async function fetch90d(){
+  const end=Date.now(),start=end-90*86400*1000,rows=[];let cursor=start,page=0;
+  const expected=Math.ceil(90*1440/1500);
+  while(cursor<end){
+    const j=await jget("/klines?interval=1m&limit=1500&startTime="+cursor+"&endTime="+end);
+    if(!Array.isArray(j)||!j.length)break;
+    rows.push(...j);cursor=Number(j[j.length-1][0])+60000;page++;
+    progress(page,expected,"Đang tải nến 1m: "+Math.min(100,Math.round(page/expected*100))+"% • "+rows.length+" nến");
+    await new Promise(r=>setTimeout(r,20));
+  }
+  const seen=new Map();for(const k of rows)seen.set(Number(k[0]),k);
+  return [...seen.values()].sort((a,b)=>Number(a[0])-Number(b[0]));
+}
+function prepareCycles(raw){
+  const mins=raw.map(k=>({t:Number(k[0]),o:Number(k[1]),h:Number(k[2]),l:Number(k[3]),c:Number(k[4])}));
+  const groups=new Map();
+  for(const x of mins){const b=Math.floor(x.t/900000)*900000;if(!groups.has(b))groups.set(b,[]);groups.get(b).push(x)}
+  const keys=[...groups.keys()].sort((a,b)=>a-b);
+  const bodies=new Map();
+  for(const t of keys){const x=groups.get(t).sort((a,b)=>a.t-b.t);if(x.length>=15)bodies.set(t,Math.abs(x[x.length-1].c-x[0].o)/x[0].o)}
+  const cycles=[];
+  for(let i=0;i<keys.length;i++){
+    const t=keys[i],x=groups.get(t).sort((a,b)=>a.t-b.t);
+    if(x.length<15)continue;
+    const prev=keys.filter(k=>k<t&&bodies.has(k));
+    if(prev.length<100)continue;
+    const last20=prev.slice(-20).map(k=>bodies.get(k)),last100=prev.slice(-100).map(k=>bodies.get(k));
+    const b20=last20.reduce((a,b)=>a+b,0)/20,b100=last100.reduce((a,b)=>a+b,0)/100;
+    cycles.push({t,b20,b100,o:x.slice(0,15).map(z=>z.o),h:x.slice(0,15).map(z=>z.h),l:x.slice(0,15).map(z=>z.l),cl:x.slice(0,15).map(z=>z.c)});
+  }
+  return cycles;
+}
+function simulate(c,ka,kb,be,fee,slip,filt){
+  const a=ka*c.b20,b=kb*c.b20;
+  if(filt&&!(c.b20/c.b100>=.8&&c.b20/c.b100<=2&&a-b>4*fee))return null;
+  const eL=c.o[0]*(1+slip),eS=c.o[0]*(1-slip);
+  const legs={L:{e:eL,tp:eL*(1+a),sl:eL*(1-b),done:false,why:"",kind:"sl"},S:{e:eS,tp:eS*(1-a),sl:eS*(1+b),done:false,why:"",kind:"sl"}};
+  let net=0;
+  function close(s,px,why){const g=legs[s];g.done=true;g.why=why;if(s==="L")net+=(px*(1-slip)-g.e)/g.e-2*fee;else net+=(g.e-px*(1+slip))/g.e-2*fee}
+  for(let k=0;k<15;k++){
+    const stopped=[];
+    for(const s of ["L","S"]){const g=legs[s];if(g.done)continue;
+      if(s==="L"){if(c.l[k]<=g.sl){close(s,g.sl,g.kind);stopped.push([s,g.kind])}else if(c.h[k]>=g.tp)close(s,g.tp,"tp")}
+      else{if(c.h[k]>=g.sl){close(s,g.sl,g.kind);stopped.push([s,g.kind])}else if(c.l[k]<=g.tp)close(s,g.tp,"tp")}
+    }
+    if(be&&stopped.some(x=>x[1]==="sl"))for(const s of ["L","S"]){const g=legs[s];if(!g.done&&g.kind==="sl"){g.sl=s==="L"?g.e*(1+2*fee):g.e*(1-2*fee);g.kind="be"}}
+    if(legs.L.done&&legs.S.done)break;
+  }
+  for(const s of ["L","S"]){const g=legs[s];if(!g.done)close(s,c.cl[14],"time")}
+  return {net,sl:[legs.L,legs.S].some(g=>g.why==="sl"),tp:[legs.L,legs.S].some(g=>g.why==="tp")};
+}
+function runSet(cycles,ka,kb,be,fee,slip,filt){
+  const out=[];for(const c of cycles){const x=simulate(c,ka,kb,be,fee,slip,filt);if(x)out.push(x)}
+  if(!out.length)return null;const arr=out.map(x=>x.net);let cum=0,peak=-Infinity,dd=0;for(const x of arr){cum+=x;peak=Math.max(peak,cum);dd=Math.max(dd,peak-cum)}
+  const sl=out.filter(x=>x.sl).length,both=out.filter(x=>x.sl&&x.tp).length;
+  return {n:arr.length,mean_bp:arr.reduce((a,b)=>a+b,0)/arr.length*1e4,total:arr.reduce((a,b)=>a+b,0)*100,win:arr.filter(x=>x>0).length/arr.length*100,p:sl?100*both/sl:0,dd:dd*100};
+}
+async function runBacktest90(){
+  const btn=$("historyBtn");btn.disabled=true;btn.textContent="ĐANG BACKTEST...";
+  try{
+    const raw=await fetch90d();progress(1,1,"Đang dựng chu kỳ 15m...");
+    const cycles=prepareCycles(raw),cut=Math.floor(cycles.length*.7),train=cycles.slice(0,cut),test=cycles.slice(cut),rows=[];
+    for(const ka of [1,1.5,2,3])for(const kb of [.3,.5,.75,1])for(const be of [true,false]){
+      if(kb>=ka)continue;const tr=runSet(train,ka,kb,be,.0005,.0001,true),te=runSet(test,ka,kb,be,.0005,.0001,true),gr=runSet(train,ka,kb,be,0,0,true);
+      if(tr&&te&&gr)rows.push({ka,kb,be,tr,te,gr});
+    }
+    rows.sort((a,b)=>b.tr.mean_bp-a.tr.mean_bp);
+    const top=rows.slice(0,10);$("backtestRows").innerHTML=top.map(x=>"<tr><td>"+x.ka+"/"+x.kb+"/"+x.be+"</td><td>"+x.tr.mean_bp.toFixed(2)+"</td><td>"+x.gr.mean_bp.toFixed(2)+"</td><td>"+x.te.mean_bp.toFixed(2)+"</td><td>"+x.te.total.toFixed(2)+"</td><td>"+x.te.dd.toFixed(2)+"</td></tr>").join("");
+    $("backtestSummary").textContent=cycles.length+" chu kỳ • train "+train.length+" / test "+test.length+" • top theo TRAIN: ka "+top[0]?.ka+" / kb "+top[0]?.kb+" / BE "+top[0]?.be+" • TEST "+(top[0]?.te.mean_bp??0).toFixed(2)+" bp";
+    progress(1,1,"Backtest xong.");setStatus("Backtest 90 ngày hoàn tất.",true);
+  }catch(e){setStatus("Backtest lỗi: "+String(e.message||e),false);progress(0,1,"")}
+  finally{btn.disabled=false;btn.textContent="BACKTEST 90 NGÀY"}
+}
+async function resetState(){if(!confirm("Reset thống kê bot? Chỉ reset khi không có vị thế đang mở."))return;try{await jget("/reset",{method:"POST"});await refreshAll()}catch(e){setStatus(String(e.message||e),false)}}
+setInterval(()=>{const now=Math.floor(Date.now()/1000),cs=Math.floor(now/INTERVAL)*INTERVAL,remain=cs+INTERVAL-now;$("countdown").textContent=String(Math.floor(remain/60)).padStart(2,"0")+":"+String(remain%60).padStart(2,"0")},1000);
+setInterval(refreshAll,20000);refreshAll();
 </script>
 </body></html>
