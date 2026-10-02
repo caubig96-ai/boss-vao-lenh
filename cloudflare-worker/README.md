@@ -1,81 +1,74 @@
-# Boss Mốc Chẵn/Lẻ Cloud — Cloudflare Worker
+# Boss Binance Hedge — Cloudflare Worker
 
-Worker theo dõi BTC Up/Down 5 phút và gửi Telegram kể cả khi iPhone không mở web.
+Bot tự động cho BTCUSDT USDⓈ-M Futures theo chu kỳ 15 phút.
 
-## Chiến lược hiện tại
+## Chiến lược
 
-- CHẴN/LẺ được xác định theo **phút**, không theo giờ:
-  - MỐC CHẴN: :00, :10, :20, :30, :40, :50.
-  - MỐC LẺ: :05, :15, :25, :35, :45, :55.
-- Mốc tên lệnh là **mốc đóng nến**.
-  - “lệnh :25” = nến :20–:25.
-  - “lệnh :30” = nến :25–:30.
-- Tool báo màu trước khoảng **7 phút**:
-  - lúc 16:18, nến live đang chạy sẽ đóng ở 16:20;
-  - lệnh kế tiếp là nến đóng 16:25, thuộc MỐC LẺ;
-  - tool lấy 3 nến LẺ đã đóng gần nhất: 15:55, 16:05, 16:15;
-  - Telegram báo màu mua cho nến 16:25 ngay khoảng 16:18.
-- Khi sang phía ngược lại:
-  - khoảng 16:23, tool lấy 16:00, 16:10, 16:20 của MỐC CHẴN;
-  - báo màu mua cho nến đóng 16:30.
-- Quy tắc màu:
-  - AAA → mua A.
-  - ABA → mua B để tiếp tục A-B-A-B.
-  - mẫu khác → bỏ qua.
+Mỗi chu kỳ 15m:
 
-## Quản lý tiền
+- mở đồng thời LONG + SHORT;
+- `b20` = trung bình thân 20 nến 15m đã đóng trước đó;
+- `b100` = trung bình thân 100 nến 15m đã đóng trước đó;
+- TP mỗi chiều = `ka × b20`;
+- SL mỗi chiều = `kb × b20`;
+- bộ lọc: `0.8 <= b20/b100 <= 2` và `TP-SL > 4×fee`;
+- nếu một chiều chạm SL gốc và `BE=true`, SL chiều còn lại dời về hòa vốn có tính 2×fee;
+- hết 15 phút, bot hủy TP/SL còn lại và đóng vị thế còn mở bằng MARKET.
 
-Hai dãy CHẴN và LẺ có bước vốn **độc lập**:
+Worker kiểm tra tài khoản đang ở Hedge Mode trước khi gửi lệnh. Worker **không tự đổi Position Mode**.
 
-- MỐC CHẴN có Lệnh 1 / Lệnh 2 x2 riêng.
-- MỐC LẺ có Lệnh 1 / Lệnh 2 x2 riêng.
-- Lệnh 1 của một dãy thắng → lần tiếp theo của chính dãy đó dùng Lệnh 2 x2.
-- Sau Lệnh 2 của dãy đó, dù thắng hay thua → quay về Lệnh 1.
-- Lệnh 1 thua → lần kế tiếp cùng dãy vẫn là Lệnh 1.
-- Vì hai dãy xen kẽ 5 phút, tại 16:18 tool có thể chuẩn bị lệnh LẺ 16:25 dù lệnh CHẴN 16:20 vẫn đang chạy; bước vốn LẺ dựa trên kết quả LẺ trước đó.
-- Khi có **2 lệnh thực tế liên tiếp đều thua**, tool dừng đúng 30 phút.
-- Trong 30 phút nghỉ, tool không chuẩn bị trước lệnh mới.
-- Ví dụ lệnh thua thứ 2 kết thúc lúc 16:10 → nghỉ đến 16:40.
-- Đến 16:40, tool lấy nến live đang chạy 16:40–16:45 làm mốc hiện tại; vì nến live đóng 16:45 là MỐC LẺ, lệnh kế tiếp đóng 16:50 thuộc MỐC CHẴN.
-- Khoảng 16:43 tool lấy 3 MỐC CHẴN gần nhất 16:20, 16:30, 16:40 để chọn màu cho nến 16:50.
-- Không đánh nến 16:45 vì thời điểm cần báo cho nến đó là 16:38, vẫn nằm trong thời gian nghỉ.
-- Hết thời gian nghỉ, cả hai dãy quay về Lệnh 1.
+## Backtest trên web
 
-## Backtest 24 giờ
+Giao diện iPhone giữ bố cục cũ nhưng thay toàn bộ logic chọn màu bằng backtest hedge:
 
-Giao diện iPhone dựng lại toàn bộ chiến lược từ màu nến lịch sử thay vì chỉ đọc danh sách lệnh cũ:
+- tải 90 ngày nến 1m từ Binance Futures;
+- gom thành chu kỳ 15m;
+- train 70% / test 30%;
+- thử `ka = [1,1.5,2,3]`;
+- thử `kb = [0.3,0.5,0.75,1.0]`;
+- thử `BE = [true,false]`;
+- mô phỏng SL trước nếu cùng nến 1m chạm cả SL và TP;
+- tính net bp, tổng %, win rate và drawdown;
+- bảng xếp theo `TRAIN mean_bp`, giống code tham chiếu.
 
-- mỗi mốc đóng 5 phút được phân loại CHẴN/LẺ;
-- lấy đúng 3 nến cùng dãy để áp dụng AAA→A / ABA→B;
-- Lệnh 1 / Lệnh 2 x2 được mô phỏng độc lập cho từng dãy;
-- 2 lệnh thua liên tiếp sẽ tạo khoảng nghỉ 30 phút;
-- bảng 24h hiển thị theo từng giờ: số lệnh, thắng, thua, phút nghỉ, tiền thắng, tiền thua và lãi/lỗ ròng;
-- tổng 24h hiển thị số lệnh, tỷ lệ thắng, số lần nghỉ, tổng phút nghỉ và PnL.
+Backtest không tự thay tham số live. Tham số live chỉ lấy từ Cloudflare Vars để trang web công khai không thể sửa cấu hình giao dịch.
 
-## Telegram
+## Cloudflare Secrets
 
-Tin nhắn lệnh hiển thị:
-- nến live hiện tại sẽ đóng lúc nào;
-- 4 màu trước;
-- 3 mốc thực sự dùng để chọn màu;
-- đang dùng MỐC CHẴN hay MỐC LẺ;
-- màu cần mua;
-- nến mục tiêu và khung 5 phút tương ứng;
-- Lệnh 1 hay Lệnh 2 x2 của đúng dãy;
-- kết quả gần nhất của CHẴN và LẺ.
+Bắt buộc để giao dịch thật:
 
-## Cấu hình
+- `BINANCE_API_KEY`
+- `BINANCE_API_SECRET`
 
-- KV binding: `BOSS_KV`
-- Secret: `PREDICT_API_KEY`
-- Secret: `CLOUD_TELEGRAM_BOT_TOKEN`
-- Secret: `CLOUD_TELEGRAM_CHAT_ID`
-- Cron: mỗi phút
-- Tiền Lệnh 1: `CLOUD_BET1`
-- Tiền Lệnh 2 x2: `CLOUD_BET2`
-- Trả thưởng: `CLOUD_PAYOUT_PERCENT`
-- Vốn bắt đầu: `CLOUD_START_BALANCE`
+Nên tạo API key chỉ có quyền Futures cần thiết và **không bật quyền rút tiền**.
+
+Telegram tùy chọn:
+
+- `CLOUD_TELEGRAM_BOT_TOKEN`
+- `CLOUD_TELEGRAM_CHAT_ID`
+
+## Cloudflare Vars
+
+- `BINANCE_LIVE_TRADING=false` — phải đổi thành `true` mới gửi lệnh thật.
+- `HEDGE_NOTIONAL_USDT=10` — notional mỗi chiều.
+- `HEDGE_LEVERAGE=1`
+- `HEDGE_KA=1.5`
+- `HEDGE_KB=0.5`
+- `HEDGE_BE=true`
+- `HEDGE_FILTER=true`
+- `HEDGE_FEE=0.0005`
+- `HEDGE_SLIP=0.0001`
+
+## API của Worker
+
+- `GET /health`
+- `GET /state`
+- `GET /ticker`
+- `GET /mode`
+- `GET /klines?interval=1m&startTime=...&limit=1500`
+- `POST /reset`
+- `POST /tick`
 
 ## Deploy
 
-Worker dùng Cloudflare Workers Builds kết nối trực tiếp với GitHub.
+Worker dùng Cloudflare Workers Builds kết nối trực tiếp với GitHub, root directory `cloudflare-worker`, production branch `main`.
