@@ -99,7 +99,8 @@ class BinanceHedgeWebTests(unittest.TestCase):
 
     def test_public_web_cannot_write_live_trading_config(self):
         self.assertNotIn("/hedge-config", self.web)
-        self.assertNotIn("BINANCE_API_SECRET", self.web)
+        self.assertNotIn('type="password"', self.web)
+        self.assertNotIn('id="apiSecret"', self.web)
 
 
 if __name__ == "__main__":
