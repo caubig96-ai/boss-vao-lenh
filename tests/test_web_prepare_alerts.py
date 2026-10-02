@@ -68,6 +68,21 @@ class BinanceHedgeWebTests(unittest.TestCase):
         self.assertIn('a.legs.L.why==="sl"', self.worker)
         self.assertIn('a.legs.S.why==="sl"', self.worker)
 
+    def test_bot_never_silently_increases_notional_to_minimum(self):
+        self.assertIn("const qty=stepFloor(c.notional/px,rules.stepSize)", self.worker)
+        self.assertIn("qty<rules.minQty", self.worker)
+        self.assertIn("Bot không tự tăng khối lượng", self.worker)
+        self.assertNotIn("Math.max(rules.minQty,stepFloor", self.worker)
+
+    def test_cycle_pnl_is_attributed_only_to_bot_order_ids(self):
+        self.assertIn("cyclePnl(env,startMs,endMs,orderIds=[])", self.worker)
+        self.assertIn("ids.has(Number(t.orderId))", self.worker)
+        self.assertIn("orderIds:[", self.worker)
+        self.assertIn("a.orderIds.push(Number(o.orderId))", self.worker)
+
+    def test_filled_leg_cancels_its_other_trigger(self):
+        self.assertIn("if(leg.tpOrderId)await cancelOrder(env,leg.tpOrderId)", self.worker)
+        self.assertIn("if(leg.slOrderId)await cancelOrder(env,leg.slOrderId)", self.worker)
     def test_time_exit_after_15_minutes(self):
         self.assertIn("if(nowSec>=a.cycleEnd)", self.worker)
         self.assertIn('finishCycle(env,state,"time")', self.worker)
