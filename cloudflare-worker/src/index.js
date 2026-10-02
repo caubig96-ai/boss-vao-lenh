@@ -115,7 +115,13 @@ async function symbolRules(){
   if(!s)throw new Error("Không tìm thấy "+SYMBOL+" trong exchangeInfo");
   const lot=(s.filters||[]).find(z=>z.filterType==="MARKET_LOT_SIZE")||(s.filters||[]).find(z=>z.filterType==="LOT_SIZE")||{};
   const price=(s.filters||[]).find(z=>z.filterType==="PRICE_FILTER")||{};
-  return {stepSize:Number(lot.stepSize||.001),minQty:Number(lot.minQty||.001),tickSize:Number(price.tickSize||.1)};
+  const notional=(s.filters||[]).find(z=>z.filterType==="MIN_NOTIONAL")||(s.filters||[]).find(z=>z.filterType==="NOTIONAL")||{};
+  return {
+    stepSize:Number(lot.stepSize||.001),
+    minQty:Number(lot.minQty||.001),
+    tickSize:Number(price.tickSize||.1),
+    minNotional:Number(notional.notional||notional.minNotional||0)
+  };
 }
 async function ensureHedgeMode(env){
   const mode=await signed(env,"GET","/fapi/v1/positionSide/dual");
@@ -165,12 +171,14 @@ async function cancelLegOrders(env,leg){
   if(leg?.slOrderId)await cancelOrder(env,leg.slOrderId);
   if(leg?.tpOrderId)await cancelOrder(env,leg.tpOrderId);
 }
-async function cyclePnl(env,startMs,endMs){
+async function cyclePnl(env,startMs,endMs,orderIds=[]){
   const j=await signedSafe(env,"GET","/fapi/v1/userTrades",{symbol:SYMBOL,startTime:startMs,endTime:endMs,limit:1000});
-  if(!Array.isArray(j))return {pnl:null,realized:null,commission:null};
+  if(!Array.isArray(j))return {pnl:null,realized:null,commission:null,trades:0};
+  const ids=new Set((orderIds||[]).map(Number).filter(Number.isFinite));
+  const rows=ids.size?j.filter(t=>ids.has(Number(t.orderId))):[];
   let realized=0,commission=0;
-  for(const t of j){realized+=Number(t.realizedPnl||0);commission+=Number(t.commission||0)}
-  return {pnl:realized-commission,realized,commission};
+  for(const t of rows){realized+=Number(t.realizedPnl||0);commission+=Number(t.commission||0)}
+  return {pnl:realized-commission,realized,commission,trades:rows.length};
 }
 
 async function openCycle(env,state,cycleStart){
@@ -200,7 +208,13 @@ async function openCycle(env,state,cycleStart){
   await setLeverage(env,c.leverage);
   const rules=await symbolRules();
   const px=await tickerPrice();
-  const qty=Math.max(rules.minQty,stepFloor(c.notional/px,rules.stepSize));
+  const qty=stepFloor(c.notional/px,rules.stepSize);
+  if(!(qty>0)||qty<rules.minQty){
+    throw new Error("Notional "+c.notional+" USDT quá nhỏ cho BTCUSDT: cần quantity >= "+rules.minQty+" BTC. Bot không tự tăng khối lượng.");
+  }
+  if(rules.minNotional>0&&qty*px<rules.minNotional){
+    throw new Error("Notional sau làm tròn thấp hơn mức tối thiểu Binance "+rules.minNotional+" USDT. Bot không tự tăng khối lượng.");
+  }
 
   let lo=null,so=null;
   try{
@@ -233,7 +247,12 @@ async function openCycle(env,state,cycleStart){
 
   state.active={
     id,cycleStart,cycleEnd:cycleStart+CYCLE_SECONDS,openedAt:nowIso(),
-    config:c,b20:body.b20,b100:body.b100,ratio,a,b,qty,rules,legs,beMoved:false
+    config:c,b20:body.b20,b100:body.b100,ratio,a,b,qty,rules,legs,beMoved:false,
+    orderIds:[
+      lo.orderId,so.orderId,
+      legs.L.slOrderId,legs.L.tpOrderId,
+      legs.S.slOrderId,legs.S.tpOrderId
+    ].map(Number).filter(Number.isFinite)
   };
   state.lastCycleStart=cycleStart;
   await writeState(env,state);
@@ -273,16 +292,18 @@ async function moveOtherToBE(env,active,stoppedKey){
   const o=await conditionClose(env,g.positionSide,"STOP_MARKET",bePrice,active.rules.tickSize);
   if(oldSlOrderId)await cancelOrder(env,oldSlOrderId);
   g.sl=bePrice;g.slOrderId=o.orderId;g.slKind="be";
+  if(Number.isFinite(Number(o.orderId)))active.orderIds.push(Number(o.orderId));
   active.beMoved=true;
   active.beMovedAt=nowIso();
 }
 async function finishCycle(env,state,reason="time"){
   const a=state.active;if(!a)return state;
   for(const k of ["L","S"])await cancelLegOrders(env,a.legs[k]);
-  await closePositionMarket(env,"LONG").catch(()=>{});
-  await closePositionMarket(env,"SHORT").catch(()=>{});
-  const p=await cyclePnl(env,a.cycleStart*1000-60000,Date.now()+60000);
-  const row={...a,closedAt:nowIso(),closeReason:reason,pnl:p.pnl,realized:p.realized,commission:p.commission};
+  const closeL=await closePositionMarket(env,"LONG").catch(()=>null);
+  const closeS=await closePositionMarket(env,"SHORT").catch(()=>null);
+  for(const o of [closeL,closeS])if(Number.isFinite(Number(o?.orderId)))a.orderIds.push(Number(o.orderId));
+  const p=await cyclePnl(env,a.cycleStart*1000-60000,Date.now()+60000,a.orderIds);
+  const row={...a,closedAt:nowIso(),closeReason:reason,pnl:p.pnl,realized:p.realized,commission:p.commission,tradeCount:p.trades};
   state.history.push(row);state.history=state.history.slice(-192);state.active=null;
   await writeState(env,state);
   await sendTelegram(env,
