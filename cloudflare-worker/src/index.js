@@ -252,8 +252,13 @@ async function refreshLeg(env,leg){
   if(leg.done)return leg;
   const sl=leg.slOrderId?await getOrder(env,leg.slOrderId):null;
   const tp=leg.tpOrderId?await getOrder(env,leg.tpOrderId):null;
-  if(sl?.status==="FILLED"){leg.done=true;leg.why=leg.slKind||"sl";leg.closedAt=nowIso()}
-  else if(tp?.status==="FILLED"){leg.done=true;leg.why="tp";leg.closedAt=nowIso()}
+  if(sl?.status==="FILLED"){
+    leg.done=true;leg.why=leg.slKind||"sl";leg.closedAt=nowIso();
+    if(leg.tpOrderId)await cancelOrder(env,leg.tpOrderId);
+  }else if(tp?.status==="FILLED"){
+    leg.done=true;leg.why="tp";leg.closedAt=nowIso();
+    if(leg.slOrderId)await cancelOrder(env,leg.slOrderId);
+  }
   return leg;
 }
 async function moveOtherToBE(env,active,stoppedKey){
@@ -262,9 +267,11 @@ async function moveOtherToBE(env,active,stoppedKey){
   const otherKey=stoppedKey==="L"?"S":"L";
   const g=active.legs[otherKey];
   if(!g||g.done||g.slKind!=="sl")return;
-  await cancelOrder(env,g.slOrderId);
+  const oldSlOrderId=g.slOrderId;
   const bePrice=otherKey==="L"?g.entry*(1+2*c.fee):g.entry*(1-2*c.fee);
+  // Đặt BE mới trước; chỉ hủy SL cũ sau khi BE đã được Binance chấp nhận.
   const o=await conditionClose(env,g.positionSide,"STOP_MARKET",bePrice,active.rules.tickSize);
+  if(oldSlOrderId)await cancelOrder(env,oldSlOrderId);
   g.sl=bePrice;g.slOrderId=o.orderId;g.slKind="be";
   active.beMoved=true;
   active.beMovedAt=nowIso();
