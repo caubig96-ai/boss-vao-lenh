@@ -1,6 +1,7 @@
 name = "boss-vao-lenh"
 main = "src/index.js"
 compatibility_date = "2026-09-25"
+# Production build: Binance hedge v1 with hardened TP/SL cleanup
 # Strategy: BTCUSDT USD-M Futures hedge LONG+SHORT every 15m
 
 [triggers]
